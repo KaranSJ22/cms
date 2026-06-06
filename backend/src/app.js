@@ -5,6 +5,10 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 
 import apiRoutes from "./routes/index.routes.js";
+
+import swaggerUi from "swagger-ui-express";
+import { swaggerSpec } from "./config/swagger.config.js";
+
 import { testDbConnection } from "./db/connection.js";
 import { requestLogger } from "./middlwares/requestLogger.middleware.js";
 import { errorHandler } from "./middlwares/error.middleware.js";
@@ -38,6 +42,8 @@ app.use(
     },
   })
 );
+
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.get("/health", (req, res) => {
   return res.status(200).json({

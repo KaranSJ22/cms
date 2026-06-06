@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "description": "",
   "main": "src/server.js",
-  "type":"module",
+  "type": "module",
   "scripts": {
-    "dev":"nodemon src/server.js",
-    "start":"node src/server.js"
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js"
   },
   "keywords": [
     "isro",
@@ -28,6 +28,8 @@
     "mysql2": "^3.22.5",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
+    "swagger-jsdoc": "^6.3.0",
+    "swagger-ui-express": "^5.0.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
