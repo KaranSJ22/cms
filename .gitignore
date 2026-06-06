@@ -1,0 +1,9 @@
+node_modules/
+.env
+dist/
+build/
+logs/
+coverage/
+.vscode/
+.DS_Store
+*:Zone.Identifier
