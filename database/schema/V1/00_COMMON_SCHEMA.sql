@@ -5,8 +5,8 @@
    - Column names are uppercase and do not contain underscores
    ============================================================ */
 
-CREATE DATABASE IF NOT EXISTS CMSDEMO;
-USE CMSDEMO;
+CREATE DATABASE IF NOT EXISTS cms_db;
+USE cms_db;
 
 SET FOREIGN_KEY_CHECKS = 0;
 

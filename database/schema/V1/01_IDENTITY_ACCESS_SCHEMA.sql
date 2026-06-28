@@ -2,7 +2,7 @@
    MODULE 1: IDENTITY & ACCESS MANAGEMENT
    ============================================================ */
 
-USE CMSDEMO;
+USE cms_db;
 
 SET FOREIGN_KEY_CHECKS = 0;
 
