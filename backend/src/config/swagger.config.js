@@ -44,6 +44,10 @@ export const swaggerSpec = swaggerJsdoc({
         name: "Day Slot",
         description: "Canteen day slot management APIs",
       },
+      {
+        name: "Day Menu",
+        description: "Canteen day menu and published menu APIs",
+      },
     ],
     components: {
       securitySchemes: {
