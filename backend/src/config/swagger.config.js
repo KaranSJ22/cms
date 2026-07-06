@@ -32,6 +32,22 @@ export const swaggerSpec = swaggerJsdoc({
         name: "Identity",
         description: "User, role, customer, and employee identity APIs",
       },
+      {
+        name: "Service",
+        description: "Canteen service management APIs",
+      },
+      {
+        name: "Menu",
+        description: "Canteen menu item management APIs",
+      },
+      {
+        name: "Day Slot",
+        description: "Canteen day slot management APIs",
+      },
+      {
+        name: "Day Menu",
+        description: "Canteen day menu and published menu APIs",
+      },
     ],
     components: {
       securitySchemes: {
