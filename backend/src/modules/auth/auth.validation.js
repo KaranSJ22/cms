@@ -8,3 +8,11 @@ export const loginSchema = z.object({
     })
     .strict(),
 });
+
+export const ssoLoginSchema = z.object({
+  body: z
+    .object({
+      token: z.string().trim().min(10),
+    })
+    .strict(),
+});

@@ -2,7 +2,6 @@ import {
   getAllUsers,
   getAllRoles,
   getAllCustomers,
-  getAllApprovalLevels,
   findUserByLoginId,
   createUserUsingProcedure,
   getUserById,
@@ -16,13 +15,12 @@ import {
   findCustomerById,
   findPermanentEmployeeByCustomerId,
   createPermanentEmployeeUsingProcedure,
-  getPermanentEmployeeById,
 } from "./identity.repository.js";
 
 import bcrypt from "bcrypt";
 
-export const fetchUsers = async () => {
-  return await getAllUsers();
+export const fetchUsers = async (ISACTIVE = null) => {
+  return await getAllUsers(ISACTIVE);
 };
 
 export const fetchRoles = async () => {
@@ -31,10 +29,6 @@ export const fetchRoles = async () => {
 
 export const fetchCustomers = async () => {
   return await getAllCustomers();
-};
-
-export const fetchApprovalLevels = async () => {
-  return await getAllApprovalLevels();
 };
 
 export const createUser = async (userData) => {
@@ -196,5 +190,7 @@ export const createPermanentEmployee = async (employeeData) => {
     throw error;
   }
 
-  return await getPermanentEmployeeById(created.PERMEMPID);
+  // Use CMSGETPERM (via findPermanentEmployeeByCustomerId) to return the
+  // full joined profile including customer and user details.
+  return await findPermanentEmployeeByCustomerId(employeeData.CUSTOMERID);
 };

@@ -47,6 +47,7 @@ export const rejectDayMenuController = asyncHandler(async (req, res) => {
 
 export const viewPublishedMenuController = asyncHandler(async (req, res) => {
   const data = await fetchPublishedMenu(
+    req.validated.query.canteenId,
     req.validated.query.serviceDate,
     req.user.CTYPECODE || "VISITOR"
   );

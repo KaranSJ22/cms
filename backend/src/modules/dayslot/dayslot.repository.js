@@ -1,54 +1,25 @@
 import { pool } from "../../db/connection.js";
 
-export const getDaySlots = async () => {
-  // TODO: Replace with a read stored procedure when Module 2 read procedures are added.
-  const [rows] = await pool.execute(`
-    SELECT
-      DS.DAYSLOTID,
-      DS.SERVICEID,
-      S.SERVCODE,
-      S.SERVNAME,
-      DS.SERVDATE,
-      DS.STARTTIME,
-      DS.ENDTIME,
-      DS.STATUS,
-      DS.CREATEDBY,
-      DS.CREATEDAT,
-      DS.UPDATEDAT
-    FROM CMS_DAYSLOT DS
-    JOIN CMS_SERVICE S
-      ON DS.SERVICEID = S.SERVICEID
-    ORDER BY DS.SERVDATE DESC, DS.STARTTIME
-  `);
+export const getDaySlots = async ({
+  SERVICEID = null,
+  CANTEENID = null,
+  DATEFROM = null,
+  DATETO = null,
+} = {}) => {
+  const [resultSets] = await pool.execute("CALL CMSLISTSLOT(?, ?, ?, ?)", [
+    SERVICEID,
+    CANTEENID,
+    DATEFROM,
+    DATETO,
+  ]);
 
-  return rows;
+  return resultSets[0] || [];
 };
 
 export const getDaySlotById = async (DAYSLOTID) => {
-  // TODO: Replace with a read stored procedure when Module 2 read procedures are added.
-  const [rows] = await pool.execute(
-    `
-    SELECT
-      DS.DAYSLOTID,
-      DS.SERVICEID,
-      S.SERVCODE,
-      S.SERVNAME,
-      DS.SERVDATE,
-      DS.STARTTIME,
-      DS.ENDTIME,
-      DS.STATUS,
-      DS.CREATEDBY,
-      DS.CREATEDAT,
-      DS.UPDATEDAT
-    FROM CMS_DAYSLOT DS
-    JOIN CMS_SERVICE S
-      ON DS.SERVICEID = S.SERVICEID
-    WHERE DS.DAYSLOTID = ?
-    `,
-    [DAYSLOTID]
-  );
+  const [resultSets] = await pool.execute("CALL CMSGETSLOT(?)", [DAYSLOTID]);
 
-  return rows[0] || null;
+  return resultSets[0]?.[0] || null;
 };
 
 export const createDaySlot = async ({

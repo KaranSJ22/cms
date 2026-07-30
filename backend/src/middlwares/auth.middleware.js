@@ -1,5 +1,27 @@
 import jwt from "jsonwebtoken";
 
+const asStringArray = (value) =>
+  Array.isArray(value)
+    ? value.filter((item) => typeof item === "string")
+    : [];
+
+const asCanteenRoles = (value) =>
+  Array.isArray(value)
+    ? value
+        .filter(
+          (role) =>
+            role &&
+            Number.isInteger(Number(role.CANTEENID)) &&
+            Number(role.CANTEENID) > 0 &&
+            typeof role.ROLECODE === "string"
+        )
+        .map((role) => ({
+          CANTEENID: Number(role.CANTEENID),
+          ROLECODE: role.ROLECODE,
+          ISDEFAULT: Boolean(role.ISDEFAULT),
+        }))
+    : [];
+
 export const authenticate = (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -18,9 +40,10 @@ export const authenticate = (req, res, next) => {
     req.user = {
       USERID: decoded.USERID,
       LOGINID: decoded.LOGINID,
-      ROLES: decoded.ROLES || [],
       CUSTOMERID: decoded.CUSTOMERID || null,
       CTYPECODE: decoded.CTYPECODE || null,
+      SYSTEMROLES: asStringArray(decoded.SYSTEMROLES),
+      CANTEENROLES: asCanteenRoles(decoded.CANTEENROLES),
     };
 
     next();

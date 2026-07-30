@@ -30,13 +30,11 @@ export const createDayMenuSchema = z.object({
       MENUITEMID: z.coerce.number().int().positive(),
       ISSPECIAL: booleanFlagSchema.optional(),
       ISPREBOOK: booleanFlagSchema.optional(),
-      ISWALKIN: booleanFlagSchema.optional(),
       ISKIOSK: booleanFlagSchema.optional(),
       AVAILQTY: z.coerce.number().int(),
       MAXQTY: z.coerce.number().int(),
-      BOOKSTART: dateTimeSchema,
-      BOOKEND: dateTimeSchema,
-      CANCELAT: dateTimeSchema,
+      BOOKUNTIL: dateTimeSchema,
+      CANCELUNTIL: dateTimeSchema,
       REMARKS: z.string().trim().max(255).nullable().optional(),
     })
     .strict(),
@@ -58,6 +56,7 @@ export const approveDayMenuSchema = z.object({
 export const publishedMenuSchema = z.object({
   query: z
     .object({
+      canteenId: z.coerce.number().int().positive(),
       serviceDate: dateSchema,
     })
     .strict(),

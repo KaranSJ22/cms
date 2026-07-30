@@ -45,8 +45,7 @@ CREATE TABLE CMS_BOOKTYPE (
 -- ------------------------------------------------------------
 -- Lifetime booking-number counter, scoped per booking type + service.
 -- Row is created lazily (first booking of that type/service pair)
--- and locked with FOR UPDATE inside CMSADDBOOK, same locking style
--- as CMSGENAUTO / CMSADDDMENU already use for DMENUNO.
+-- and locked with FOR UPDATE inside CMSADDBOOK, 
 -- ------------------------------------------------------------
 
 
@@ -64,11 +63,7 @@ CREATE TABLE CMS_BOOKCTR (
 -- ------------------------------------------------------------
 -- Booking header
 -- BOOKNO      = formatted business number, e.g. 'PB-BR001', 
--- BOOKSEQNO   = raw lifetime sequence backing BOOKNO
--- No DB-level uniqueness is placed on "one active PB per
--- customer/service/date" because a cancelled booking must not
--- block a new one, and MySQL cannot express a partial unique
--- index cleanly. This is enforced procedurally in CMSADDBOOK.
+-- BOOKSEQNO   = sequence BOOKNO
 -- ------------------------------------------------------------
 CREATE TABLE CMS_BOOKING (
     BOOKID INT AUTO_INCREMENT PRIMARY KEY,
@@ -133,19 +128,10 @@ CREATE TABLE CMS_BOOKITEM (
     CONSTRAINT CK_BI_QTY CHECK (QTY >= 1),
     CONSTRAINT CK_BI_RATE CHECK (RATE >= 0),
     CONSTRAINT CK_BI_AMOUNT CHECK (AMOUNT >= 0),
-    CONSTRAINT CK_BK_STATUS CHECK (STATUS IN ('CR','SRV','CAN','NOS')),
+    CONSTRAINT CK_BI_STATUS CHECK (STATUS IN ('CR','SRV','CAN','NOS')),
     KEY IX_BI_DAYMENU (DAYMENUID)
 ) ENGINE=InnoDB;
 
--- ------------------------------------------------------------
--- Concurrency guard for "one active PB per customer/service/date".
--- A plain unique index on CMS_BOOKING can't express this because a
--- cancelled booking must not block a new one, and MySQL has no
--- partial/filtered unique index. Instead, CMSADDBOOK inserts a row
--- here for every new PB booking; the PRIMARY KEY makes a concurrent
--- duplicate attempt fail atomically inside the transaction.
--- CMSCANCELBOOK deletes the row on cancellation, freeing the slot.
--- ------------------------------------------------------------
 
 
 CREATE TABLE CMS_PBACTIVE (
@@ -162,11 +148,9 @@ CREATE TABLE CMS_PBACTIVE (
 
 -- ------------------------------------------------------------
 -- Booking header history. One row per terminal transition
--- (Cancel / Serve / No-Show). Pre-cutoff item edits never land
--- here by design. Carries a full snapshot of the header (not just
--- the fields that changed) so reporting/BI/ML never needs to join
--- back to the live CMS_BOOKING row, which may have moved on further.
+-- (Cancel / Serve / No-Show)
 -- ------------------------------------------------------------
+
 CREATE TABLE CMS_BOOKHIST (
     BOOKHISTID INT AUTO_INCREMENT PRIMARY KEY,
     BOOKID INT NOT NULL,
@@ -201,7 +185,7 @@ CREATE TABLE CMS_BOOKHIST (
 ) ENGINE=InnoDB;
 
 -- ------------------------------------------------------------
--- Booking item history. Finalized snapshot for reporting / BI / ML.
+-- Booking item history. Finalized snapshot 
 -- ------------------------------------------------------------
 
 CREATE TABLE CMS_BOOKITMHS (
@@ -219,6 +203,6 @@ CREATE TABLE CMS_BOOKITMHS (
     CONSTRAINT FK_BIH_HIST FOREIGN KEY (BOOKHISTID) REFERENCES CMS_BOOKHIST(BOOKHISTID),
     CONSTRAINT FK_BIH_ITEM FOREIGN KEY (MENUITEMID) REFERENCES CMS_MENUITEM(MENUITEMID),
     CONSTRAINT FK_BIH_DAYMENU FOREIGN KEY (DAYMENUID) REFERENCES CMS_DAYMENU(DAYMENUID),
-    CONSTRAINT CK_BK_STATUS CHECK (STATUS IN ('CR','SRV','CAN','NOS')),
+    CONSTRAINT CK_BIH_STATUS CHECK (STATUS IN ('CR','SRV','CAN','NOS')),
     KEY IX_BIH_HIST (BOOKHISTID)
 ) ENGINE=InnoDB;

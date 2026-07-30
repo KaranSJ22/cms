@@ -23,12 +23,11 @@ export const serviceIdSchema = z.object({
 export const createServiceSchema = z.object({
   body: z
     .object({
+      CANTEENID: z.coerce.number().int().positive(),
       SERVCODE: z.string().trim().min(1).max(20),
       SERVNAME: z.string().trim().min(1).max(80),
       DEFSTART: timeSchema,
       DEFEND: timeSchema,
-      VALIDFROM: dateSchema,
-      VALIDUNTIL: dateSchema,
     })
     .strict(),
 });
@@ -44,8 +43,6 @@ export const updateServiceSchema = z.object({
       SERVNAME: z.string().trim().min(1).max(80),
       DEFSTART: timeSchema,
       DEFEND: timeSchema,
-      VALIDFROM: dateSchema,
-      VALIDUNTIL: dateSchema,
       STATUS: z.string().trim().min(1).max(20),
       CHGREASON: z.string().trim().max(255).nullable().optional(),
     })

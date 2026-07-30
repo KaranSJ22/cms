@@ -9,24 +9,24 @@ USE cms_db;
 
 /* ---- CMS_STATUS ---- */
 INSERT INTO CMS_STATUS (STATUSCODE, STATUSNAME, STATUSGRP, DESCR) VALUES
-('A',    'Active',    'GENERAL',   'Record is active'),
-('D',    'Disabled',  'GENERAL',   'Record is disabled'),
-('P',    'Pending',   'APPROVAL',  'Approval is pending'),
+('ACT',    'Active',    'GENERAL',   'Record is active'),
+('DIS',    'Disabled',  'GENERAL',   'Record is disabled'),
+('PEN',    'Pending',   'APPROVAL',  'Approval is pending'),
 ('APP',  'Approved',  'APPROVAL',  'Approval completed'),
 ('REJ',  'Rejected',  'APPROVAL',  'Approval rejected'),
 ('EXP',  'Expired',   'ACCESS',    'Access expired'),
+('CNC', 'Cancelled', 'WORKFLOW', 'Workflow was cancelled'),
 ('REV',  'Revoked',   'ACCESS',    'Access revoked'),
-('BLK',  'Blocked',   'GENERAL',   'Access blocked'),
-('PEND', 'Pending',   'WORKFLOW',  'Workflow step is pending'),
-('CANCELLED', 'Cancelled', 'WORKFLOW', 'Workflow was cancelled');
+('BLK',  'Blocked',   'GENERAL',   'Access blocked');
 
 
 /* ---- CMS_CUSTTYPE ---- */
 INSERT INTO CMS_CUSTTYPE (CTYPECODE, CTYPENAME, DESCR) VALUES
-('PERMANENT',   'Permanent Employee',      'ISRO/HSFC permanent employee — salary deduction'),
-('CONTRACT',    'Contract Employee',       'Contract or vendor employee — wallet/cash'),
-('VISITOR',     'Visitor',                 'Temporary visitor — wallet/cash'),
-('OTHERCENTRE', 'Other Centre Employee',   'Employee from another ISRO centre — inter-centre billing');
+('PRM',   'Permanent Employee',      'ISRO/HSFC permanent employee — Accounts Dept'),
+('CNT',    'Contract Employee',       'Contract or vendor employee — wallet/cash'),
+('VIS',     'Visitor',                 'Temporary visitor — wallet/cash'),
+('OCE', 'Other Centre Employee',   'Employee from another ISRO centre — inter-centre billing'),
+('OFR','Official Request','Permanent Employee but makes official request-Accounts Dept');
 
 
 /* ---- CMS_SCREEN ---- */

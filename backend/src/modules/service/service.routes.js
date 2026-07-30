@@ -21,14 +21,14 @@ const router = express.Router();
 router.get(
   "/",
   authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN", "CANTEENSTF"),
+  authorizeRoles("ADMIN", "CTNMNG", "CTNSTF"),
   getServicesController
 );
 
 router.get(
   "/:id",
   authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN", "CANTEENSTF"),
+  authorizeRoles("ADMIN", "CTNMNG", "CTNSTF"),
   validate(serviceIdSchema),
   getServiceController
 );
@@ -36,7 +36,7 @@ router.get(
 router.post(
   "/",
   authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN"),
+  authorizeRoles("ADMIN", "CTNMNG"),
   validate(createServiceSchema),
   createServiceController
 );
@@ -44,7 +44,7 @@ router.post(
 router.put(
   "/:id",
   authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN"),
+  authorizeRoles("ADMIN", "CTNMNG"),
   validate(updateServiceSchema),
   updateServiceController
 );

@@ -182,55 +182,55 @@
  *         description: Customer created successfully
  */
 
-/**
- * @swagger
- * /api/identity/approval-levels:
- *   get:
- *     summary: Get approval levels
- *     tags:
- *       - Identity
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Approval levels fetched successfully
- */
+// /**
+//  * @swagger
+//  * /api/identity/approval-levels:
+//  *   get:
+//  *     summary: Get approval levels
+//  *     tags:
+//  *       - Identity
+//  *     security:
+//  *       - bearerAuth: []
+//  *     responses:
+//  *       200:
+//  *         description: Approval levels fetched successfully
+//  */
 
-/**
- * @swagger
- * /api/identity/permanent-employees:
- *   post:
- *     summary: Create permanent employee profile
- *     description: Admin-only API to create permanent employee-specific profile for a PERMANENT customer.
- *     tags:
- *       - Identity
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - CUSTOMERID
- *               - EMPCODE
- *               - DEPT
- *               - DESIG
- *             properties:
- *               CUSTOMERID:
- *                 type: integer
- *                 example: 6
- *               EMPCODE:
- *                 type: string
- *                 example: EMPTEST001
- *               DEPT:
- *                 type: string
- *                 example: IT Department
- *               DESIG:
- *                 type: string
- *                 example: Assistant Engineer
- *     responses:
- *       201:
- *         description: Permanent employee profile created successfully
- */
+// /**
+//  * @swagger
+//  * /api/identity/permanent-employees:
+//  *   post:
+//  *     summary: Create permanent employee profile
+//  *     description: Admin-only API to create permanent employee-specific profile for a PERMANENT customer.
+//  *     tags:
+//  *       - Identity
+//  *     security:
+//  *       - bearerAuth: []
+//  *     requestBody:
+//  *       required: true
+//  *       content:
+//  *         application/json:
+//  *           schema:
+//  *             type: object
+//  *             required:
+//  *               - CUSTOMERID
+//  *               - EMPCODE
+//  *               - DEPT
+//  *               - DESIG
+//  *             properties:
+//  *               CUSTOMERID:
+//  *                 type: integer
+//  *                 example: 6
+//  *               EMPCODE:
+//  *                 type: string
+//  *                 example: EMPTEST001
+//  *               DEPT:
+//  *                 type: string
+//  *                 example: IT Department
+//  *               DESIG:
+//  *                 type: string
+//  *                 example: Assistant Engineer
+//  *     responses:
+//  *       201:
+//  *         description: Permanent employee profile created successfully
+//  */

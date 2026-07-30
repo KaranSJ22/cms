@@ -3,22 +3,21 @@ import express from "express";
 import { authenticate } from "../../middlwares/auth.middleware.js";
 import { authorizeRoles } from "../../middlwares/role.middleware.js";
 import { validate } from "../../middlwares/validate.middleware.js";
-import { 
+import {
   createUserSchema,
   assignUserRoleSchema,
   createCustomerSchema,
-  createPermanentEmployeeSchema,
+  // createPermanentEmployeeSchema,
 } from "./identity.validation.js";
 
 import {
   getUsers,
   getRoles,
   getCustomers,
-  getApprovalLevels,
   createUserController,
   assignUserRoleController,
   createCustomerController,
-  createPermanentEmployeeController,
+  // createPermanentEmployeeController,
 } from "./identity.controller.js";
 
 const router = express.Router();
@@ -53,19 +52,16 @@ router.post(
   createCustomerController
 );
 
-router.get(
-  "/approval-levels",
-  authenticate,
-  authorizeRoles("ADMIN"),
-  getApprovalLevels
-);
 
-router.post(
-  "/permanent-employees",
-  authenticate,
-  authorizeRoles("ADMIN"),
-  validate(createPermanentEmployeeSchema),
-  createPermanentEmployeeController
-);
+// router.post(
+//   "/permanent-employees",
+//   authenticate,
+//   authorizeRoles("ADMIN"),
+//   validate(createPermanentEmployeeSchema),
+//   createPermanentEmployeeController
+// );
+
+
+
 
 export default router;

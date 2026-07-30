@@ -29,14 +29,12 @@ export const createDayMenu = async (dayMenuData, addedByUserId) => {
     MENUITEMID: dayMenuData.MENUITEMID,
     ISSPECIAL: dayMenuData.ISSPECIAL ?? 0,
     ISPREBOOK: dayMenuData.ISPREBOOK ?? 1,
-    ISWALKIN: dayMenuData.ISWALKIN ?? 1,
     ISKIOSK: dayMenuData.ISKIOSK ?? 1,
     AVAILQTY: dayMenuData.AVAILQTY,
     MAXQTY: dayMenuData.MAXQTY,
-    BOOKSTART: dayMenuData.BOOKSTART,
-    BOOKEND: dayMenuData.BOOKEND,
-    CANCELAT: dayMenuData.CANCELAT,
-    ADDEDBY: addedByUserId,
+    BOOKUNTIL: dayMenuData.BOOKUNTIL,
+    CANCELUNTIL: dayMenuData.CANCELUNTIL,
+    CREATEDBY: addedByUserId,
     REMARKS: dayMenuData.REMARKS || null,
   });
 
@@ -69,8 +67,13 @@ export const rejectDayMenu = async (DAYMENUID, remarks, approvedByUserId) => {
   return await getDayMenuById(DAYMENUID);
 };
 
-export const fetchPublishedMenu = async (serviceDate, customerTypeCode) => {
+export const fetchPublishedMenu = async (
+  canteenId,
+  serviceDate,
+  customerTypeCode
+) => {
   return await viewPublishedMenu({
+    CANTEENID: canteenId,
     SERVDATE: serviceDate,
     CTYPECODE: customerTypeCode || "VISITOR",
   });

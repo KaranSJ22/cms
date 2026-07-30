@@ -48,6 +48,10 @@ export const swaggerSpec = swaggerJsdoc({
         name: "Day Menu",
         description: "Canteen day menu and published menu APIs",
       },
+      {
+        name: "Pricing",
+        description: "Canteen menu item pricing APIs",
+      },
     ],
     components: {
       securitySchemes: {

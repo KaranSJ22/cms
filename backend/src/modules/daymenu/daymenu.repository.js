@@ -1,94 +1,24 @@
 import { pool } from "../../db/connection.js";
 
-export const getDayMenus = async () => {
-  // TODO: Replace with a read stored procedure when Module 2 read procedures are added.
-  const [rows] = await pool.execute(`
-    SELECT
-      DM.DAYMENUID,
-      DM.DMENUNO,
-      DM.DAYSLOTID,
-      S.SERVCODE,
-      S.SERVNAME,
-      DS.SERVDATE,
-      DS.STARTTIME,
-      DS.ENDTIME,
-      DM.MENUITEMID,
-      MI.MENUCODE,
-      MI.ITEMNAME,
-      DM.ISSPECIAL,
-      DM.ISPREBOOK,
-      DM.ISWALKIN,
-      DM.ISKIOSK,
-      DM.AVAILQTY,
-      DM.MAXQTY,
-      DM.BOOKSTART,
-      DM.BOOKEND,
-      DM.CANCELAT,
-      DM.APPRSTATUS,
-      DM.ADDEDBY,
-      DM.APPROVEDBY,
-      DM.APPROVEDAT,
-      DM.REMARKS,
-      DM.CREATEDAT,
-      DM.UPDATEDAT
-    FROM CMS_DAYMENU DM
-    JOIN CMS_DAYSLOT DS
-      ON DM.DAYSLOTID = DS.DAYSLOTID
-    JOIN CMS_SERVICE S
-      ON DS.SERVICEID = S.SERVICEID
-    JOIN CMS_MENUITEM MI
-      ON DM.MENUITEMID = MI.MENUITEMID
-    ORDER BY DS.SERVDATE DESC, DS.STARTTIME, MI.ITEMNAME
-  `);
+export const getDayMenus = async ({
+  CANTEENID = null,
+  SERVICEID = null,
+  DAYSLOTID = null,
+  SERVDATE = null,
+  APPRSTATUS = null,
+} = {}) => {
+  const [resultSets] = await pool.execute(
+    "CALL CMSLISTDMENU(?, ?, ?, ?, ?)",
+    [CANTEENID, SERVICEID, DAYSLOTID, SERVDATE, APPRSTATUS]
+  );
 
-  return rows;
+  return resultSets[0] || [];
 };
 
 export const getDayMenuById = async (DAYMENUID) => {
-  // TODO: Replace with a read stored procedure when Module 2 read procedures are added.
-  const [rows] = await pool.execute(
-    `
-    SELECT
-      DM.DAYMENUID,
-      DM.DMENUNO,
-      DM.DAYSLOTID,
-      S.SERVCODE,
-      S.SERVNAME,
-      DS.SERVDATE,
-      DS.STARTTIME,
-      DS.ENDTIME,
-      DM.MENUITEMID,
-      MI.MENUCODE,
-      MI.ITEMNAME,
-      DM.ISSPECIAL,
-      DM.ISPREBOOK,
-      DM.ISWALKIN,
-      DM.ISKIOSK,
-      DM.AVAILQTY,
-      DM.MAXQTY,
-      DM.BOOKSTART,
-      DM.BOOKEND,
-      DM.CANCELAT,
-      DM.APPRSTATUS,
-      DM.ADDEDBY,
-      DM.APPROVEDBY,
-      DM.APPROVEDAT,
-      DM.REMARKS,
-      DM.CREATEDAT,
-      DM.UPDATEDAT
-    FROM CMS_DAYMENU DM
-    JOIN CMS_DAYSLOT DS
-      ON DM.DAYSLOTID = DS.DAYSLOTID
-    JOIN CMS_SERVICE S
-      ON DS.SERVICEID = S.SERVICEID
-    JOIN CMS_MENUITEM MI
-      ON DM.MENUITEMID = MI.MENUITEMID
-    WHERE DM.DAYMENUID = ?
-    `,
-    [DAYMENUID]
-  );
+  const [resultSets] = await pool.execute("CALL CMSGETDMENU(?)", [DAYMENUID]);
 
-  return rows[0] || null;
+  return resultSets[0]?.[0] || null;
 };
 
 export const createDayMenu = async ({
@@ -96,31 +26,27 @@ export const createDayMenu = async ({
   MENUITEMID,
   ISSPECIAL = 0,
   ISPREBOOK = 1,
-  ISWALKIN = 1,
   ISKIOSK = 1,
   AVAILQTY,
   MAXQTY,
-  BOOKSTART,
-  BOOKEND,
-  CANCELAT,
-  ADDEDBY,
+  BOOKUNTIL,
+  CANCELUNTIL,
+  CREATEDBY,
   REMARKS = null,
 }) => {
   const [resultSets] = await pool.execute(
-    "CALL CMSADDDMENU(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    "CALL CMSADDDMENU(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [
       DAYSLOTID,
       MENUITEMID,
       ISSPECIAL,
       ISPREBOOK,
-      ISWALKIN,
       ISKIOSK,
       AVAILQTY,
       MAXQTY,
-      BOOKSTART,
-      BOOKEND,
-      CANCELAT,
-      ADDEDBY,
+      BOOKUNTIL,
+      CANCELUNTIL,
+      CREATEDBY,
       REMARKS,
     ]
   );
@@ -134,9 +60,8 @@ export const approveDayMenu = async ({
   APPROVEDBY,
   REMARKS = null,
 }) => {
-  await pool.execute("CALL CMSAPPDMENU(?, ?, ?, ?)", [
+  await pool.execute("CALL CMSAPPDMENU(?, ?, ?)", [
     DAYMENUID,
-    "APP",
     APPROVEDBY,
     REMARKS,
   ]);
@@ -149,9 +74,8 @@ export const rejectDayMenu = async ({
   APPROVEDBY,
   REMARKS = null,
 }) => {
-  await pool.execute("CALL CMSAPPDMENU(?, ?, ?, ?)", [
+  await pool.execute("CALL CMSREJDMENU(?, ?, ?)", [
     DAYMENUID,
-    "REJ",
     APPROVEDBY,
     REMARKS,
   ]);
@@ -159,8 +83,9 @@ export const rejectDayMenu = async ({
   return true;
 };
 
-export const viewPublishedMenu = async ({ SERVDATE, CTYPECODE }) => {
-  const [resultSets] = await pool.execute("CALL CMSVIEWMENU(?, ?)", [
+export const viewPublishedMenu = async ({ CANTEENID, SERVDATE, CTYPECODE }) => {
+  const [resultSets] = await pool.execute("CALL CMSVIEWMENU(?, ?, ?)", [
+    CANTEENID,
     SERVDATE,
     CTYPECODE,
   ]);

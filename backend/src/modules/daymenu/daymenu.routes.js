@@ -24,14 +24,14 @@ const router = express.Router();
 router.get(
   "/",
   authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN"),
+  authorizeRoles("ADMIN", "CTNMNG"),
   getDayMenusController
 );
 
 router.get(
   "/:id",
   authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN"),
+  authorizeRoles("ADMIN", "CTNMNG"),
   validate(dayMenuIdSchema),
   getDayMenuController
 );
@@ -39,7 +39,7 @@ router.get(
 router.post(
   "/",
   authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN", "CANTEENSTF"),
+  authorizeRoles("ADMIN", "CTNMNG", "CTNSTF"),
   validate(createDayMenuSchema),
   createDayMenuController
 );
@@ -47,7 +47,7 @@ router.post(
 router.patch(
   "/:id/approve",
   authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN"),
+  authorizeRoles("ADMIN", "CTNMNG"),
   validate(approveDayMenuSchema),
   approveDayMenuController
 );
@@ -55,7 +55,7 @@ router.patch(
 router.patch(
   "/:id/reject",
   authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN"),
+  authorizeRoles("ADMIN", "CTNMNG"),
   validate(approveDayMenuSchema),
   rejectDayMenuController
 );
