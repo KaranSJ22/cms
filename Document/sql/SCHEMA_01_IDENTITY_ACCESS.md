@@ -247,18 +247,3 @@ This schema defines user accounts, organizational hierarchy (centres/canteens), 
 **Purpose**: Access credential for kiosk/QR/RFID identification. Validated by `CMSVALIDATEACCKEY` procedure.
 
 ---
-
-### CMS_APPLVL
-
-| Column    | Type          | Nullable | Default             | Constraints                          |
-|-----------|---------------|----------|---------------------|--------------------------------------|
-| APPLVLID  | INT AI        | NO       | —                   | PRIMARY KEY                          |
-| LEVELNO   | INT           | NO       | —                   | UNIQUE                               |
-| LEVELNAME | VARCHAR(100)  | NO       | —                   |                                      |
-| ROLEID    | INT           | NO       | —                   | FK → CMS_ROLE                        |
-| DESCR     | VARCHAR(255)  | YES      | NULL                |                                      |
-| ISACTIVE  | TINYINT(1)    | NO       | 1                   | CHECK (0,1)                          |
-| CREATEDAT | DATETIME      | NO       | CURRENT_TIMESTAMP   |                                      |
-| UPDATEDAT | DATETIME      | YES      | ON UPDATE           |                                      |
-
-**Purpose**: Approval level configuration. Maps an approval level number to a role. Used by the generic approval engine (CMS_APPRINST/CMS_APPRSTEP in Module 2 procedures).

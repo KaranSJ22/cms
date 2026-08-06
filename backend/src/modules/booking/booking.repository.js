@@ -118,3 +118,37 @@ export const toggleKiosk = async ({
   );
   return result;
 };
+
+export const getBookingsByRfid = async (rfidHash, serviceId) => {
+  let query = `
+    SELECT b.*, c.DISPNAME, c.CTYPECODE 
+    FROM CMS_BOOKING b
+    JOIN CMS_ACCKEY a ON b.CUSTOMERID = a.CUSTOMERID
+    JOIN CMS_CUSTOMER c ON b.CUSTOMERID = c.CUSTOMERID
+    WHERE a.KEYVALUE = ? 
+      AND b.SERVICEDATE = CURRENT_DATE() 
+      AND b.STATUS IN ('CR', 'PRT')
+      AND a.STATUS = 'A'
+  `;
+  const params = [rfidHash];
+  
+  if (serviceId) {
+    query += ` AND b.SERVICEID = ?`;
+    params.push(serviceId);
+  }
+
+  const [bookings] = await pool.query(query, params);
+
+  for (const booking of bookings) {
+    const [items] = await pool.query(
+      `SELECT bi.*, m.ITEMNAME 
+       FROM CMS_BOOKITEM bi 
+       JOIN CMS_MENUITEM m ON bi.MENUITEMID = m.MENUITEMID 
+       WHERE bi.BOOKID = ?`,
+      [booking.BOOKID]
+    );
+    booking.ITEMS = items;
+  }
+
+  return bookings;
+};

@@ -1,3 +1,4 @@
+import dayjs from "dayjs";
 import { z } from "zod";
 
 export const createBookingSchema = z.object({
@@ -16,6 +17,18 @@ export const createBookingSchema = z.object({
       .min(1, "At least one booking item is required"),
     PREMARKS: z.string().max(255).optional().nullable(),
   }).strict(),
+}).superRefine((data, ctx) => {
+  if (data.body.PBOOKTYPECODE === "KS") {
+    // Exact next day logic or future day logic
+    const today = dayjs().format("YYYY-MM-DD");
+    if (data.body.PSERVICEDATE <= today) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Kiosk bookings are only allowed for pre-booking next day or later.",
+        path: ["body", "PSERVICEDATE"],
+      });
+    }
+  }
 });
 
 export const updateBookingItemSchema = z.object({

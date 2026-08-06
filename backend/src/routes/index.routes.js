@@ -20,7 +20,7 @@ const router = express.Router();
 
 router.use("/auth", authRoutes);
 router.use("/common", commonRoutes);
-router.use("/identity",identityRoutes);
+router.use("/identity", identityRoutes);
 router.use("/services", serviceRoutes);
 router.use("/menu-items", menuRoutes);
 router.use("/", pricingRoutes);

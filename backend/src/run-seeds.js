@@ -26,7 +26,8 @@ async function runSeeds() {
 
     for (const file of seedFiles) {
       console.log(`Executing ${file}...`);
-      const sql = fs.readFileSync(file, 'utf8');
+      let sql = fs.readFileSync(file, 'utf8');
+      sql = sql.replace(/INSERT INTO/g, 'INSERT IGNORE INTO');
       await connection.query(sql);
       console.log(`${file} executed successfully.`);
     }

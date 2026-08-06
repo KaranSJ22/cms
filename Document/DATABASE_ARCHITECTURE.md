@@ -121,7 +121,7 @@ Most tables use a `STATUS` column with check constraints:
 - `'A'` = Active, `'D'` = Deactivated/Disabled
 - Some tables use `ISACTIVE` (TINYINT 0/1) instead
 - `CMS_DAYMENU` has dual status: `STATUS` (operational A/D) + `APPRSTATUS` (approval PEN/APP/REJ)
-- `CMS_BOOKING`: `'CR'` (Created), `'SRV'` (Served), `'CAN'` (Cancelled), `'NOS'` (No-Show)
+- `CMS_BOOKING`: `'CR'` (Created), `'SRV'` (Served), `'CAN'` (Cancelled), `'NOS'` (No-Show), `'PRT'` (Partially Served)
 
 ### 4.5 Concurrency Guard — `CMS_PBACTIVE`
 

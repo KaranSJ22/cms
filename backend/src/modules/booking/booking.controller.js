@@ -62,3 +62,21 @@ export const toggleKioskController = asyncHandler(async (req, res) => {
   );
   return sendSuccess(res, data, "Kiosk availability toggled successfully");
 });
+
+export const scanRfidController = asyncHandler(async (req, res) => {
+  const data = await bookingService.scanRfid(
+    req.validated.body.PRFIDHASH,
+    req.validated.body.PSERVICEID
+  );
+  return sendSuccess(res, data, "RFID scanned successfully");
+});
+
+export const serveBookingItemController = asyncHandler(async (req, res) => {
+  const data = await bookingService.serveBookingItem(
+    req.params.id,
+    req.params.itemId,
+    req.validated.body,
+    req.user.USERID
+  );
+  return sendSuccess(res, data, "Booking item served successfully");
+});

@@ -11,6 +11,8 @@ import {
   serveBookingController,
   noShowBookingController,
   toggleKioskController,
+  scanRfidController,
+  serveBookingItemController,
 } from "./booking.controller.js";
 import {
   createBookingSchema,
@@ -19,6 +21,7 @@ import {
   serveBookingSchema,
   noShowBookingSchema,
   toggleKioskSchema,
+  scanRfidSchema,
 } from "./booking.validation.js";
 
 const router = express.Router();
@@ -35,12 +38,30 @@ router.post(
   createBookingController
 );
 
+// Scan RFID at Kiosk
+router.post(
+  "/scan-rfid",
+  authenticate,
+  authorizeAnyCanteenRole("CTNMNG", "CTNSTF"),
+  validate(scanRfidSchema),
+  scanRfidController
+);
+
 // Update a booking item
 router.put(
   "/:id/items/:itemId",
   authenticate,
   validate(updateBookingItemSchema),
   updateBookingItemController
+);
+
+// Serve a specific booking item
+router.patch(
+  "/:id/items/:itemId/serve",
+  authenticate,
+  authorizeAnyCanteenRole("CTNMNG", "CTNSTF"),
+  validate(serveBookingSchema), // Reuse serveBookingSchema since it just expects an optional PSERVEREASON
+  serveBookingItemController
 );
 
 // Cancel a booking
@@ -51,7 +72,7 @@ router.patch(
   cancelBookingController
 );
 
-// Serve a booking (e.g. by Canteen Staff scanning QR/RFID)
+// Serve an entire booking
 router.patch(
   "/:id/serve",
   authenticate,

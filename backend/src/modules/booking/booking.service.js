@@ -61,3 +61,40 @@ export const toggleKiosk = async (dayMenuId, data, userId) => {
     PCHANGEDBY: userId,
   });
 };
+
+export const scanRfid = async (rfidHash, serviceId) => {
+  const bookings = await bookingRepository.getBookingsByRfid(rfidHash, serviceId);
+  
+  if (!bookings || bookings.length === 0) {
+    const error = new Error("No active bookings found for this RFID");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // Dynamically import to avoid circular dependencies if any
+  import("../../utils/socket.js").then(({ getIO }) => {
+    try {
+      const io = getIO();
+      io.to("canteen_dashboard").emit("rfid_scanned", {
+        rfidHash,
+        bookings,
+      });
+    } catch (e) {
+      console.error("Socket emit failed", e);
+    }
+  });
+
+  return bookings;
+};
+
+export const serveBookingItem = async (bookingId, itemId, data, userId) => {
+  // Uses existing update item proc. We assume the proc handles STATUS changes.
+  return await bookingRepository.updateBookingItem({
+    PBOOKINGID: bookingId,
+    PBOOKDTID: itemId,
+    PQTY: data.PQTY || 1,
+    PSTATUS: 'SRV',
+    PCHANGEDBY: userId,
+    PCHGREASON: data.PSERVEREASON || 'Served at kiosk',
+  });
+};
