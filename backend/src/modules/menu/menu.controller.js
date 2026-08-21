@@ -9,7 +9,7 @@ import {
 } from "./menu.service.js";
 
 export const getMenusController = asyncHandler(async (req, res) => {
-  const data = await fetchMenus();
+  const data = await fetchMenus(req.query.isSpecial, req.query.status);
   return sendSuccess(res, data, "Menu items fetched successfully");
 });
 

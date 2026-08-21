@@ -8,6 +8,7 @@ import {
   approveDayMenuSchema,
   dayMenuIdSchema,
   publishedMenuSchema,
+  getDayMenusSchema,
 } from "./daymenu.validation.js";
 
 import {
@@ -24,14 +25,15 @@ const router = express.Router();
 router.get(
   "/",
   authenticate,
-  authorizeRoles("ADMIN", "CTNMNG"),
+  authorizeRoles("CTNMNG", "CTNAST"),
+  validate(getDayMenusSchema),
   getDayMenusController
 );
 
 router.get(
   "/:id",
   authenticate,
-  authorizeRoles("ADMIN", "CTNMNG"),
+  authorizeRoles("CTNMNG", "CTNAST"),
   validate(dayMenuIdSchema),
   getDayMenuController
 );
@@ -39,7 +41,7 @@ router.get(
 router.post(
   "/",
   authenticate,
-  authorizeRoles("ADMIN", "CTNMNG", "CTNSTF"),
+  authorizeRoles("CTNMNG", "CTNAST"),
   validate(createDayMenuSchema),
   createDayMenuController
 );
@@ -47,7 +49,7 @@ router.post(
 router.patch(
   "/:id/approve",
   authenticate,
-  authorizeRoles("ADMIN", "CTNMNG"),
+  authorizeRoles("CTNMNG"),
   validate(approveDayMenuSchema),
   approveDayMenuController
 );
@@ -55,7 +57,7 @@ router.patch(
 router.patch(
   "/:id/reject",
   authenticate,
-  authorizeRoles("ADMIN", "CTNMNG"),
+  authorizeRoles("CTNMNG"),
   validate(approveDayMenuSchema),
   rejectDayMenuController
 );

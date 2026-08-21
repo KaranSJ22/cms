@@ -21,14 +21,14 @@ const router = express.Router();
 router.get(
   "/",
   authenticate,
-  authorizeRoles("ADMIN", "CTNMNG", "CTNSTF"),
+  authorizeRoles("CTNMNG", "CTNAST"),
   getMenusController
 );
 
 router.get(
   "/:id",
   authenticate,
-  authorizeRoles("ADMIN", "CTNMNG", "CTNSTF"),
+  authorizeRoles("CTNMNG", "CTNAST"),
   validate(menuIdSchema),
   getMenuController
 );
@@ -36,7 +36,7 @@ router.get(
 router.post(
   "/",
   authenticate,
-  authorizeRoles("ADMIN", "CTNMNG"),
+  authorizeRoles("CTNMNG", "CTNAST"),
   validate(createMenuSchema),
   createMenuController
 );
@@ -44,7 +44,7 @@ router.post(
 router.put(
   "/:id",
   authenticate,
-  authorizeRoles("ADMIN", "CTNMNG"),
+  authorizeRoles("CTNMNG", "CTNAST"),
   validate(updateMenuSchema),
   updateMenuController
 );

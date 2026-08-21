@@ -8,8 +8,20 @@ export const getBookingController = asyncHandler(async (req, res) => {
 });
 
 export const getBookingsController = asyncHandler(async (req, res) => {
-  const data = await bookingService.listBookings(req.query);
+  const filters = {
+    PCUSTOMERID: req.query.customerId,
+    PSERVICEID: req.query.serviceId,
+    PSTARTDATE: req.query.startDate,
+    PENDDATE: req.query.endDate,
+    PSTATUS: req.query.status
+  };
+  const data = await bookingService.listBookings(filters);
   return sendSuccess(res, data, "Bookings retrieved successfully");
+});
+
+export const getKitchenPrepController = asyncHandler(async (req, res) => {
+  const data = await bookingService.fetchKitchenPrep(req.validated.query.daySlotId);
+  return sendSuccess(res, data, "Kitchen prep data retrieved successfully");
 });
 
 export const createBookingController = asyncHandler(async (req, res) => {
@@ -79,4 +91,9 @@ export const serveBookingItemController = asyncHandler(async (req, res) => {
     req.user.USERID
   );
   return sendSuccess(res, data, "Booking item served successfully");
+});
+
+export const resolveBookingController = asyncHandler(async (req, res) => {
+  const data = await bookingService.resolveBooking(req.params.identifier);
+  return sendSuccess(res, data, "Booking resolved successfully");
 });

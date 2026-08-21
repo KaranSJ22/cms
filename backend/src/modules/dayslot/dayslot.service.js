@@ -5,8 +5,8 @@ import {
   getDaySlotById,
 } from "./dayslot.repository.js";
 
-export const fetchDaySlots = async () => {
-  return await getDaySlots();
+export const fetchDaySlots = async (params = {}) => {
+  return await getDaySlots(params);
 };
 
 export const fetchDaySlot = async (DAYSLOTID) => {
@@ -23,6 +23,7 @@ export const fetchDaySlot = async (DAYSLOTID) => {
 
 export const createDaySlot = async (daySlotData, createdByUserId) => {
   const created = await createDaySlotRepository({
+    CANTEENID: daySlotData.CANTEENID,
     SERVICEID: daySlotData.SERVICEID,
     SERVDATE: daySlotData.SERVDATE,
     STARTTIME: daySlotData.STARTTIME,

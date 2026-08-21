@@ -14,7 +14,7 @@
     "express",
     "mysql"
   ],
-  "author": "",
+  "author": "Karan J",
   "license": "ISC",
   "dependencies": {
     "bcrypt": "^6.0.0",

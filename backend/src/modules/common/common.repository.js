@@ -23,3 +23,9 @@ export const getAllAutonos = async () => {
 
   return resultSets[0] || [];
 };
+
+export const getAllCanteens = async () => {
+  const [resultSets] = await pool.execute("CALL CMSLISTCANTEEN(?)", [null]);
+
+  return resultSets[0] || [];
+};

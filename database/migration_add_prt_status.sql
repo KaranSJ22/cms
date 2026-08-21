@@ -1,7 +1,0 @@
-USE cms_db;
-
--- Drop the existing constraint
-ALTER TABLE CMS_BOOKING DROP CONSTRAINT CK_BK_STATUS;
-
--- Add the updated constraint with 'PRT'
-ALTER TABLE CMS_BOOKING ADD CONSTRAINT CK_BK_STATUS CHECK (STATUS IN ('CR','SRV','CAN','NOS','PRT'));

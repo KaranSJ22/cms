@@ -8,6 +8,11 @@ export const getBooking = async (bookingId) => {
   };
 };
 
+export const getKitchenPrep = async (daySlotId) => {
+  const [resultSets] = await pool.query("CALL CMSLISTKITCHENPREP(?)", [daySlotId]);
+  return resultSets[0] || [];
+};
+
 export const listBookings = async ({
   PCUSTOMERID = null,
   PSERVICEID = null,
@@ -51,21 +56,16 @@ export const createBooking = async ({
 
 export const updateBookingItem = async ({
   PBOOKINGID,
-  PBOOKDTID,
-  PQTY,
-  PSTATUS,
+  PITEMSJSON,
   PCHANGEDBY,
-  PCHGREASON,
+
 }) => {
   const [result] = await pool.query(
-    "CALL CMSUPDBOOKITEM(?, ?, ?, ?, ?, ?)",
+    "CALL CMSUPDBOOKITEM(?, ?, ?)",
     [
       PBOOKINGID,
-      PBOOKDTID,
-      PQTY,
-      PSTATUS,
-      PCHANGEDBY,
-      PCHGREASON || null,
+      PITEMSJSON,
+      PCHANGEDBY
     ]
   );
   return result;
@@ -74,11 +74,12 @@ export const updateBookingItem = async ({
 export const cancelBooking = async ({
   PBOOKINGID,
   PCANCELLEDBY,
+  PISSTAFFOVERRIDE = 0,
   PCANCELREASON,
 }) => {
   const [result] = await pool.query(
-    "CALL CMSCANCELBOOK(?, ?, ?)",
-    [PBOOKINGID, PCANCELLEDBY, PCANCELREASON || null]
+    "CALL CMSCANCELBOOK(?, ?, ?, ?)",
+    [PBOOKINGID, PCANCELLEDBY, PISSTAFFOVERRIDE, PCANCELREASON || null]
   );
   return result;
 };
@@ -86,11 +87,10 @@ export const cancelBooking = async ({
 export const serveBooking = async ({
   PBOOKINGID,
   PSERVEDBY,
-  PSERVEREASON,
 }) => {
   const [result] = await pool.query(
-    "CALL CMSSERVEBOOK(?, ?, ?)",
-    [PBOOKINGID, PSERVEDBY, PSERVEREASON || null]
+    "CALL CMSSERVEBOOK(?, ?)",
+    [PBOOKINGID, PSERVEDBY]
   );
   return result;
 };
@@ -119,36 +119,3 @@ export const toggleKiosk = async ({
   return result;
 };
 
-export const getBookingsByRfid = async (rfidHash, serviceId) => {
-  let query = `
-    SELECT b.*, c.DISPNAME, c.CTYPECODE 
-    FROM CMS_BOOKING b
-    JOIN CMS_ACCKEY a ON b.CUSTOMERID = a.CUSTOMERID
-    JOIN CMS_CUSTOMER c ON b.CUSTOMERID = c.CUSTOMERID
-    WHERE a.KEYVALUE = ? 
-      AND b.SERVICEDATE = CURRENT_DATE() 
-      AND b.STATUS IN ('CR', 'PRT')
-      AND a.STATUS = 'A'
-  `;
-  const params = [rfidHash];
-  
-  if (serviceId) {
-    query += ` AND b.SERVICEID = ?`;
-    params.push(serviceId);
-  }
-
-  const [bookings] = await pool.query(query, params);
-
-  for (const booking of bookings) {
-    const [items] = await pool.query(
-      `SELECT bi.*, m.ITEMNAME 
-       FROM CMS_BOOKITEM bi 
-       JOIN CMS_MENUITEM m ON bi.MENUITEMID = m.MENUITEMID 
-       WHERE bi.BOOKID = ?`,
-      [booking.BOOKID]
-    );
-    booking.ITEMS = items;
-  }
-
-  return bookings;
-};

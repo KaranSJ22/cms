@@ -1,4 +1,5 @@
 import express from "express";
+const router = express.Router();
 import { authenticate } from "../../middlwares/auth.middleware.js";
 import { authorizeAnyCanteenRole } from "../../middlwares/role.middleware.js";
 import { validate } from "../../middlwares/validate.middleware.js";
@@ -17,9 +18,8 @@ import {
   itemPriceIdSchema,
 } from "./pricing.validation.js";
 
-const router = express.Router();
-const canManagePrices = authorizeAnyCanteenRole("CTNMNG", "CTNAST");
 
+const canManagePrices = authorizeAnyCanteenRole("CTNMNG", "CTNAST");
 router.post(
   "/menu-items/:menuItemId/prices",
   authenticate,

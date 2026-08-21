@@ -23,7 +23,6 @@ export const serviceIdSchema = z.object({
 export const createServiceSchema = z.object({
   body: z
     .object({
-      CANTEENID: z.coerce.number().int().positive(),
       SERVCODE: z.string().trim().min(1).max(20),
       SERVNAME: z.string().trim().min(1).max(80),
       DEFSTART: timeSchema,

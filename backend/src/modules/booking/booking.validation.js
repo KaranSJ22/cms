@@ -1,6 +1,12 @@
 import dayjs from "dayjs";
 import { z } from "zod";
 
+export const getKitchenPrepSchema = z.object({
+  query: z.object({
+    daySlotId: z.coerce.number().int().positive("Day Slot ID must be a positive integer"),
+  }).strict(),
+});
+
 export const createBookingSchema = z.object({
   body: z.object({
     PBOOKTYPECODE: z.enum(["PB", "KS"]),
@@ -76,5 +82,12 @@ export const toggleKioskSchema = z.object({
   }),
   body: z.object({
     PISKIOSK: z.number().int().min(0).max(1),
+  }).strict(),
+});
+
+export const scanRfidSchema = z.object({
+  body: z.object({
+    PRFIDHASH: z.string().min(1, "RFID hash is required"),
+    PSERVICEID: z.number().int().positive("Service ID must be positive"),
   }).strict(),
 });

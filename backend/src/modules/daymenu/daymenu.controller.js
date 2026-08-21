@@ -11,7 +11,7 @@ import {
 } from "./daymenu.service.js";
 
 export const getDayMenusController = asyncHandler(async (req, res) => {
-  const data = await fetchDayMenus();
+  const data = await fetchDayMenus(req.validated.query);
   return sendSuccess(res, data, "Day menus fetched successfully");
 });
 
@@ -21,7 +21,16 @@ export const getDayMenuController = asyncHandler(async (req, res) => {
 });
 
 export const createDayMenuController = asyncHandler(async (req, res) => {
-  const data = await createDayMenu(req.validated.body, req.user.USERID);
+  let data = await createDayMenu(req.validated.body, req.user.USERID);
+  
+  const isManager = 
+    req.user.SYSTEMROLES?.includes("CTNMNG") || 
+    req.user.CANTEENROLES?.some(r => r.ROLECODE === "CTNMNG");
+
+  if (isManager) {
+    data = await approveDayMenu(data.DAYMENUID, "Auto-approved by Canteen Manager", req.user.USERID);
+  }
+
   return sendSuccess(res, data, "Day menu created successfully", 201);
 });
 

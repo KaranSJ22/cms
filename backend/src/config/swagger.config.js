@@ -52,6 +52,14 @@ export const swaggerSpec = swaggerJsdoc({
         name: "Pricing",
         description: "Canteen menu item pricing APIs",
       },
+      {
+        name: "Booking",
+        description: "Canteen booking and ordering APIs",
+      },
+      {
+        name: "Wallet",
+        description: "Digital wallet and funds management APIs",
+      },
     ],
     components: {
       securitySchemes: {

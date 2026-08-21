@@ -5,8 +5,8 @@ import {
   getMenuById,
 } from "./menu.repository.js";
 
-export const fetchMenus = async () => {
-  return await getMenus();
+export const fetchMenus = async (isSpecial = null, status = null) => {
+  return await getMenus(isSpecial, status);
 };
 
 export const fetchMenu = async (MENUITEMID) => {
@@ -47,7 +47,7 @@ export const updateMenu = async (MENUITEMID, menuData, changedByUserId) => {
     ITEMNAME: menuData.ITEMNAME,
     ITEMDESCR: menuData.ITEMDESCR || null,
     ISSPECIAL: menuData.ISSPECIAL ?? 0,
-    STATUS: menuData.STATUS,
+    STATUS: menuData.STATUS === 'ACT' ? 'A' : (menuData.STATUS === 'DIS' ? 'D' : menuData.STATUS),
     CHANGEDBY: changedByUserId,
     CHGREASON: menuData.CHGREASON || null,
   });

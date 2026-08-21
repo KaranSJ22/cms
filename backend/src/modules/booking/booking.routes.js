@@ -5,6 +5,7 @@ import { authorizeRoles, authorizeAnyCanteenRole } from "../../middlwares/role.m
 import {
   getBookingController,
   getBookingsController,
+  getKitchenPrepController,
   createBookingController,
   updateBookingItemController,
   cancelBookingController,
@@ -13,6 +14,7 @@ import {
   toggleKioskController,
   scanRfidController,
   serveBookingItemController,
+  resolveBookingController,
 } from "./booking.controller.js";
 import {
   createBookingSchema,
@@ -22,12 +24,20 @@ import {
   noShowBookingSchema,
   toggleKioskSchema,
   scanRfidSchema,
+  getKitchenPrepSchema,
 } from "./booking.validation.js";
 
 const router = express.Router();
 
 // Fetch booking endpoints
 router.get("/", authenticate, getBookingsController);
+router.get(
+  "/kitchen-prep",
+  authenticate,
+  authorizeAnyCanteenRole("CTNMNG", "CTNSTF", "CTNAST"),
+  validate(getKitchenPrepSchema),
+  getKitchenPrepController
+);
 router.get("/:id", authenticate, getBookingController);
 
 // Create a booking
@@ -94,7 +104,7 @@ router.patch(
 router.patch(
   "/kiosk-toggle/:dayMenuId",
   authenticate,
-  authorizeRoles("ADMIN", "CTNMNG", "CTNSTF"),
+  authorizeRoles("CTNMNG", "CTNSTF"),
   validate(toggleKioskSchema),
   toggleKioskController
 );

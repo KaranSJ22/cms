@@ -1,7 +1,7 @@
 import { pool } from "../../db/connection.js";
 
-export const getServices = async (CANTEENID = null) => {
-  const [resultSets] = await pool.execute("CALL CMSLISTSERV(?)", [CANTEENID]);
+export const getServices = async () => {
+  const [resultSets] = await pool.execute("CALL CMSLISTSERV()");
 
   return resultSets[0] || [];
 };
@@ -13,7 +13,6 @@ export const getServiceById = async (SERVICEID) => {
 };
 
 export const createService = async ({
-  CANTEENID,
   SERVCODE,
   SERVNAME,
   DEFSTART,
@@ -21,8 +20,8 @@ export const createService = async ({
   CREATEDBY,
 }) => {
   const [resultSets] = await pool.execute(
-    "CALL CMSADDSERV(?, ?, ?, ?, ?, ?)",
-    [CANTEENID, SERVCODE, SERVNAME, DEFSTART, DEFEND, CREATEDBY]
+    "CALL CMSADDSERV(?, ?, ?, ?, ?)",
+    [SERVCODE, SERVNAME, DEFSTART, DEFEND, CREATEDBY]
   );
 
   const rows = resultSets[0];

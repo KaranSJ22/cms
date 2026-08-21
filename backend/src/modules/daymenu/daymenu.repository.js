@@ -1,5 +1,12 @@
 import { pool } from "../../db/connection.js";
 
+const formatToMySQLDateTime = (isoString) => {
+  if (!isoString) return null;
+  const d = new Date(isoString);
+  const pad = (n) => n.toString().padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+};
+
 export const getDayMenus = async ({
   CANTEENID = null,
   SERVICEID = null,
@@ -44,8 +51,8 @@ export const createDayMenu = async ({
       ISKIOSK,
       AVAILQTY,
       MAXQTY,
-      BOOKUNTIL,
-      CANCELUNTIL,
+      formatToMySQLDateTime(BOOKUNTIL),
+      formatToMySQLDateTime(CANCELUNTIL),
       CREATEDBY,
       REMARKS,
     ]

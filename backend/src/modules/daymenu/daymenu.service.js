@@ -7,8 +7,8 @@ import {
   viewPublishedMenu,
 } from "./daymenu.repository.js";
 
-export const fetchDayMenus = async () => {
-  return await getDayMenus();
+export const fetchDayMenus = async (params = {}) => {
+  return await getDayMenus(params);
 };
 
 export const fetchDayMenu = async (DAYMENUID) => {

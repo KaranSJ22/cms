@@ -61,3 +61,15 @@ export const publishedMenuSchema = z.object({
     })
     .strict(),
 });
+
+export const getDayMenusSchema = z.object({
+  query: z
+    .object({
+      CANTEENID: z.coerce.number().int().positive().optional(),
+      SERVICEID: z.coerce.number().int().positive().optional(),
+      DAYSLOTID: z.coerce.number().int().positive().optional(),
+      SERVDATE: dateSchema.optional(),
+      APPRSTATUS: z.string().trim().max(20).optional(),
+    })
+    .strict(),
+});

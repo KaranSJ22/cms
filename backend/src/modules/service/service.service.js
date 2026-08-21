@@ -23,7 +23,6 @@ export const fetchService = async (SERVICEID) => {
 
 export const createService = async (serviceData, createdByUserId) => {
   const created = await createServiceRepository({
-    CANTEENID: serviceData.CANTEENID,
     SERVCODE: serviceData.SERVCODE,
     SERVNAME: serviceData.SERVNAME,
     DEFSTART: serviceData.DEFSTART,

@@ -21,6 +21,7 @@ export const daySlotIdSchema = z.object({
 export const createDaySlotSchema = z.object({
   body: z
     .object({
+      CANTEENID: z.coerce.number().int().positive(),
       SERVICEID: z.coerce.number().int().positive(),
       SERVDATE: dateSchema,
       STARTTIME: timeSchema,
