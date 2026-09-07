@@ -1,63 +1,90 @@
 import express from "express";
 
 import { authenticate } from "../../middlwares/auth.middleware.js";
-import { authorizeRoles } from "../../middlwares/role.middleware.js";
+import { authorizeCanteenRoles, getResourceCanteenId, authorizeAnyCanteenRole } from "../../middlwares/role.middleware.js";
 import { validate } from "../../middlwares/validate.middleware.js";
 import {
-  createDayMenuSchema,
+  replaceDayMenuSchema,
   approveDayMenuSchema,
-  dayMenuIdSchema,
   publishedMenuSchema,
+  bulkCreateDayMenuSchema,
 } from "./daymenu.validation.js";
 
 import {
-  createDayMenuController,
+  getDayMenuWorkspaceController,
+  updateMenuItemsController,
+  submitDayMenuController,
   approveDayMenuController,
   rejectDayMenuController,
-  getDayMenusController,
-  getDayMenuController,
+  getPendingDayMenusController,
   viewPublishedMenuController,
+  bulkCreateDayMenuController,
 } from "./daymenu.controller.js";
 
 const router = express.Router();
 
-router.get(
-  "/",
-  authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN"),
-  getDayMenusController
-);
+const getCanteenFromDaySlot = async (req) => getResourceCanteenId('DAYSLOT', req.params.id);
 
-router.get(
-  "/:id",
-  authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN"),
-  validate(dayMenuIdSchema),
-  getDayMenuController
-);
-
+// POST /day-menus/bulk
+// IMPORTANT: This literal route must be defined BEFORE /:id/* param routes
+// to prevent the router from matching 'bulk' as an ID parameter.
 router.post(
-  "/",
+  "/bulk",
   authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN", "CANTEENSTF"),
-  validate(createDayMenuSchema),
-  createDayMenuController
+  authorizeAnyCanteenRole("CNTMGR", "CNTAST"),
+  validate(bulkCreateDayMenuSchema),
+  bulkCreateDayMenuController
 );
 
-router.patch(
-  "/:id/approve",
+// GET /day-slots/:id/menu
+router.get(
+  "/:id/menu",
   authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN"),
+  authorizeCanteenRoles(["CNTMGR", "CNTAST"], getCanteenFromDaySlot),
+  getDayMenuWorkspaceController
+);
+
+// PUT /day-slots/:id/menu
+router.put(
+  "/:id/menu",
+  authenticate,
+  authorizeCanteenRoles(["CNTMGR", "CNTAST"], getCanteenFromDaySlot),
+  validate(replaceDayMenuSchema),
+  updateMenuItemsController
+);
+
+// POST /day-slots/:id/menu/submit
+router.post(
+  "/:id/menu/submit",
+  authenticate,
+  authorizeCanteenRoles(["CNTMGR", "CNTAST"], getCanteenFromDaySlot),
+  submitDayMenuController
+);
+
+// POST /day-slots/:id/menu/approve
+router.post(
+  "/:id/menu/approve",
+  authenticate,
+  authorizeCanteenRoles(["CNTMGR"], getCanteenFromDaySlot),
   validate(approveDayMenuSchema),
   approveDayMenuController
 );
 
-router.patch(
-  "/:id/reject",
+// POST /day-slots/:id/menu/reject
+router.post(
+  "/:id/menu/reject",
   authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN"),
+  authorizeCanteenRoles(["CNTMGR"], getCanteenFromDaySlot),
   validate(approveDayMenuSchema),
   rejectDayMenuController
+);
+
+// GET /day-menus/pending
+router.get(
+  "/pending",
+  authenticate,
+  authorizeAnyCanteenRole("CNTMGR"),
+  getPendingDayMenusController
 );
 
 export const publishedMenuRoutes = express.Router();

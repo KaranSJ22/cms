@@ -1,0 +1,56 @@
+export function UsersTable({ users, loading, error }) {
+  if (loading) {
+    return <div className="p-8 text-center text-slate-500 text-sm animate-pulse">Loading users...</div>;
+  }
+
+  if (error) {
+    return <div className="p-8 text-center text-red-500 text-sm font-semibold">{error}</div>;
+  }
+
+  if (!users || users.length === 0) {
+    return (
+      <div className="p-12 flex flex-col items-center justify-center border border-dashed border-slate-200 rounded-lg bg-slate-50/50">
+        <div className="text-slate-400 mb-2">No users found</div>
+        <div className="text-[0.75rem] text-slate-400 text-center max-w-xs">
+          Get started by adding a new user to the system.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full overflow-x-auto rounded-lg border border-slate-200 bg-white">
+      <table className="w-full text-left border-collapse">
+        <thead>
+          <tr className="bg-slate-50 text-[0.7rem] font-grotesk tracking-wider text-slate-500 uppercase border-b border-slate-200">
+            <th className="px-4 py-3 font-semibold">Login ID</th>
+            <th className="px-4 py-3 font-semibold">Full Name</th>
+            <th className="px-4 py-3 font-semibold">Email</th>
+            <th className="px-4 py-3 font-semibold">Mobile</th>
+            <th className="px-4 py-3 font-semibold">Provider</th>
+          </tr>
+        </thead>
+        <tbody>
+          {users.map((user, index) => (
+            <tr 
+              key={user.USERID || index} 
+              className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80 transition-colors text-sm text-slate-700"
+            >
+              <td className="px-4 py-3 font-medium text-slate-900">{user.LOGINID}</td>
+              <td className="px-4 py-3">{user.FULLNAME}</td>
+              <td className="px-4 py-3">{user.EMAIL || '-'}</td>
+              <td className="px-4 py-3">{user.MOBILENO || '-'}</td>
+              <td className="px-4 py-3">
+                <span className={`px-2 py-0.5 rounded text-[0.65rem] font-bold tracking-wide uppercase ${
+                  user.AUTHPROV === 'SSO' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {user.AUTHPROV}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}

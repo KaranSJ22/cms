@@ -1,77 +1,83 @@
 import {
-  createDayMenu as createDayMenuRepository,
-  approveDayMenu as approveDayMenuRepository,
-  rejectDayMenu as rejectDayMenuRepository,
-  getDayMenus,
-  getDayMenuById,
+  getDayMenuWorkspace,
+  replaceDayMenuItems,
+  submitDayMenu as submitDayMenuRepo,
+  approveDayMenu as approveDayMenuRepo,
+  rejectDayMenu as rejectDayMenuRepo,
+  listPendingDayMenus,
   viewPublishedMenu,
+  bulkCreateMenuForWeek,
 } from "./daymenu.repository.js";
 
-export const fetchDayMenus = async () => {
-  return await getDayMenus();
+export const getWorkspace = async (DAYSLOTID) => {
+  return await getDayMenuWorkspace(DAYSLOTID);
 };
 
-export const fetchDayMenu = async (DAYMENUID) => {
-  const dayMenu = await getDayMenuById(DAYMENUID);
-
-  if (!dayMenu) {
-    const error = new Error("Day menu not found");
-    error.statusCode = 404;
-    throw error;
-  }
-
-  return dayMenu;
+export const updateMenuItems = async (DAYSLOTID, ITEMSJSON, CHANGEDBY, REMARKS = null) => {
+  await replaceDayMenuItems({ DAYSLOTID, ITEMSJSON, CHANGEDBY, REMARKS });
+  return await getDayMenuWorkspace(DAYSLOTID);
 };
 
-export const createDayMenu = async (dayMenuData, addedByUserId) => {
-  const created = await createDayMenuRepository({
-    DAYSLOTID: dayMenuData.DAYSLOTID,
-    MENUITEMID: dayMenuData.MENUITEMID,
-    ISSPECIAL: dayMenuData.ISSPECIAL ?? 0,
-    ISPREBOOK: dayMenuData.ISPREBOOK ?? 1,
-    ISWALKIN: dayMenuData.ISWALKIN ?? 1,
-    ISKIOSK: dayMenuData.ISKIOSK ?? 1,
-    AVAILQTY: dayMenuData.AVAILQTY,
-    MAXQTY: dayMenuData.MAXQTY,
-    BOOKSTART: dayMenuData.BOOKSTART,
-    BOOKEND: dayMenuData.BOOKEND,
-    CANCELAT: dayMenuData.CANCELAT,
-    ADDEDBY: addedByUserId,
-    REMARKS: dayMenuData.REMARKS || null,
-  });
-
-  if (!created?.DAYMENUID) {
-    const error = new Error("Day menu creation failed");
-    error.statusCode = 500;
-    throw error;
-  }
-
-  return await getDayMenuById(created.DAYMENUID);
+export const submitDayMenu = async (DAYSLOTID, SUBMITTEDBY) => {
+  await submitDayMenuRepo({ DAYSLOTID, SUBMITTEDBY });
+  return await getDayMenuWorkspace(DAYSLOTID);
 };
 
-export const approveDayMenu = async (DAYMENUID, remarks, approvedByUserId) => {
-  await approveDayMenuRepository({
-    DAYMENUID,
-    APPROVEDBY: approvedByUserId,
-    REMARKS: remarks || null,
-  });
-
-  return await getDayMenuById(DAYMENUID);
+export const approveDayMenu = async (DAYSLOTID, remarks, APPROVEDBY) => {
+  await approveDayMenuRepo({ DAYSLOTID, APPROVEDBY, REMARKS: remarks });
+  return await getDayMenuWorkspace(DAYSLOTID);
 };
 
-export const rejectDayMenu = async (DAYMENUID, remarks, approvedByUserId) => {
-  await rejectDayMenuRepository({
-    DAYMENUID,
-    APPROVEDBY: approvedByUserId,
-    REMARKS: remarks || null,
-  });
-
-  return await getDayMenuById(DAYMENUID);
+export const rejectDayMenu = async (DAYSLOTID, remarks, REJECTEDBY) => {
+  await rejectDayMenuRepo({ DAYSLOTID, REJECTEDBY, REMARKS: remarks });
+  return await getDayMenuWorkspace(DAYSLOTID);
 };
 
-export const fetchPublishedMenu = async (serviceDate, customerTypeCode) => {
+export const fetchPendingDayMenus = async (CANTEENID) => {
+  return await listPendingDayMenus(CANTEENID);
+};
+
+export const fetchPublishedMenu = async (canteenId, serviceDate, customerTypeCode) => {
   return await viewPublishedMenu({
+    CANTEENID: canteenId,
     SERVDATE: serviceDate,
-    CTYPECODE: customerTypeCode || "VISITOR",
+    CTYPECODE: customerTypeCode || "VIS",
+  });
+};
+
+/**
+ * Creates Day Slots (upsert) and Day Menu items for 7 consecutive days.
+ * Validates that ENDTIME is strictly after STARTTIME before delegating
+ * to the repository's single atomic transaction.
+ *
+ * @param {object} payload - Validated body from bulkCreateDayMenuSchema
+ * @param {number} createdBy - USERID of the authenticated user
+ */
+export const bulkCreateDayMenu = async (payload, createdBy) => {
+  const { CANTEENID, SERVICEID, STARTDATE, STARTTIME, ENDTIME, DAYS } = payload;
+
+  // Cross-field time validation (Zod schema can't express this simply)
+  if (ENDTIME <= STARTTIME) {
+    const error = new Error("ENDTIME must be strictly after STARTTIME");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // Ensure at least one day has items
+  const hasAnyItems = DAYS.some((d) => d.ITEMS && d.ITEMS.length > 0);
+  if (!hasAnyItems) {
+    const error = new Error("At least one day must have menu items configured");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return await bulkCreateMenuForWeek({
+    canteenId: CANTEENID,
+    serviceId: SERVICEID,
+    startDate: STARTDATE,
+    startTime: STARTTIME,
+    endTime:   ENDTIME,
+    days:      DAYS,
+    createdBy,
   });
 };

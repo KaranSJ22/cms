@@ -1,33 +1,31 @@
 import { pool } from "../../db/connection.js";
 
 export const getAllStatus = async () => {
-  const [rows] = await pool.execute(
-    "SELECT * FROM CMS_STATUS ORDER BY STATUSCODE"
-  );
+  const [resultSets] = await pool.execute("CALL CMSLISTSTATUS(?)", [null]);
 
-  return rows;
+  return resultSets[0] || [];
 };
 
 export const getAllCustomerTypes = async () => {
-  const [rows] = await pool.execute(
-    "SELECT * FROM CMS_CUSTTYPE ORDER BY CTYPECODE"
-  );
+  const [resultSets] = await pool.execute("CALL CMSLISTCUSTTYPE()");
 
-  return rows;
+  return resultSets[0] || [];
 };
 
 export const getAllScreens = async () => {
-  const [rows] = await pool.execute(
-    "SELECT * FROM CMS_SCREEN ORDER BY SCREENID"
-  );
+  const [resultSets] = await pool.execute("CALL CMSLISTSCREEN()");
 
-  return rows;
+  return resultSets[0] || [];
 };
 
 export const getAllAutonos = async () => {
-  const [rows] = await pool.execute(
-    "SELECT * FROM CMS_AUTONOS ORDER BY AUTONOID"
-  );
+  const [resultSets] = await pool.execute("CALL CMSLISTAUTONO()");
 
-  return rows;
+  return resultSets[0] || [];
+};
+
+export const getAllCanteens = async () => {
+  const [resultSets] = await pool.execute("CALL CMSLISTCANTEEN(?)", [null]);
+
+  return resultSets[0] || [];
 };

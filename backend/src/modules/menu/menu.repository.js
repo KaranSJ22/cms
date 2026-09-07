@@ -1,56 +1,20 @@
 import { pool } from "../../db/connection.js";
 
-export const getMenus = async () => {
-  // TODO: Replace with a read stored procedure when Module 2 read procedures are added.
-  const [rows] = await pool.execute(`
-    SELECT
-      MENUITEMID,
-      MENUCODE,
-      SHORTNAME,
-      ITEMNAME,
-      ITEMDESCR,
-      PERMPRICE,
-      CONTPRICE,
-      VISPRICE,
-      OFFPRICE,
-      ISSPECIAL,
-      STATUS,
-      CREATEDBY,
-      CREATEDAT,
-      UPDATEDAT
-    FROM CMS_MENUITEM
-    ORDER BY MENUITEMID DESC
-  `);
+export const getMenus = async (ISSPECIAL = null, STATUS = null) => {
+  const [resultSets] = await pool.execute("CALL CMSLISTMENUITEM(?, ?)", [
+    ISSPECIAL,
+    STATUS,
+  ]);
 
-  return rows;
+  return resultSets[0] || [];
 };
 
 export const getMenuById = async (MENUITEMID) => {
-  // TODO: Replace with a read stored procedure when Module 2 read procedures are added.
-  const [rows] = await pool.execute(
-    `
-    SELECT
-      MENUITEMID,
-      MENUCODE,
-      SHORTNAME,
-      ITEMNAME,
-      ITEMDESCR,
-      PERMPRICE,
-      CONTPRICE,
-      VISPRICE,
-      OFFPRICE,
-      ISSPECIAL,
-      STATUS,
-      CREATEDBY,
-      CREATEDAT,
-      UPDATEDAT
-    FROM CMS_MENUITEM
-    WHERE MENUITEMID = ?
-    `,
-    [MENUITEMID]
-  );
+  const [resultSets] = await pool.execute("CALL CMSGETMENUITEM(?)", [
+    MENUITEMID,
+  ]);
 
-  return rows[0] || null;
+  return resultSets[0]?.[0] || null;
 };
 
 export const createMenu = async ({
@@ -58,25 +22,18 @@ export const createMenu = async ({
   SHORTNAME,
   ITEMNAME,
   ITEMDESCR = null,
-  PERMPRICE,
-  CONTPRICE,
-  VISPRICE,
-  OFFPRICE,
   ISSPECIAL = 0,
+  SERVICEID = null,
   CREATEDBY,
 }) => {
   const [resultSets] = await pool.execute(
-    "CALL CMSADDMENU(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    "CALL CMSADDMENUITEM(?, ?, ?, ?, ?, ?)",
     [
-      MENUCODE,
       SHORTNAME,
       ITEMNAME,
       ITEMDESCR,
-      PERMPRICE,
-      CONTPRICE,
-      VISPRICE,
-      OFFPRICE,
       ISSPECIAL,
+      SERVICEID,
       CREATEDBY,
     ]
   );
@@ -90,29 +47,34 @@ export const updateMenu = async ({
   SHORTNAME,
   ITEMNAME,
   ITEMDESCR = null,
-  PERMPRICE,
-  CONTPRICE,
-  VISPRICE,
-  OFFPRICE,
   ISSPECIAL = 0,
+  SERVICEID = null,
   STATUS,
   CHANGEDBY,
   CHGREASON = null,
 }) => {
-  await pool.execute("CALL CMSUPDMENU(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+  await pool.execute("CALL CMSUPDMENUITEM(?, ?, ?, ?, ?, ?, ?, ?, ?)", [
     MENUITEMID,
     SHORTNAME,
     ITEMNAME,
     ITEMDESCR,
-    PERMPRICE,
-    CONTPRICE,
-    VISPRICE,
-    OFFPRICE,
     ISSPECIAL,
+    SERVICEID,
     STATUS,
     CHANGEDBY,
     CHGREASON,
   ]);
 
   return true;
+};
+
+export const checkPriceReadiness = async (MENUITEMID, SERVICEDATE) => {
+  // If it doesn't throw an error, it is ready.
+  // The procedure raises a custom SQL error if it is not ready.
+  await pool.execute("CALL CMSCHECKITEMPRICEREADINESS(?, ?)", [
+    MENUITEMID,
+    SERVICEDATE,
+  ]);
+
+  return { isReady: true };
 };

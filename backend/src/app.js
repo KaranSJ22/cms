@@ -12,28 +12,44 @@ import { swaggerSpec } from "./config/swagger.config.js";
 import { testDbConnection } from "./db/connection.js";
 import { requestLogger } from "./middlwares/requestLogger.middleware.js";
 import { errorHandler } from "./middlwares/error.middleware.js";
+import { detectKiosk } from "./middlwares/kioskDevice.middleware.js";
 
 const app = express();
+
+app.set("trust proxy", true);
 
 app.use(helmet());
 
 app.use(
   cors({
-    origin: env.FRONTEND_URL,
+    origin: [
+      env.FRONTEND_URL,
+      "http://localhost:5173",
+      "http://localhost:5174",
+      "http://localhost:5175",
+    ],
     credentials: true,
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Correlation-ID",
+      "X-Request-ID",
+    ],
+    exposedHeaders: ["X-Correlation-ID"],
   })
 );
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use(detectKiosk);
 app.use(requestLogger);
 
 app.use(
   "/api/auth/login",
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 10,
+    max: 5,
     standardHeaders: true,
     legacyHeaders: false,
     message: {

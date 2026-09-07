@@ -165,4 +165,33 @@
  *         description: Validation failed
  *       404:
  *         description: Menu item not found
+ *
+ * /api/menu-items/{id}/price-readiness:
+ *   get:
+ *     summary: Check menu item price readiness
+ *     description: Checks if a menu item has valid prices configured for a specific service date.
+ *     tags:
+ *       - Menu
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 1
+ *       - in: query
+ *         name: serviceDate
+ *         required: false
+ *         schema:
+ *           type: string
+ *         example: "2026-06-28"
+ *     responses:
+ *       200:
+ *         description: Price readiness checked successfully
+ *       400:
+ *         description: Menu item does not have valid prices for the service date
+ *       404:
+ *         description: Menu item not found
  */

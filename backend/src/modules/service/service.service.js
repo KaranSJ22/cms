@@ -27,8 +27,6 @@ export const createService = async (serviceData, createdByUserId) => {
     SERVNAME: serviceData.SERVNAME,
     DEFSTART: serviceData.DEFSTART,
     DEFEND: serviceData.DEFEND,
-    VALIDFROM: serviceData.VALIDFROM || null,
-    VALIDUNTIL: serviceData.VALIDUNTIL || null,
     CREATEDBY: createdByUserId,
   });
 
@@ -51,8 +49,6 @@ export const updateService = async (
     SERVNAME: serviceData.SERVNAME,
     DEFSTART: serviceData.DEFSTART,
     DEFEND: serviceData.DEFEND,
-    VALIDFROM: serviceData.VALIDFROM || null,
-    VALIDUNTIL: serviceData.VALIDUNTIL || null,
     STATUS: serviceData.STATUS,
     CHANGEDBY: changedByUserId,
     CHGREASON: serviceData.CHGREASON || null,

@@ -1,7 +1,7 @@
 import express from "express";
 
 import { authenticate } from "../../middlwares/auth.middleware.js";
-import { authorizeRoles } from "../../middlwares/role.middleware.js";
+import { authorizeAnyCanteenRole } from "../../middlwares/role.middleware.js";
 import { validate } from "../../middlwares/validate.middleware.js";
 import {
   createServiceSchema,
@@ -21,14 +21,14 @@ const router = express.Router();
 router.get(
   "/",
   authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN", "CANTEENSTF"),
+  authorizeAnyCanteenRole("CNTMGR", "CNTAST"),
   getServicesController
 );
 
 router.get(
   "/:id",
   authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN", "CANTEENSTF"),
+  authorizeAnyCanteenRole("CNTMGR", "CNTAST"),
   validate(serviceIdSchema),
   getServiceController
 );
@@ -36,7 +36,7 @@ router.get(
 router.post(
   "/",
   authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN"),
+  authorizeAnyCanteenRole("CNTMGR", "CNTAST"),
   validate(createServiceSchema),
   createServiceController
 );
@@ -44,7 +44,7 @@ router.post(
 router.put(
   "/:id",
   authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN"),
+  authorizeAnyCanteenRole("CNTMGR", "CNTAST"),
   validate(updateServiceSchema),
   updateServiceController
 );

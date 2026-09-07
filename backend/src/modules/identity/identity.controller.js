@@ -5,7 +5,6 @@ import {
   fetchUsers,
   fetchRoles,
   fetchCustomers,
-  fetchApprovalLevels,
   createUser,
   assignUserRole,
   createCustomer,
@@ -27,10 +26,10 @@ export const getCustomers = asyncHandler(async (req, res) => {
   return sendSuccess(res, data, "Customers fetched successfully");
 });
 
-export const getApprovalLevels = asyncHandler(async (req, res) => {
-  const data = await fetchApprovalLevels();
-  return sendSuccess(res, data, "Approval levels fetched successfully");
-});
+// export const getApprovalLevels = asyncHandler(async (req, res) => {
+//   const data = await fetchApprovalLevels();
+//   return sendSuccess(res, data, "Approval levels fetched successfully");
+// });
 
 export const createUserController = asyncHandler(async (req, res) => {
   const data = await createUser(req.validated.body);

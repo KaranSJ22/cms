@@ -15,18 +15,19 @@ export const daySlotIdSchema = z.object({
     .object({
       id: z.coerce.number().int().positive(),
     })
-    .strict(),
+    ,
 });
 
 export const createDaySlotSchema = z.object({
   body: z
     .object({
+      CANTEENID: z.coerce.number().int().positive(),
       SERVICEID: z.coerce.number().int().positive(),
       SERVDATE: dateSchema,
       STARTTIME: timeSchema,
       ENDTIME: timeSchema,
     })
-    .strict(),
+    ,
 });
 
 export const updateDaySlotSchema = z.object({
@@ -34,7 +35,7 @@ export const updateDaySlotSchema = z.object({
     .object({
       id: z.coerce.number().int().positive(),
     })
-    .strict(),
+    ,
   body: z
     .object({
       STARTTIME: timeSchema,
@@ -42,5 +43,5 @@ export const updateDaySlotSchema = z.object({
       STATUS: z.string().trim().min(1).max(20),
       CHGREASON: z.string().trim().max(255).nullable().optional(),
     })
-    .strict(),
+    ,
 });

@@ -1,50 +1,15 @@
 import { pool } from "../../db/connection.js";
 
 export const getServices = async () => {
-  // TODO: Replace with a read stored procedure when Module 2 read procedures are added.
-  const [rows] = await pool.execute(`
-    SELECT
-      SERVICEID,
-      SERVCODE,
-      SERVNAME,
-      DEFSTART,
-      DEFEND,
-      VALIDFROM,
-      VALIDUNTIL,
-      STATUS,
-      CREATEDBY,
-      CREATEDAT,
-      UPDATEDAT
-    FROM CMS_SERVICE
-    ORDER BY SERVICEID DESC
-  `);
+  const [resultSets] = await pool.execute("CALL CMSLISTSERV()");
 
-  return rows;
+  return resultSets[0] || [];
 };
 
 export const getServiceById = async (SERVICEID) => {
-  // TODO: Replace with a read stored procedure when Module 2 read procedures are added.
-  const [rows] = await pool.execute(
-    `
-    SELECT
-      SERVICEID,
-      SERVCODE,
-      SERVNAME,
-      DEFSTART,
-      DEFEND,
-      VALIDFROM,
-      VALIDUNTIL,
-      STATUS,
-      CREATEDBY,
-      CREATEDAT,
-      UPDATEDAT
-    FROM CMS_SERVICE
-    WHERE SERVICEID = ?
-    `,
-    [SERVICEID]
-  );
+  const [resultSets] = await pool.execute("CALL CMSGETSERV(?)", [SERVICEID]);
 
-  return rows[0] || null;
+  return resultSets[0]?.[0] || null;
 };
 
 export const createService = async ({
@@ -52,13 +17,11 @@ export const createService = async ({
   SERVNAME,
   DEFSTART,
   DEFEND,
-  VALIDFROM = null,
-  VALIDUNTIL = null,
   CREATEDBY,
 }) => {
   const [resultSets] = await pool.execute(
-    "CALL CMSADDSERV(?, ?, ?, ?, ?, ?, ?)",
-    [SERVCODE, SERVNAME, DEFSTART, DEFEND, VALIDFROM, VALIDUNTIL, CREATEDBY]
+    "CALL CMSADDSERV(?, ?, ?, ?, ?)",
+    [SERVCODE, SERVNAME, DEFSTART, DEFEND, CREATEDBY]
   );
 
   const rows = resultSets[0];
@@ -70,19 +33,15 @@ export const updateService = async ({
   SERVNAME,
   DEFSTART,
   DEFEND,
-  VALIDFROM = null,
-  VALIDUNTIL = null,
   STATUS,
   CHANGEDBY,
   CHGREASON = null,
 }) => {
-  await pool.execute("CALL CMSUPDSERV(?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+  await pool.execute("CALL CMSUPDSERV(?, ?, ?, ?, ?, ?, ?)", [
     SERVICEID,
     SERVNAME,
     DEFSTART,
     DEFEND,
-    VALIDFROM,
-    VALIDUNTIL,
     STATUS,
     CHANGEDBY,
     CHGREASON,

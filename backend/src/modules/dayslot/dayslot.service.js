@@ -5,8 +5,18 @@ import {
   getDaySlotById,
 } from "./dayslot.repository.js";
 
-export const fetchDaySlots = async () => {
-  return await getDaySlots();
+export const fetchDaySlots = async (params = {}) => {
+  const CANTEENID = params.CANTEENID ?? params.canteenId ?? null;
+  const SERVICEID = params.SERVICEID ?? params.serviceId ?? null;
+  const DATEFROM = params.DATEFROM ?? params.dateFrom ?? params.servingDate ?? null;
+  const DATETO = params.DATETO ?? params.dateTo ?? params.servingDate ?? null;
+
+  return await getDaySlots({
+    SERVICEID: SERVICEID ? Number(SERVICEID) : null,
+    CANTEENID: CANTEENID ? Number(CANTEENID) : null,
+    DATEFROM: DATEFROM || null,
+    DATETO: DATETO || null,
+  });
 };
 
 export const fetchDaySlot = async (DAYSLOTID) => {
@@ -23,6 +33,7 @@ export const fetchDaySlot = async (DAYSLOTID) => {
 
 export const createDaySlot = async (daySlotData, createdByUserId) => {
   const created = await createDaySlotRepository({
+    CANTEENID: daySlotData.CANTEENID,
     SERVICEID: daySlotData.SERVICEID,
     SERVDATE: daySlotData.SERVDATE,
     STARTTIME: daySlotData.STARTTIME,
@@ -48,7 +59,7 @@ export const updateDaySlot = async (
     DAYSLOTID,
     STARTTIME: daySlotData.STARTTIME,
     ENDTIME: daySlotData.ENDTIME,
-    STATUS: daySlotData.STATUS,
+    STATUS: daySlotData.STATUS || 'ACT',
     CHANGEDBY: changedByUserId,
     CHGREASON: daySlotData.CHGREASON || null,
   });

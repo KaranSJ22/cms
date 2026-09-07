@@ -1,12 +1,13 @@
 import express from "express";
 
 import { authenticate } from "../../middlwares/auth.middleware.js";
-import { authorizeRoles } from "../../middlwares/role.middleware.js";
+import { authorizeAnyCanteenRole } from "../../middlwares/role.middleware.js";
 import { validate } from "../../middlwares/validate.middleware.js";
 import {
   createMenuSchema,
   updateMenuSchema,
   menuIdSchema,
+  priceReadinessSchema,
 } from "./menu.validation.js";
 
 import {
@@ -14,6 +15,7 @@ import {
   updateMenuController,
   getMenusController,
   getMenuController,
+  checkPriceReadinessController,
 } from "./menu.controller.js";
 
 const router = express.Router();
@@ -21,22 +23,30 @@ const router = express.Router();
 router.get(
   "/",
   authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN", "CANTEENSTF"),
+  authorizeAnyCanteenRole("CNTMGR", "CNTAST"),
   getMenusController
 );
 
 router.get(
   "/:id",
   authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN", "CANTEENSTF"),
+  authorizeAnyCanteenRole("CNTMGR", "CNTAST"),
   validate(menuIdSchema),
   getMenuController
+);
+
+router.get(
+  "/:id/price-readiness",
+  authenticate,
+  authorizeAnyCanteenRole("CNTMGR", "CNTAST"),
+  validate(priceReadinessSchema),
+  checkPriceReadinessController
 );
 
 router.post(
   "/",
   authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN"),
+  authorizeAnyCanteenRole("CNTMGR", "CNTAST"),
   validate(createMenuSchema),
   createMenuController
 );
@@ -44,7 +54,7 @@ router.post(
 router.put(
   "/:id",
   authenticate,
-  authorizeRoles("ADMIN", "CANTEENMAN"),
+  authorizeAnyCanteenRole("CNTMGR", "CNTAST"),
   validate(updateMenuSchema),
   updateMenuController
 );

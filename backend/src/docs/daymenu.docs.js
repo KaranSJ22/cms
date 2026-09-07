@@ -1,94 +1,9 @@
 /**
  * @swagger
- * /api/day-menus:
+ * /api/day-slots/{id}/menu:
  *   get:
- *     summary: Get all day menus
- *     description: Admin or canteen manager API to fetch configured day menus.
- *     tags:
- *       - Day Menu
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Day menus fetched successfully
- *       401:
- *         description: Authentication token missing or invalid
- *       403:
- *         description: Permission denied
- *
- *   post:
- *     summary: Create day menu
- *     description: Admin, canteen manager, or canteen staff API to add a menu item to a day slot.
- *     tags:
- *       - Day Menu
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - DAYSLOTID
- *               - MENUITEMID
- *               - AVAILQTY
- *               - MAXQTY
- *               - BOOKSTART
- *               - BOOKEND
- *               - CANCELAT
- *             properties:
- *               DAYSLOTID:
- *                 type: integer
- *                 example: 1
- *               MENUITEMID:
- *                 type: integer
- *                 example: 3
- *               ISSPECIAL:
- *                 type: integer
- *                 example: 0
- *               ISPREBOOK:
- *                 type: integer
- *                 example: 1
- *               ISWALKIN:
- *                 type: integer
- *                 example: 1
- *               ISKIOSK:
- *                 type: integer
- *                 example: 1
- *               AVAILQTY:
- *                 type: integer
- *                 example: 100
- *               MAXQTY:
- *                 type: integer
- *                 example: 2
- *               BOOKSTART:
- *                 type: string
- *                 example: "2026-06-28T06:00:00.000Z"
- *               BOOKEND:
- *                 type: string
- *                 example: "2026-06-28T08:00:00.000Z"
- *               CANCELAT:
- *                 type: string
- *                 example: "2026-06-28T08:30:00.000Z"
- *               REMARKS:
- *                 type: string
- *                 nullable: true
- *                 example: Breakfast item
- *     responses:
- *       201:
- *         description: Day menu created successfully
- *       400:
- *         description: Validation failed
- *       403:
- *         description: Permission denied
- */
-
-/**
- * @swagger
- * /api/day-menus/{id}:
- *   get:
- *     summary: Get day menu by ID
+ *     summary: Get day menu workspace
+ *     description: Canteen manager or assistant API to fetch the full menu workspace for a specific day slot.
  *     tags:
  *       - Day Menu
  *     security:
@@ -99,18 +14,91 @@
  *         required: true
  *         schema:
  *           type: integer
- *         example: 1
  *     responses:
  *       200:
- *         description: Day menu fetched successfully
+ *         description: Day menu workspace fetched successfully
  *       404:
- *         description: Day menu not found
- */
-
-/**
- * @swagger
- * /api/day-menus/{id}/approve:
- *   patch:
+ *         description: Day slot not found
+ *
+ *   put:
+ *     summary: Replace day menu items
+ *     description: Canteen manager or assistant API to atomically replace the draft/pending day menu items for a slot.
+ *     tags:
+ *       - Day Menu
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ITEMSJSON
+ *             properties:
+ *               ITEMSJSON:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     MENUITEMID:
+ *                       type: integer
+ *                     ISBASE:
+ *                       type: integer
+ *                     ISSPECIAL:
+ *                       type: integer
+ *                     ISPREBOOK:
+ *                       type: integer
+ *                     ISKIOSK:
+ *                       type: integer
+ *                     AVAILQTY:
+ *                       type: integer
+ *                       nullable: true
+ *                     MAXQTY:
+ *                       type: integer
+ *                     BOOKUNTIL:
+ *                       type: string
+ *                     CANCELUNTIL:
+ *                       type: string
+ *                     REMARKS:
+ *                       type: string
+ *                       nullable: true
+ *     responses:
+ *       200:
+ *         description: Day menu items replaced successfully
+ *       400:
+ *         description: Validation failed
+ *       403:
+ *         description: Permission denied
+ *
+ * /api/day-slots/{id}/menu/submit:
+ *   post:
+ *     summary: Submit day menu for approval
+ *     description: API to submit a draft menu for approval.
+ *     tags:
+ *       - Day Menu
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Day menu submitted successfully
+ *       403:
+ *         description: Permission denied
+ *
+ * /api/day-slots/{id}/menu/approve:
+ *   post:
  *     summary: Approve day menu
  *     description: Admin or canteen manager API to approve a pending day menu.
  *     tags:
@@ -123,7 +111,6 @@
  *         required: true
  *         schema:
  *           type: integer
- *         example: 1
  *     requestBody:
  *       required: false
  *       content:
@@ -134,7 +121,6 @@
  *               REMARKS:
  *                 type: string
  *                 nullable: true
- *                 example: Approved
  *     responses:
  *       200:
  *         description: Day menu approved successfully
@@ -142,12 +128,9 @@
  *         description: Validation failed
  *       403:
  *         description: Permission denied
- */
-
-/**
- * @swagger
- * /api/day-menus/{id}/reject:
- *   patch:
+ *
+ * /api/day-slots/{id}/menu/reject:
+ *   post:
  *     summary: Reject day menu
  *     description: Admin or canteen manager API to reject a pending day menu.
  *     tags:
@@ -160,7 +143,6 @@
  *         required: true
  *         schema:
  *           type: integer
- *         example: 1
  *     requestBody:
  *       required: false
  *       content:
@@ -171,7 +153,6 @@
  *               REMARKS:
  *                 type: string
  *                 nullable: true
- *                 example: Rejected due to duplicate item
  *     responses:
  *       200:
  *         description: Day menu rejected successfully
@@ -179,10 +160,27 @@
  *         description: Validation failed
  *       403:
  *         description: Permission denied
- */
-
-/**
- * @swagger
+ *
+ * /api/day-menus/pending:
+ *   get:
+ *     summary: Get pending day menus
+ *     description: Canteen manager API to fetch all day slots with a pending menu.
+ *     tags:
+ *       - Day Menu
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: canteenId
+ *         required: false
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Pending day menus fetched successfully
+ *       403:
+ *         description: Permission denied
+ *
  * /api/menus:
  *   get:
  *     summary: View published menu
@@ -193,11 +191,15 @@
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
+ *         name: canteenId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
  *         name: serviceDate
  *         required: true
  *         schema:
  *           type: string
- *         example: "2026-06-28"
  *     responses:
  *       200:
  *         description: Published menu fetched successfully
@@ -205,4 +207,6 @@
  *         description: Validation failed
  *       401:
  *         description: Authentication token missing or invalid
+ *       403:
+ *         description: Permission denied
  */

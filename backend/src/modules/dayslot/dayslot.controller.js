@@ -9,7 +9,7 @@ import {
 } from "./dayslot.service.js";
 
 export const getDaySlotsController = asyncHandler(async (req, res) => {
-  const data = await fetchDaySlots();
+  const data = await fetchDaySlots(req.query);
   return sendSuccess(res, data, "Day slots fetched successfully");
 });
 
