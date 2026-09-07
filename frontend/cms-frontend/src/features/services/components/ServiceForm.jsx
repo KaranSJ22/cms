@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState } from "react";
 
 export default function ServiceForm({
   initialData = null,
@@ -7,30 +7,30 @@ export default function ServiceForm({
   isSubmitting = false,
 }) {
   const isEditMode = !!initialData;
+  const [prevInitialData, setPrevInitialData] = useState(initialData);
 
-  const [formData, setFormData] = useState({
-    SERVCODE: "",
-    SERVNAME: "",
-    DEFSTART: "",
-    DEFEND: "",
-    STATUS: "A",
+  const [formData, setFormData] = useState(() => ({
+    SERVCODE: initialData?.SERVCODE || "",
+    SERVNAME: initialData?.SERVNAME || "",
+    DEFSTART: initialData?.DEFSTART ? initialData.DEFSTART.substring(0, 5) : "",
+    DEFEND: initialData?.DEFEND ? initialData.DEFEND.substring(0, 5) : "",
+    STATUS: initialData?.STATUS || "ACT",
     CHGREASON: "",
-  });
+  }));
 
   const [errors, setErrors] = useState({});
 
-  useEffect(() => {
-    if (initialData) {
-      setFormData({
-        SERVCODE: initialData.SERVCODE || "",
-        SERVNAME: initialData.SERVNAME || "",
-        DEFSTART: initialData.DEFSTART ? initialData.DEFSTART.substring(0, 5) : "",
-        DEFEND: initialData.DEFEND ? initialData.DEFEND.substring(0, 5) : "",
-        STATUS: initialData.STATUS || "A",
-        CHGREASON: "",
-      });
-    }
-  }, [initialData]);
+  if (initialData !== prevInitialData) {
+    setPrevInitialData(initialData);
+    setFormData({
+      SERVCODE: initialData?.SERVCODE || "",
+      SERVNAME: initialData?.SERVNAME || "",
+      DEFSTART: initialData?.DEFSTART ? initialData.DEFSTART.substring(0, 5) : "",
+      DEFEND: initialData?.DEFEND ? initialData.DEFEND.substring(0, 5) : "",
+      STATUS: initialData?.STATUS || "ACT",
+      CHGREASON: "",
+    });
+  }
 
   const validateForm = () => {
     const newErrors = {};
@@ -46,7 +46,7 @@ export default function ServiceForm({
       newErrors.DEFEND = "End time must be after start time";
     }
 
-    if (isEditMode && formData.STATUS !== "A" && !formData.CHGREASON.trim()) {
+    if (isEditMode && formData.STATUS !== "ACT" && !formData.CHGREASON.trim()) {
       newErrors.CHGREASON = "Reason is required when deactivating";
     }
 
@@ -205,15 +205,15 @@ export default function ServiceForm({
                   onChange={handleChange}
                   className="w-full px-4 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all"
                 >
-                  <option value="A">Active</option>
-                  <option value="D">Inactive</option>
+                  <option value="ACT">Active</option>
+                  <option value="DIS">Inactive</option>
                 </select>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Change Reason{" "}
-                  {formData.STATUS !== "A" && (
+                  {formData.STATUS !== "ACT" && (
                     <span className="text-rose-500">*</span>
                   )}
                 </label>

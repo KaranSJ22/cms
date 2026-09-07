@@ -46,8 +46,20 @@ export function useMenu() {
   };
 
   useEffect(() => {
-    fetchMenus();
-  }, [fetchMenus]);
+    let ignore = false;
+    async function init() {
+      try {
+        const data = await menuApi.getMenuItems({});
+        if (!ignore) setMenus(data || []);
+      } catch (err) {
+        if (!ignore) setError(err.response?.data?.message || err.message || 'Failed to load menu items.');
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+    init();
+    return () => { ignore = true; };
+  }, []);
 
   return {
     menus,

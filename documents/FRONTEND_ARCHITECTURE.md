@@ -32,9 +32,13 @@ cms-frontend/
 │   │   ├── dashboard/
 │   │   ├── daymenu/
 │   │   ├── dayslot/
+│   │   ├── holidays/
 │   │   ├── identity/
+│   │   ├── kiosk/
 │   │   ├── menu/
+│   │   ├── menutemplates/
 │   │   ├── pricing/
+│   │   ├── reports/
 │   │   ├── services/
 │   │   └── wallet/
 │   ├── hooks/          # Global custom React hooks
@@ -68,11 +72,14 @@ The `features/` directory aligns 1:1 with the backend API modules:
 
 *   **`auth`**: Login, SSO, token management.
 *   **`identity`**: Admin user management, role assignments, customer profiles.
-*   **`menu` / `services` / `dayslot`**: Core master data management for food items and timings.
+*   **`menu` / `services` / `dayslot` / `holidays`**: Core master data management for food items, timings, and inactive days.
+*   **`menutemplates`**: Repeated menu scheduling and baseline definitions.
 *   **`daymenu`**: Building, proposing, and approving the daily operational menus.
 *   **`pricing`**: Managing historical and effective prices for different employee tiers.
-*   **`booking`**: Consumer booking flow, POS kiosk interfaces, QR/RFID scanning, and serving logic.
+*   **`booking`**: Consumer booking flow, RFID scanning, and serving logic.
+*   **`kiosk`**: POS kiosk interfaces, fast scanning, and offline-first queueing mechanics.
 *   **`wallet`**: Consumer balance displays, top-ups, and withdrawal approval flows.
+*   **`reports`**: Aggregated views for kitchen prep (e.g. daily serving sheet) and sales summaries.
 *   **`dashboard`**: Aggregated views tailored specifically to the logged-in user's role (Admin vs. Manager vs. Consumer).
 
 ## 7. UI/UX & Styling
@@ -80,6 +87,3 @@ The `features/` directory aligns 1:1 with the backend API modules:
 *   **Responsive Design:** Layouts (`AppLayout`) and components are designed to be mobile-first, accommodating consumers on mobile devices and canteen staff on POS tablets.
 *   **Component Modularity:** Complex pages are broken down into smaller, reusable components stored within their respective feature folders to prevent prop-drilling and massive file sizes.
 
-## 8. Build & Deployment
-*   **Vite:** Used as the build tool for Lightning-fast Hot Module Replacement (HMR) during development and highly optimized rollup builds for production.
-*   **Environment Variables:** Handled via `.env` files (e.g., `VITE_API_BASE_URL`) to seamlessly switch between local, staging, and production backend environments.

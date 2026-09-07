@@ -22,12 +22,12 @@ import {
 
 const router = express.Router();
 
-router.get("/users", authenticate, authorizeRoles("ADMIN"), getUsers);
+router.get("/users", authenticate, authorizeRoles("SYSADM"), getUsers);
 
 router.post(
   "/users",
   authenticate,
-  authorizeRoles("ADMIN"),
+  authorizeRoles("SYSADM"),
   validate(createUserSchema),
   createUserController
 );
@@ -35,19 +35,19 @@ router.post(
 router.post(
   "/user-roles",
   authenticate,
-  authorizeRoles("ADMIN"),
+  authorizeRoles("SYSADM"),
   validate(assignUserRoleSchema),
   assignUserRoleController
 );
 
-router.get("/roles", authenticate, authorizeRoles("ADMIN"), getRoles);
+router.get("/roles", authenticate, authorizeRoles("SYSADM"), getRoles);
 
-router.get("/customers", authenticate, authorizeRoles("ADMIN"), getCustomers);
+router.get("/customers", authenticate, authorizeRoles("SYSADM"), getCustomers);
 
 router.post(
   "/customers",
   authenticate,
-  authorizeRoles("ADMIN"),
+  authorizeRoles("SYSADM"),
   validate(createCustomerSchema),
   createCustomerController
 );
@@ -56,7 +56,7 @@ router.post(
 // router.post(
 //   "/permanent-employees",
 //   authenticate,
-//   authorizeRoles("ADMIN"),
+//   authorizeRoles("SYSADM"),
 //   validate(createPermanentEmployeeSchema),
 //   createPermanentEmployeeController
 // );

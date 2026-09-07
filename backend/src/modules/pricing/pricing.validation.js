@@ -19,7 +19,7 @@ export const createItemPriceSchema = z.object({
               CTYPECODE: z.enum(["PRM", "CNT", "VIS", "OCE", "OFR"]),
               PRICE: z.coerce.number().nonnegative(),
             })
-            .strict()
+            
         )
         .min(1)
         .refine(
@@ -27,7 +27,7 @@ export const createItemPriceSchema = z.object({
           "Customer types must be unique"
         ),
     })
-    .strict(),
+    ,
 });
 
 export const itemPriceHistorySchema = z.object({
@@ -36,7 +36,7 @@ export const itemPriceHistorySchema = z.object({
 
 export const effectiveItemPricesSchema = z.object({
   params: menuItemParams,
-  query: z.object({ serviceDate: dateSchema }).strict(),
+  query: z.object({ serviceDate: dateSchema }),
 });
 
 export const effectiveItemPriceSchema = z.object({
@@ -44,7 +44,7 @@ export const effectiveItemPriceSchema = z.object({
     menuItemId: idSchema,
     customerTypeCode: z.enum(["PRM", "CNT", "VIS", "OCE", "OFR"]),
   }),
-  query: z.object({ serviceDate: dateSchema }).strict(),
+  query: z.object({ serviceDate: dateSchema }),
 });
 
 export const itemPriceIdSchema = z.object({

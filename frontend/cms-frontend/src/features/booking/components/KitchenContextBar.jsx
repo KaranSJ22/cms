@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { getActiveCanteens, getDaySlots } from "../../dayslot/api/daySlotsApi";
 import * as servicesApi from "../../services/api/servicesApi";
 
@@ -20,7 +20,7 @@ export default function KitchenContextBar({ onSlotResolved }) {
           servicesApi.getServices(),
         ]);
         setCanteens(canteenData || []);
-        setServices((serviceData || []).filter((s) => s.STATUS === "A"));
+        setServices((serviceData || []).filter((s) => s.STATUSCODE === "ACT"));
       } catch (err) {
         console.error("Failed to load initial context data", err);
       }

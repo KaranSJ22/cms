@@ -1,5 +1,3 @@
-import React from "react";
-
 export default function ServicesTable({ services, onEdit }) {
   if (!services || services.length === 0) {
     return (
@@ -42,12 +40,12 @@ export default function ServicesTable({ services, onEdit }) {
                 <td className="py-4 px-6 text-center">
                   <span
                     className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      service.STATUS === "A"
+                      service.STATUSCODE === "ACT"
                         ? "bg-emerald-100 text-emerald-800"
                         : "bg-rose-100 text-rose-800"
                     }`}
                   >
-                    {service.STATUS === "A" ? "Active" : "Inactive"}
+                    {service.STATUSCODE === "ACT" ? "Active" : "Inactive"}
                   </span>
                 </td>
                 <td className="py-4 px-6 text-right">

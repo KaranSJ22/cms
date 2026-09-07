@@ -1,5 +1,4 @@
 import { useState, useCallback, useEffect } from 'react';
-import { identityService } from '../api/identityService';
 
 export function useIdentity() {
   const [loading, setLoading] = useState(false);
@@ -42,8 +41,20 @@ export function useFetchData(fetchFn) {
   }, [fetchFn]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    let ignore = false;
+    async function init() {
+      try {
+        const result = await fetchFn();
+        if (!ignore) setData(result.data || result);
+      } catch (err) {
+        if (!ignore) setError(err.response?.data?.message || err.message || 'Error fetching data');
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+    init();
+    return () => { ignore = true; };
+  }, [fetchFn]);
 
   return { data, loading, error, refetch: fetchData };
 }

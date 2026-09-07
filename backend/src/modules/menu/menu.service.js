@@ -3,7 +3,9 @@ import {
   updateMenu as updateMenuRepository,
   getMenus,
   getMenuById,
+  checkPriceReadiness as checkPriceReadinessRepo,
 } from "./menu.repository.js";
+import { addItemPrice as addItemPriceRepository } from "../pricing/pricing.repository.js";
 
 export const fetchMenus = async (isSpecial = null, status = null) => {
   return await getMenus(isSpecial, status);
@@ -28,6 +30,7 @@ export const createMenu = async (menuData, createdByUserId) => {
     ITEMNAME: menuData.ITEMNAME,
     ITEMDESCR: menuData.ITEMDESCR || null,
     ISSPECIAL: menuData.ISSPECIAL ?? 0,
+    SERVICEID: menuData.SERVICEID ?? menuData.serviceId ?? null,
     CREATEDBY: createdByUserId,
   });
 
@@ -35,6 +38,22 @@ export const createMenu = async (menuData, createdByUserId) => {
     const error = new Error("Menu item creation failed");
     error.statusCode = 500;
     throw error;
+  }
+
+  // Handle optional initial pricing if provided
+  if (
+    menuData.PRICING &&
+    Array.isArray(menuData.PRICING.PRICES) &&
+    menuData.PRICING.PRICES.length > 0
+  ) {
+    const effFrom =
+      menuData.PRICING.EFFFROM || new Date().toISOString().split("T")[0];
+    await addItemPriceRepository({
+      MENUITEMID: created.MENUITEMID,
+      EFFFROM: effFrom,
+      PRICEJSON: menuData.PRICING.PRICES,
+      CREATEDBY: createdByUserId,
+    });
   }
 
   return await getMenuById(created.MENUITEMID);
@@ -47,10 +66,16 @@ export const updateMenu = async (MENUITEMID, menuData, changedByUserId) => {
     ITEMNAME: menuData.ITEMNAME,
     ITEMDESCR: menuData.ITEMDESCR || null,
     ISSPECIAL: menuData.ISSPECIAL ?? 0,
-    STATUS: menuData.STATUS === 'ACT' ? 'A' : (menuData.STATUS === 'DIS' ? 'D' : menuData.STATUS),
+    SERVICEID: menuData.SERVICEID !== undefined ? menuData.SERVICEID : (menuData.serviceId !== undefined ? menuData.serviceId : null),
+    STATUS: menuData.STATUS || 'ACT',
     CHANGEDBY: changedByUserId,
     CHGREASON: menuData.CHGREASON || null,
   });
 
   return await getMenuById(MENUITEMID);
+};
+
+
+export const checkPriceReadiness = async (MENUITEMID, SERVICEDATE) => {
+  return await checkPriceReadinessRepo(MENUITEMID, SERVICEDATE);
 };

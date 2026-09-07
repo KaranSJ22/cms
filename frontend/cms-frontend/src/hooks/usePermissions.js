@@ -4,7 +4,7 @@ import { useAuth } from './useAuth'
  * Role-checking utilities based on the backend's dual role system:
  *   SYSTEMROLES  — global roles: 'ADMIN', 'CTNMGR'
  *   CANTEENROLES — canteen-scoped roles: [{CANTEENID, ROLECODE, ISDEFAULT}]
- *                  ROLECODE values: 'CTNMNG', 'CTNAST', 'CTNSTF'
+ *                  ROLECODE values: 'CTNMGR', 'CTNAST', 'CTNSTF'
  */
 export function usePermissions() {
   const { user } = useAuth()
@@ -40,10 +40,10 @@ export function usePermissions() {
     return roles.some(r => canteenRoles.includes(r))
   }
 
-  const isAdmin = hasSystemRole('ADMIN')
-  const isCanteenManager = hasCanteenRole('CTNMNG')
-  const isCanteenAssistant = hasCanteenRole('CTNAST')
-  const isCanteenStaff = hasCanteenRole('CTNSTF')
+  const isAdmin = hasSystemRole('SYSADM')
+  const isCanteenManager = hasCanteenRole('CNTMGR')
+  const isCanteenAssistant = hasCanteenRole('CNTAST')
+  const isCanteenStaff = hasCanteenRole('CNTSTF')
   const isCanteenWorker = isCanteenManager || isCanteenAssistant || isCanteenStaff
 
   // Employee = has a CUSTOMER record but no canteen roles
@@ -52,15 +52,15 @@ export function usePermissions() {
   // Feature-level permission shortcuts
   const canManageMenu = isCanteenManager || isCanteenAssistant
   const canApproveDayMenu = isCanteenManager
-  const canManageWallet = hasSystemRole('ADMIN', 'CTNMGR') // wallet uses system roles
+  const canManageWallet = isAdmin || isCanteenManager
   const canServeBookings = isCanteenManager || isCanteenStaff
 
   // Derive primary role label for nav/display
   let primaryRole = null
-  if (isAdmin) primaryRole = 'ADMIN'
-  else if (isCanteenManager) primaryRole = 'CTNMNG'
-  else if (isCanteenAssistant) primaryRole = 'CTNAST'
-  else if (isCanteenStaff) primaryRole = 'CTNSTF'
+  if (isAdmin) primaryRole = 'SYSADM'
+  else if (isCanteenManager) primaryRole = 'CNTMGR'
+  else if (isCanteenAssistant) primaryRole = 'CNTAST'
+  else if (isCanteenStaff) primaryRole = 'CNTSTF'
   else if (isEmployee) primaryRole = 'EMPLOYEE'
 
   return {

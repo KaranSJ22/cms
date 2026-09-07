@@ -1,7 +1,7 @@
 import express from "express";
 
 import { authenticate } from "../../middlwares/auth.middleware.js";
-import { authorizeRoles } from "../../middlwares/role.middleware.js";
+import { authorizeAnyCanteenRole } from "../../middlwares/role.middleware.js";
 import { validate } from "../../middlwares/validate.middleware.js";
 import {
   createDaySlotSchema,
@@ -21,14 +21,14 @@ const router = express.Router();
 router.get(
   "/",
   authenticate,
-  authorizeRoles("CTNMNG", "CTNAST"),
+  authorizeAnyCanteenRole("CNTMGR", "CNTAST", "CNTSTF"),
   getDaySlotsController
 );
 
 router.get(
   "/:id",
   authenticate,
-  authorizeRoles("CTNMNG", "CTNAST"),
+  authorizeAnyCanteenRole("CNTMGR", "CNTAST", "CNTSTF"),
   validate(daySlotIdSchema),
   getDaySlotController
 );
@@ -36,7 +36,7 @@ router.get(
 router.post(
   "/",
   authenticate,
-  authorizeRoles("CTNMNG", "CTNAST"),
+  authorizeAnyCanteenRole("CNTMGR", "CNTAST"),
   validate(createDaySlotSchema),
   createDaySlotController
 );
@@ -44,7 +44,7 @@ router.post(
 router.put(
   "/:id",
   authenticate,
-  authorizeRoles("CTNMNG", "CTNAST"),
+  authorizeAnyCanteenRole("CNTMGR", "CNTAST"),
   validate(updateDaySlotSchema),
   updateDaySlotController
 );

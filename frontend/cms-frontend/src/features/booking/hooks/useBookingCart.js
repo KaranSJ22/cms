@@ -6,7 +6,8 @@ export function useBookingCart() {
   const addToCart = useCallback((item) => {
     setCart((prev) => {
       const currentQty = prev[item.DAYMENUID]?.qty || 0;
-      const availableLimit = Math.min(item.AVAILQTY, item.MAXQTY);
+      const availQty = item.AVAILQTY === null || item.AVAILQTY === undefined ? Infinity : item.AVAILQTY;
+      const availableLimit = Math.min(availQty, item.MAXQTY);
       
       if (currentQty >= availableLimit) return prev; // Cannot exceed limits
 

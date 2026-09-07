@@ -1,0 +1,160 @@
+/* ============================================================
+   ISRO CANTEEN MANAGEMENT SYSTEM (CMS)
+   MODULE: WALLET (Refactored with CMS_WALLETWD Restored)
+   ============================================================ */
+
+USE cms_db;
+
+SET FOREIGN_KEY_CHECKS = 0;
+
+DROP TABLE IF EXISTS CMS_WALLETTRAN;
+DROP TABLE IF EXISTS CMS_WALLETWD;
+DROP TABLE IF EXISTS CMS_WALLET;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+/* ============================================================
+   TABLE: CMS_WALLET
+   ------------------------------------------------------------
+   One wallet per eligible customer[cite: 2].
+   ============================================================ */
+
+CREATE TABLE CMS_WALLET
+(
+    WALLETID       INT AUTO_INCREMENT PRIMARY KEY,
+    CUSTOMERID     INT NOT NULL UNIQUE,
+    BALANCE        DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    RESERVEDAMT    DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    STATUSID       INT NOT NULL DEFAULT 10,              -- 10 = 'ACT' (Active)
+    CREATEDAT      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UPDATEDAT      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                   ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT CK_WAL_BALANCE
+        CHECK (BALANCE >= 0.00),
+
+    CONSTRAINT CK_WAL_RESERVED
+        CHECK (RESERVEDAMT >= 0.00),
+
+    CONSTRAINT CK_WAL_RES_BAL
+        CHECK (RESERVEDAMT <= BALANCE),
+
+    CONSTRAINT FK_WAL_CUST
+        FOREIGN KEY (CUSTOMERID)
+        REFERENCES CMS_CUSTOMER (CUSTOMERID),
+
+    CONSTRAINT FK_WAL_STATUS
+        FOREIGN KEY (STATUSID)
+        REFERENCES CMS_STATUS (STATUSID),
+
+    INDEX IX_WAL_CUST (CUSTOMERID),
+    INDEX IX_WAL_STATUSID (STATUSID)
+) ENGINE=InnoDB;
+
+
+/* ============================================================
+   TABLE: CMS_WALLETTRAN
+   ------------------------------------------------------------
+   Immutable wallet ledger[cite: 2]. REFNO uses CMS_AUTONOS (TXN).
+   ============================================================ */
+
+CREATE TABLE CMS_WALLETTRAN
+(
+    WALLETTRANID    INT AUTO_INCREMENT PRIMARY KEY,
+    WALLETID        INT NOT NULL,
+    BOOKINGID       INT NULL,
+
+    TRANSTYPE       VARCHAR(20) NOT NULL,
+    SOURCECODE      VARCHAR(30) NOT NULL,
+
+    AMOUNT          DECIMAL(12,2) NOT NULL,
+    BALBEFORE       DECIMAL(12,2) NOT NULL,
+    BALAFTER        DECIMAL(12,2) NOT NULL,
+
+    PAYMENTMETHOD   VARCHAR(20) NULL,
+    REFNO           VARCHAR(80) NULL UNIQUE,              -- Auto-generated via CMSGENAUTO (Prefix: TXN)
+
+    STATUSID        INT NOT NULL DEFAULT 40,              -- References CMS_STATUS WALLET_TXN group
+    CREATEDBY       INT NOT NULL,
+    CREATEDAT       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    REMARKS         VARCHAR(500) NULL,
+
+    CONSTRAINT FK_WT_WALLET
+        FOREIGN KEY (WALLETID)
+        REFERENCES CMS_WALLET (WALLETID),
+
+    CONSTRAINT FK_WT_BOOKING
+        FOREIGN KEY (BOOKINGID)
+        REFERENCES CMS_BOOKING (BOOKID),
+
+    CONSTRAINT FK_WT_USER
+        FOREIGN KEY (CREATEDBY)
+        REFERENCES CMS_USER (USERID),
+
+    CONSTRAINT FK_WT_STATUS
+        FOREIGN KEY (STATUSID)
+        REFERENCES CMS_STATUS (STATUSID),
+
+    CONSTRAINT CK_WT_AMOUNT
+        CHECK (AMOUNT > 0.00),
+
+    CONSTRAINT CK_WT_BALBEFORE
+        CHECK (BALBEFORE >= 0.00),
+
+    CONSTRAINT CK_WT_BALAFTER
+        CHECK (BALAFTER >= 0.00),
+
+    INDEX IX_WT_WALLET (WALLETID, CREATEDAT),
+    INDEX IX_WT_BOOKING (BOOKINGID),
+    INDEX IX_WT_CREATEDBY (CREATEDBY),
+    INDEX IX_WT_REFNO (REFNO)
+) ENGINE=InnoDB;
+
+
+/* ============================================================
+   TABLE: CMS_WALLETWD
+   ------------------------------------------------------------
+   Withdrawal request tracking table[cite: 2].
+   ============================================================ */
+
+CREATE TABLE CMS_WALLETWD
+(
+    WALLETWDID      INT AUTO_INCREMENT PRIMARY KEY,
+    WALLETID        INT NOT NULL,
+    AMOUNT          DECIMAL(12,2) NOT NULL,
+
+    STATUSID        INT NOT NULL DEFAULT 40,              -- References CMS_STATUS (e.g., DEP/WTH states)
+
+    REQUESTEDBY     INT NOT NULL,
+    REQUESTEDAT     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PROCESSEDBY     INT NULL,
+    PROCESSEDAT     DATETIME NULL,
+
+    PAYMENTMETHOD   VARCHAR(20) NULL,
+    REFNO           VARCHAR(80) NULL,
+    REMARKS         VARCHAR(500) NULL,
+
+    CONSTRAINT FK_WD_WALLET
+        FOREIGN KEY (WALLETID)
+        REFERENCES CMS_WALLET (WALLETID),
+
+    CONSTRAINT FK_WD_REQUSER
+        FOREIGN KEY (REQUESTEDBY)
+        REFERENCES CMS_USER (USERID),
+
+    CONSTRAINT FK_WD_PROCUSER
+        FOREIGN KEY (PROCESSEDBY)
+        REFERENCES CMS_USER (USERID),
+
+    CONSTRAINT FK_WD_STATUS
+        FOREIGN KEY (STATUSID)
+        REFERENCES CMS_STATUS (STATUSID),
+
+    CONSTRAINT CK_WD_AMOUNT
+        CHECK (AMOUNT > 0.00),
+
+    INDEX IX_WD_WALLET (WALLETID, STATUSID),
+    INDEX IX_WD_STATUSID (STATUSID),
+    INDEX IX_WD_REQUESTEDAT (REQUESTEDAT)
+) ENGINE=InnoDB;

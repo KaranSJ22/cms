@@ -17,18 +17,17 @@ export const serviceIdSchema = z.object({
     .object({
       id: z.coerce.number().int().positive(),
     })
-    .strict(),
+    ,
 });
 
 export const createServiceSchema = z.object({
   body: z
     .object({
-      SERVCODE: z.string().trim().min(1).max(20),
+      SERVCODE: z.string().trim().min(1).max(20).optional(),
       SERVNAME: z.string().trim().min(1).max(80),
       DEFSTART: timeSchema,
       DEFEND: timeSchema,
-    })
-    .strict(),
+    }),
 });
 
 export const updateServiceSchema = z.object({
@@ -36,14 +35,13 @@ export const updateServiceSchema = z.object({
     .object({
       id: z.coerce.number().int().positive(),
     })
-    .strict(),
+    ,
   body: z
     .object({
       SERVNAME: z.string().trim().min(1).max(80),
       DEFSTART: timeSchema,
       DEFEND: timeSchema,
-      STATUS: z.string().trim().min(1).max(20),
+      STATUS: z.enum(["ACT", "DIS"]).default("ACT"),
       CHGREASON: z.string().trim().max(255).nullable().optional(),
-    })
-    .strict(),
+    }),
 });

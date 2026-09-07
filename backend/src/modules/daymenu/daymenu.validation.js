@@ -3,7 +3,10 @@ import { z } from "zod";
 const dateTimeSchema = z
   .string()
   .trim()
-  .datetime();
+  .refine(
+    (val) => /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/.test(val),
+    { message: "Invalid ISO datetime" }
+  );
 
 const dateSchema = z
   .string()
@@ -20,24 +23,29 @@ export const dayMenuIdSchema = z.object({
     .object({
       id: z.coerce.number().int().positive(),
     })
-    .strict(),
+    ,
 });
 
-export const createDayMenuSchema = z.object({
-  body: z
-    .object({
-      DAYSLOTID: z.coerce.number().int().positive(),
-      MENUITEMID: z.coerce.number().int().positive(),
-      ISSPECIAL: booleanFlagSchema.optional(),
-      ISPREBOOK: booleanFlagSchema.optional(),
-      ISKIOSK: booleanFlagSchema.optional(),
-      AVAILQTY: z.coerce.number().int(),
-      MAXQTY: z.coerce.number().int(),
-      BOOKUNTIL: dateTimeSchema,
-      CANCELUNTIL: dateTimeSchema,
-      REMARKS: z.string().trim().max(255).nullable().optional(),
-    })
-    .strict(),
+export const replaceDayMenuSchema = z.object({
+  params: z.object({
+    id: z.coerce.number().int().positive(),
+  }),
+  body: z.object({
+    ITEMSJSON: z.array(
+      z.object({
+        MENUITEMID: z.coerce.number().int().positive(),
+        ISBASE: booleanFlagSchema,
+        ISSPECIAL: booleanFlagSchema,
+        ISPREBOOK: booleanFlagSchema,
+        ISKIOSK: booleanFlagSchema,
+        AVAILQTY: z.coerce.number().int().nullable().optional(),
+        MAXQTY: z.coerce.number().int(),
+        BOOKUNTIL: dateTimeSchema,
+        CANCELUNTIL: dateTimeSchema,
+        REMARKS: z.string().trim().max(255).nullable().optional(),
+      })
+    ).min(1, "At least one item is required in the menu"),
+  }),
 });
 
 export const approveDayMenuSchema = z.object({
@@ -45,12 +53,12 @@ export const approveDayMenuSchema = z.object({
     .object({
       id: z.coerce.number().int().positive(),
     })
-    .strict(),
+    ,
   body: z
     .object({
       REMARKS: z.string().trim().max(255).nullable().optional(),
     })
-    .strict(),
+    ,
 });
 
 export const publishedMenuSchema = z.object({
@@ -59,7 +67,7 @@ export const publishedMenuSchema = z.object({
       canteenId: z.coerce.number().int().positive(),
       serviceDate: dateSchema,
     })
-    .strict(),
+    ,
 });
 
 export const getDayMenusSchema = z.object({
@@ -71,5 +79,40 @@ export const getDayMenusSchema = z.object({
       SERVDATE: dateSchema.optional(),
       APPRSTATUS: z.string().trim().max(20).optional(),
     })
-    .strict(),
+    ,
+});
+
+const timeSchema = z
+  .string()
+  .trim()
+  .regex(/^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/, "Invalid time format (expected HH:MM or HH:MM:SS)");
+
+const bulkMenuItemSchema = z.object({
+  MENUITEMID: z.coerce.number().int().positive(),
+  ISBASE: booleanFlagSchema,
+  ISSPECIAL: booleanFlagSchema,
+  ISPREBOOK: booleanFlagSchema,
+  ISKIOSK: booleanFlagSchema,
+  MAXQTY: z.coerce.number().int().min(1, "MAXQTY must be at least 1"),
+  AVAILQTY: z.coerce.number().int().nullable().optional(),
+  BOOKUNTIL: dateTimeSchema,
+  CANCELUNTIL: dateTimeSchema,
+});
+
+const bulkDaySchema = z.object({
+  // dayIndex represents Day 0 to Day 4 (Monday to Friday, or up to 6)
+  DAYINDEX: z.coerce.number().int().min(0).max(6),
+  ITEMS: z.array(bulkMenuItemSchema).min(0), // allow empty = skip that day
+});
+
+export const bulkCreateDayMenuSchema = z.object({
+  body: z.object({
+    CANTEENID:  z.coerce.number().int().positive(),
+    SERVICEID:  z.coerce.number().int().positive(),
+    STARTDATE:  dateSchema,
+    STARTTIME:  timeSchema,
+    ENDTIME:    timeSchema,
+    // 5 day configs (Monday to Friday). Days with empty ITEMS or holidays are skipped.
+    DAYS: z.array(bulkDaySchema).min(1).max(7),
+  }),
 });

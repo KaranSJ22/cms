@@ -3,6 +3,7 @@ export class AppError extends Error {
         super(message);
         this.statusCode = statusCode;
         this.name = this.constructor.name;
+        this.isOperational = true;
         Error.captureStackTrace(this, this.constructor);
     }
 }
@@ -26,7 +27,7 @@ export class ForbiddenError extends AppError {
 }
 
 export class NotFoundError extends AppError {
-    constructor(message = 'Require not found') {
+    constructor(message = 'Resource not found') {
         super(message, 404);
     }
 }

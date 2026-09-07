@@ -1,26 +1,24 @@
 import app from "./app.js";
 import { env } from "./config/env.js";
 import { logger } from "./utils/logger.js";
-import { initSocket } from "./utils/socket.js";
 
-const server = app.listen(env.PORT, () => {
+
+const server = app.listen(env.PORT, '0.0.0.0', () => {
   logger.info(`CMS backend server running on port ${env.PORT}`);
 });
 
-initSocket(server);
+server.on('error', (err) => {
+  logger.error({ err }, 'HTTP server error!');
+  process.exit(1);
+});
+
 
 process.on("SIGINT", () => {
-  logger.info("SIGINT received. Shutting down server...");
-  server.close(() => {
-    logger.info("Server closed successfully");
-    process.exit(0);
-  });
+  logger.info("SIGINT received. Force shutting down server for fast restart...");
+  process.exit(0);
 });
 
 process.on("SIGTERM", () => {
-  logger.info("SIGTERM received. Shutting down server...");
-  server.close(() => {
-    logger.info("Server closed successfully");
-    process.exit(0);
-  });
+  logger.info("SIGTERM received. Force shutting down server for fast restart...");
+  process.exit(0);
 });

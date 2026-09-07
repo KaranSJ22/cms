@@ -1,1 +1,1 @@
-export default function CatalogPage() { return <div>CatalogPage Placeholder</div>; }
+export { default } from './MenuCatalogPage';

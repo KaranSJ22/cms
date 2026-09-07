@@ -4,7 +4,16 @@ import { z } from "zod";
 export const getKitchenPrepSchema = z.object({
   query: z.object({
     daySlotId: z.coerce.number().int().positive("Day Slot ID must be a positive integer"),
-  }).strict(),
+  }),
+});
+
+export const getActiveBookingSchema = z.object({
+  query: z.object({
+    canteenId: z.coerce.number().int().positive("Canteen ID must be a positive integer"),
+    serviceId: z.coerce.number().int().positive("Service ID must be a positive integer"),
+    serviceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
+    customerId: z.coerce.number().int().positive().optional(),
+  }),
 });
 
 export const createBookingSchema = z.object({
@@ -22,10 +31,9 @@ export const createBookingSchema = z.object({
       )
       .min(1, "At least one booking item is required"),
     PREMARKS: z.string().max(255).optional().nullable(),
-  }).strict(),
+  }),
 }).superRefine((data, ctx) => {
   if (data.body.PBOOKTYPECODE === "KS") {
-    // Exact next day logic or future day logic
     const today = dayjs().format("YYYY-MM-DD");
     if (data.body.PSERVICEDATE <= today) {
       ctx.addIssue({
@@ -37,16 +45,40 @@ export const createBookingSchema = z.object({
   }
 });
 
+export const addBookingItemSchema = z.object({
+  params: z.object({
+    id: z.string().regex(/^\d+$/, "Booking ID must be a positive integer"),
+  }),
+  body: z.object({
+    DAYMENUID: z.number().int().positive("Day Menu ID must be a positive integer"),
+    QTY: z.number().int().positive("Quantity must be a positive integer"),
+  }),
+});
+
 export const updateBookingItemSchema = z.object({
   params: z.object({
     id: z.string().regex(/^\d+$/, "Booking ID must be a positive integer"),
     itemId: z.string().regex(/^\d+$/, "Booking Item ID must be a positive integer"),
   }),
   body: z.object({
-    PQTY: z.number().int().positive(),
-    PSTATUS: z.enum(["CR", "SRV", "CAN", "NOS"]),
+    QTY: z.number().int().positive("Quantity must be a positive integer").optional(),
+    PQTY: z.number().int().positive("Quantity must be a positive integer").optional(),
+    PSTATUS: z.enum(["CRT", "SRV", "CAN", "NOS"]).optional(),
     PCHGREASON: z.string().max(255).optional().nullable(),
-  }).strict(),
+  }),
+}).refine((data) => data.body.QTY !== undefined || data.body.PQTY !== undefined, {
+  message: "Quantity (QTY or PQTY) is required",
+  path: ["body", "QTY"],
+});
+
+export const cancelBookingItemSchema = z.object({
+  params: z.object({
+    id: z.string().regex(/^\d+$/, "Booking ID must be a positive integer"),
+    itemId: z.string().regex(/^\d+$/, "Booking Item ID must be a positive integer"),
+  }),
+  body: z.object({
+    PCANCELREASON: z.string().max(255).optional().nullable(),
+  }).optional().default({}),
 });
 
 export const cancelBookingSchema = z.object({
@@ -55,7 +87,7 @@ export const cancelBookingSchema = z.object({
   }),
   body: z.object({
     PCANCELREASON: z.string().max(255).optional().nullable(),
-  }).strict(),
+  }).optional().default({}),
 });
 
 export const serveBookingSchema = z.object({
@@ -64,7 +96,7 @@ export const serveBookingSchema = z.object({
   }),
   body: z.object({
     PSERVEREASON: z.string().max(255).optional().nullable(),
-  }).strict(),
+  }).optional().default({}),
 });
 
 export const noShowBookingSchema = z.object({
@@ -73,7 +105,7 @@ export const noShowBookingSchema = z.object({
   }),
   body: z.object({
     PCHGREASON: z.string().max(255).optional().nullable(),
-  }).strict(),
+  }).optional().default({}),
 });
 
 export const toggleKioskSchema = z.object({
@@ -82,12 +114,12 @@ export const toggleKioskSchema = z.object({
   }),
   body: z.object({
     PISKIOSK: z.number().int().min(0).max(1),
-  }).strict(),
+  }),
 });
 
 export const scanRfidSchema = z.object({
   body: z.object({
     PRFIDHASH: z.string().min(1, "RFID hash is required"),
     PSERVICEID: z.number().int().positive("Service ID must be positive"),
-  }).strict(),
+  }),
 });

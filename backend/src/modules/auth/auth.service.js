@@ -88,10 +88,11 @@ export const loginUser = async ({ LOGINID, PASSWORD }) => {
   return generateLoginResponse(user, CONSUMERROLES, CANTEENROLES);
 };
 
-export const ssoLoginUser = async ({ token }) => {
+export const ssoLoginUser = async ({ token, SSO_TOKEN }) => {
+  const effectiveToken = token || SSO_TOKEN;
   let rawToken;
   try {
-    rawToken = decryptToken(token);
+    rawToken = decryptToken(effectiveToken);
   } catch (err) {
     const error = new Error("Invalid SSO token");
     error.statusCode = 401;

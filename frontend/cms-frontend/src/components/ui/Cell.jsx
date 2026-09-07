@@ -15,9 +15,9 @@ export function TableRow({ item, odd }) {
   return (
     <div
       className={`
-        grid gap-0 px-5 border-b border-slate-100
+        grid gap-0 px-5 border-b border-slate-200
         hover:bg-slate-50 transition-colors duration-150
-        ${odd ? 'bg-black/[0.018]' : 'bg-transparent'}
+        ${odd ? 'bg-slate-50/50' : 'bg-white'}
       `}
       style={{ gridTemplateColumns: '130px 180px 1fr 130px' }}
     >
@@ -26,7 +26,7 @@ export function TableRow({ item, odd }) {
       <Cell>{item.ITEMNAME || item.itemName}</Cell>
       <Cell>
         <span
-          className="px-2.5 py-0.5 rounded-full text-[0.68rem] font-bold tracking-[0.04em] font-grotesk border"
+          className="px-2 py-0.5 rounded text-[0.68rem] font-bold tracking-[0.04em] font-grotesk border"
           style={{
             backgroundColor: meta.colors.bg,
             color:           meta.colors.text,

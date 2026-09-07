@@ -1,3 +1,7 @@
+import { getResourceCanteenId } from "../modules/canteen/canteen.repository.js";
+
+export { getResourceCanteenId };
+
 const sendForbidden = (res, message) =>
   res.status(403).json({
     SUCCESS: false,
@@ -5,6 +9,7 @@ const sendForbidden = (res, message) =>
   });
 
 export const authorizeSystemRoles = (...allowedRoles) => {
+  const flatRoles = allowedRoles.flat();
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({
@@ -13,11 +18,10 @@ export const authorizeSystemRoles = (...allowedRoles) => {
       });
     }
 
-    const userRoles = req.user.SYSTEMROLES || [];
+    const userSysRoles = req.user.SYSTEMROLES || [];
+    const hasSysAccess = userSysRoles.some((role) => flatRoles.includes(role));
 
-    const hasAccess = userRoles.some((role) => allowedRoles.includes(role));
-
-    if (!hasAccess) {
+    if (!hasSysAccess) {
       return sendForbidden(res, "You do not have permission to access this resource");
     }
 
@@ -39,41 +43,51 @@ const canteenIdFromRequest = (req) =>
 
 export const authorizeCanteenRoles = (
   allowedRoles,
-  getCanteenId = canteenIdFromRequest
+  getCanteenId = async (req) => canteenIdFromRequest(req)
 ) => {
-  return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({
-        SUCCESS: false,
-        MESSAGE: "Authentication required",
-      });
+  return async (req, res, next) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          SUCCESS: false,
+          MESSAGE: "Authentication required",
+        });
+      }
+
+      const resolvedCanteenId = await getCanteenId(req);
+      const canteenId = Number(resolvedCanteenId);
+
+      if (!Number.isInteger(canteenId) || canteenId <= 0) {
+        return res.status(400).json({
+          SUCCESS: false,
+          MESSAGE: "A valid canteen ID is required for this operation",
+        });
+      }
+
+      const hasAccess = (req.user.CANTEENROLES || []).some(
+        (assignment) =>
+          assignment.CANTEENID === canteenId &&
+          allowedRoles.includes(assignment.ROLECODE)
+      );
+
+      if (!hasAccess) {
+        return sendForbidden(res, "You are not assigned to this canteen for this operation");
+      }
+
+      req.canteenId = canteenId;
+      next();
+    } catch (error) {
+      next(error);
     }
-
-    const canteenId = Number(getCanteenId(req));
-
-    if (!Number.isInteger(canteenId) || canteenId <= 0) {
-      return res.status(400).json({
-        SUCCESS: false,
-        MESSAGE: "A valid canteen ID is required for this operation",
-      });
-    }
-
-    const hasAccess = (req.user.CANTEENROLES || []).some(
-      (assignment) =>
-        assignment.CANTEENID === canteenId &&
-        allowedRoles.includes(assignment.ROLECODE)
-    );
-
-    if (!hasAccess) {
-      return sendForbidden(res, "You are not assigned to this canteen for this operation");
-    }
-
-    req.canteenId = canteenId;
-    next();
   };
 };
 
+// Compatibility name for routes that are strictly global/admin routes.
+// New code should use authorizeSystemRoles explicitly.
+export const authorizeRoles = authorizeSystemRoles;
+
 export const authorizeAnyCanteenRole = (...allowedRoles) => {
+  const flatRoles = allowedRoles.flat();
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({
@@ -83,17 +97,13 @@ export const authorizeAnyCanteenRole = (...allowedRoles) => {
     }
 
     const hasAccess = (req.user.CANTEENROLES || []).some((assignment) =>
-      allowedRoles.includes(assignment.ROLECODE)
+      flatRoles.includes(assignment.ROLECODE)
     );
 
     if (!hasAccess) {
-      return sendForbidden(res, "You do not have an operational canteen role");
+      return sendForbidden(res, "You do not have permission for this operation in any canteen");
     }
 
     next();
   };
 };
-
-// Compatibility name for routes that are strictly global/admin routes.
-// New code should use authorizeSystemRoles explicitly.
-export const authorizeRoles = authorizeSystemRoles;

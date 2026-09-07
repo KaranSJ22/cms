@@ -7,10 +7,13 @@ export const validate = (schema) => {
     });
 
     if (!result.success) {
+      const issues = result.error?.issues || result.error?.errors || [];
+      const errorMessage = issues.map((e) => `${e.path?.join(".") || "field"}: ${e.message}`).join(", ") || "Validation Error";
+      console.error("Zod Validation Error:", errorMessage, req.body);
       return res.status(400).json({
         SUCCESS: false,
-        MESSAGE: "Validation failed",
-        ERRORS: result.error.flatten(),
+        MESSAGE: errorMessage,
+        ERRORS: result.error?.flatten ? result.error.flatten() : result.error,
       });
     }
 

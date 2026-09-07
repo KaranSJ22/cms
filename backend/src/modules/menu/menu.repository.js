@@ -23,16 +23,17 @@ export const createMenu = async ({
   ITEMNAME,
   ITEMDESCR = null,
   ISSPECIAL = 0,
+  SERVICEID = null,
   CREATEDBY,
 }) => {
   const [resultSets] = await pool.execute(
     "CALL CMSADDMENUITEM(?, ?, ?, ?, ?, ?)",
     [
-      MENUCODE,
       SHORTNAME,
       ITEMNAME,
       ITEMDESCR,
       ISSPECIAL,
+      SERVICEID,
       CREATEDBY,
     ]
   );
@@ -47,20 +48,33 @@ export const updateMenu = async ({
   ITEMNAME,
   ITEMDESCR = null,
   ISSPECIAL = 0,
+  SERVICEID = null,
   STATUS,
   CHANGEDBY,
   CHGREASON = null,
 }) => {
-  await pool.execute("CALL CMSUPDMENUITEM(?, ?, ?, ?, ?, ?, ?, ?)", [
+  await pool.execute("CALL CMSUPDMENUITEM(?, ?, ?, ?, ?, ?, ?, ?, ?)", [
     MENUITEMID,
     SHORTNAME,
     ITEMNAME,
     ITEMDESCR,
     ISSPECIAL,
+    SERVICEID,
     STATUS,
     CHANGEDBY,
     CHGREASON,
   ]);
 
   return true;
+};
+
+export const checkPriceReadiness = async (MENUITEMID, SERVICEDATE) => {
+  // If it doesn't throw an error, it is ready.
+  // The procedure raises a custom SQL error if it is not ready.
+  await pool.execute("CALL CMSCHECKITEMPRICEREADINESS(?, ?)", [
+    MENUITEMID,
+    SERVICEDATE,
+  ]);
+
+  return { isReady: true };
 };

@@ -1,13 +1,16 @@
 import express from "express";
 import { validate } from "../../middlwares/validate.middleware.js";
 import { authenticate } from "../../middlwares/auth.middleware.js";
-import { authorizeRoles, authorizeAnyCanteenRole } from "../../middlwares/role.middleware.js";
+import { authorizeAnyCanteenRole } from "../../middlwares/role.middleware.js";
 import {
+  getActiveBookingController,
   getBookingController,
   getBookingsController,
   getKitchenPrepController,
   createBookingController,
+  addBookingItemController,
   updateBookingItemController,
+  cancelBookingItemController,
   cancelBookingController,
   serveBookingController,
   noShowBookingController,
@@ -17,8 +20,11 @@ import {
   resolveBookingController,
 } from "./booking.controller.js";
 import {
+  getActiveBookingSchema,
   createBookingSchema,
+  addBookingItemSchema,
   updateBookingItemSchema,
+  cancelBookingItemSchema,
   cancelBookingSchema,
   serveBookingSchema,
   noShowBookingSchema,
@@ -29,15 +35,33 @@ import {
 
 const router = express.Router();
 
+// Fetch active booking for context
+router.get(
+  "/active",
+  authenticate,
+  validate(getActiveBookingSchema),
+  getActiveBookingController
+);
+
 // Fetch booking endpoints
 router.get("/", authenticate, getBookingsController);
+
 router.get(
   "/kitchen-prep",
   authenticate,
-  authorizeAnyCanteenRole("CTNMNG", "CTNSTF", "CTNAST"),
+  authorizeAnyCanteenRole("CNTMGR", "CNTSTF", "CNTAST"),
   validate(getKitchenPrepSchema),
   getKitchenPrepController
 );
+
+// Resolve booking for serving counter lookup
+router.get(
+  "/resolve/:identifier",
+  authenticate,
+  authorizeAnyCanteenRole("CNTMGR", "CNTSTF"),
+  resolveBookingController
+);
+
 router.get("/:id", authenticate, getBookingController);
 
 // Create a booking
@@ -48,16 +72,15 @@ router.post(
   createBookingController
 );
 
-// Scan RFID at Kiosk
+// Add an item to an existing booking (incremental)
 router.post(
-  "/scan-rfid",
+  "/:id/items",
   authenticate,
-  authorizeAnyCanteenRole("CTNMNG", "CTNSTF"),
-  validate(scanRfidSchema),
-  scanRfidController
+  validate(addBookingItemSchema),
+  addBookingItemController
 );
 
-// Update a booking item
+// Update a booking item quantity (incremental)
 router.put(
   "/:id/items/:itemId",
   authenticate,
@@ -65,12 +88,29 @@ router.put(
   updateBookingItemController
 );
 
+// Cancel an individual booking item (incremental soft-cancel)
+router.patch(
+  "/:id/items/:itemId/cancel",
+  authenticate,
+  validate(cancelBookingItemSchema),
+  cancelBookingItemController
+);
+
+// Scan RFID at Kiosk
+router.post(
+  "/scan-rfid",
+  authenticate,
+  authorizeAnyCanteenRole("CNTMGR", "CNTSTF"),
+  validate(scanRfidSchema),
+  scanRfidController
+);
+
 // Serve a specific booking item
 router.patch(
   "/:id/items/:itemId/serve",
   authenticate,
-  authorizeAnyCanteenRole("CTNMNG", "CTNSTF"),
-  validate(serveBookingSchema), // Reuse serveBookingSchema since it just expects an optional PSERVEREASON
+  authorizeAnyCanteenRole("CNTMGR", "CNTSTF"),
+  validate(serveBookingSchema),
   serveBookingItemController
 );
 
@@ -86,7 +126,7 @@ router.patch(
 router.patch(
   "/:id/serve",
   authenticate,
-  authorizeAnyCanteenRole("CTNMNG", "CTNSTF"),
+  authorizeAnyCanteenRole("CNTMGR", "CNTSTF"),
   validate(serveBookingSchema),
   serveBookingController
 );
@@ -95,7 +135,7 @@ router.patch(
 router.patch(
   "/:id/no-show",
   authenticate,
-  authorizeAnyCanteenRole("CTNMNG", "CTNSTF"),
+  authorizeAnyCanteenRole("CNTMGR", "CNTSTF"),
   validate(noShowBookingSchema),
   noShowBookingController
 );
@@ -104,7 +144,7 @@ router.patch(
 router.patch(
   "/kiosk-toggle/:dayMenuId",
   authenticate,
-  authorizeRoles("CTNMNG", "CTNSTF"),
+  authorizeAnyCanteenRole("CNTMGR", "CNTSTF"),
   validate(toggleKioskSchema),
   toggleKioskController
 );

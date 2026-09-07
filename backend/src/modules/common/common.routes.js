@@ -14,7 +14,7 @@ const router = express.Router();
 
 router.get("/status", authenticate, getStatus);
 router.get("/customer-types", authenticate, getCustomerTypes);
-router.get("/screens", authenticate, authorizeRoles("ADMIN"), getScreens);
-router.get("/autonos", authenticate, authorizeRoles("ADMIN"), getAutonos);
+router.get("/screens", authenticate, authorizeRoles("SYSADM"), getScreens);
+router.get("/autonos", authenticate, authorizeRoles("SYSADM"), getAutonos);
 
 export default router;

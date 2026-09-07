@@ -3,7 +3,7 @@ import * as servicesApi from "../api/servicesApi";
 
 export function useServices() {
   const [services, setServices] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const fetchServices = useCallback(async () => {
@@ -42,8 +42,20 @@ export function useServices() {
   };
 
   useEffect(() => {
-    fetchServices();
-  }, [fetchServices]);
+    let ignore = false;
+    async function init() {
+      try {
+        const data = await servicesApi.getServices();
+        if (!ignore) setServices(data || []);
+      } catch (err) {
+        if (!ignore) setError(err.response?.data?.message || err.message || "Failed to fetch services");
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+    init();
+    return () => { ignore = true; };
+  }, []);
 
   return {
     services,

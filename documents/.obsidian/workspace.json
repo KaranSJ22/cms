@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Canteen_Workflow_Refactoring_Implementation_Plan.md",
-                "mode": "preview",
+                "file": "DATABASE_ARCHITECTURE.md",
+                "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Canteen_Workflow_Refactoring_Implementation_Plan"
+              "title": "DATABASE_ARCHITECTURE"
             }
           }
         ]
@@ -80,8 +80,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300,
-    "collapsed": true
+    "width": 300
   },
   "right": {
     "id": "cf6456850546b662",
@@ -97,7 +96,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Welcome.md",
+                "file": "ISRO_CMS_Project_Specification.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -107,7 +106,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for Welcome"
+              "title": "Backlinks"
             }
           },
           {
@@ -172,7 +171,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300,
+    "width": 200,
     "collapsed": true
   },
   "left-ribbon": {
@@ -188,13 +187,21 @@
   },
   "active": "987df0df1e4e50a3",
   "lastOpenFiles": [
-    "ISRO_CMS_Complete_Project_Description.md",
-    "implementation_report.md",
-    "FRONTEND_API_DOCS.md",
     "FRONTEND_ARCHITECTURE.md",
-    "database_reference.md",
-    "DATABASE_ARCHITECTURE.md",
+    "FRONTEND_API_DOCS.md",
+    "ISRO_CMS_Project_Specification.md",
+    "SYSTEM_REVIEW.md",
+    "rc522_kiosk_bridge.py",
+    "Untitled.md",
+    "implementation_plan.md",
     "BACKEND_ARCHITECTURE.md",
+    "DATABASE_ARCHITECTURE.md",
+    "ISRO_CMS_Complete_Project_Description_Updated.md",
+    "ISRO_CMS_AI_Coding_Agent_Project_Specification.md",
+    "ISRO_CMS_Complete_Project_Description.md",
+    "frontend_prd.md",
+    "implementation_report.md",
+    "database_reference.md",
     "architectural_review.md",
     "sql/SCHEMA_03_BOOKING.md",
     "sql/SCHEMA_02_MENU_SERVICE.md",

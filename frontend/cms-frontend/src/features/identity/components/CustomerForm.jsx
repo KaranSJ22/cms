@@ -5,9 +5,9 @@ import { LightInput, FieldLabel, ErrMsg } from '../../../components/ui/FormCompo
 export function CustomerForm({ onSubmit, loading, onCancel }) {
   const [formData, setFormData] = useState({
     USERID: '',
-    CTYPECODE: 'PERMANENT',
+    CTYPECODE: 'PRM',
     DISPNAME: '',
-    STATUS: 'A',
+    STATUS: 'ACT',
     VALIDFROM: '',
     VALIDUNTIL: ''
   });
@@ -76,10 +76,11 @@ export function CustomerForm({ onSubmit, loading, onCancel }) {
           onChange={(e) => handleChange('CTYPECODE', e.target.value)}
           className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 text-[0.82rem] outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-all"
         >
-          <option value="PERMANENT">Permanent</option>
-          <option value="CONTRACT">Contract</option>
-          <option value="VISITOR">Visitor</option>
-          <option value="OTHERCENTRE">Other Centre</option>
+          <option value="PRM">Permanent</option>
+          <option value="CNT">Contract</option>
+          <option value="VIS">Visitor</option>
+          <option value="OCE">Other Centre</option>
+          <option value="OFR">Officer</option>
         </select>
       </div>
 

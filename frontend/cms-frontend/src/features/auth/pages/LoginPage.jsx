@@ -1,25 +1,22 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Emblem, Spinner } from '../../../components/icons/Icons'
+import { Spinner } from '../../../components/icons/Icons'
 import { FormField } from '../../../components/ui/FormComponents'
 import { PrimaryBtn } from '../../../components/ui/Buttons'
 import { useAuth } from '../../../hooks/useAuth'
-import { usePermissions } from '../../../hooks/usePermissions'
-import { getDefaultTab } from '../../../routes/routeConfig'
+import { ShieldCheckIcon, LockClosedIcon } from '@heroicons/react/24/outline'
 
 export default function LoginPage() {
   const { login, ssoLogin, error, setError } = useAuth()
   const navigate = useNavigate()
 
-  const [mode, setMode]       = useState('password') // 'password' | 'sso'
-  const [loginId, setLoginId] = useState('')
+  const [mode, setMode]         = useState('password') // 'password' | 'sso'
+  const [loginId, setLoginId]   = useState('')
   const [password, setPassword] = useState('')
   const [ssoToken, setSsoToken] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading]   = useState(false)
   const [localErr, setLocalErr] = useState('')
 
-  // After login, user is set in AuthContext — we redirect from AppRoutes.
-  // But we also need to get the default tab for navigation.
   async function handleSubmit(e) {
     e.preventDefault()
     setLocalErr('')
@@ -33,7 +30,7 @@ export default function LoginPage() {
       }
       navigate('/', { replace: true })
     } catch (err) {
-      setLocalErr(err.response?.data?.MESSAGE || 'Invalid credentials. Please try again.')
+      setLocalErr(err.response?.data?.MESSAGE || 'Invalid credentials. Please verify your Login ID and password.')
     } finally {
       setLoading(false)
     }
@@ -42,69 +39,62 @@ export default function LoginPage() {
   const displayError = localErr || error
 
   return (
-    <div
-      className="relative w-full min-h-screen flex items-center justify-center px-6"
-      onPointerMove={e => {
-        const rect = e.currentTarget.getBoundingClientRect()
-        const x = e.clientX - rect.left
-        const y = e.clientY - rect.top
-        e.currentTarget.querySelector('[data-glow]').style.maskImage =
-          `radial-gradient(circle at ${x}px ${y}px, #000 72px, transparent 140px)`
-        e.currentTarget.querySelector('[data-glow]').style.webkitMaskImage =
-          `radial-gradient(circle at ${x}px ${y}px, #000 72px, transparent 140px)`
-        e.currentTarget.querySelector('[data-glow]').style.opacity = '1'
-      }}
-      onPointerLeave={e => {
-        e.currentTarget.querySelector('[data-glow]').style.opacity = '0'
-      }}
-    >
-      {/* Saffron dot-grid hover glow */}
-      <div
-        data-glow
-        className="absolute inset-0 pointer-events-none transition-opacity duration-200 opacity-0"
-        style={{
-          backgroundImage: 'radial-gradient(circle at center,rgba(249,115,22,0.28) 2.2px,transparent 2.5px)',
-          backgroundSize: '22px 22px',
-        }}
-      />
-
-      {/* Login card */}
-      <div className="relative z-10 w-full max-w-[420px]"
-        style={{
-          backgroundColor: '#1e293b',
-          border: '1px solid rgba(255,255,255,0.08)',
-          borderRadius: 16,
-          boxShadow: '0 12px 48px rgba(0,0,0,0.4), 0 0 0 1px rgba(249,115,22,0.08)',
-          padding: '2.5rem 2.25rem 2.25rem',
-        }}
-      >
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <Emblem size={56} />
+    <div className="w-full max-w-md mx-auto">
+      {/* ── Main Structured Login Panel ── */}
+      <div className="bg-slate-900 border border-slate-800 rounded-md shadow-md p-6 sm:p-8">
+        
+        {/* ── Official ISRO & HSFC Header ── */}
+        <div className="text-center mb-6">
+          {/* Official ISRO Logo */}
+          <div className="flex justify-center mb-3">
+            <img
+              src="/assets/logo.png"
+              alt="ISRO Official Logo"
+              className="h-16 w-auto object-contain drop-shadow-sm"
+            />
           </div>
-          <h1 className="font-grotesk text-[1.3rem] font-bold text-white tracking-[0.04em] mt-0">
-            CMS PORTAL
-          </h1>
-          <p className="text-[0.75rem] text-white/40 mt-1 tracking-[0.08em] uppercase">
+
+          <div className="text-[0.68rem] font-bold text-slate-300 tracking-[0.14em] uppercase leading-none">
+            भारतीय अंतरिक्ष अनुसंधान संगठन
+          </div>
+          <div className="text-[0.78rem] font-bold text-white tracking-wide mt-1">
+            Indian Space Research Organisation
+          </div>
+
+          <div className="mt-2.5 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-slate-800 border border-slate-700/80">
+            <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+            <span className="text-[0.68rem] font-bold text-slate-200 tracking-wider uppercase">
+              HSFC · Human Space Flight Centre
+            </span>
+          </div>
+
+          <h1 className="font-grotesk font-bold text-base text-white tracking-wider uppercase mt-3">
             Canteen Management System
+          </h1>
+          <p className="text-[0.68rem] text-slate-400 mt-0.5 tracking-wide">
+            High Reliability Operations & Pre-Booking Portal
           </p>
         </div>
 
-        {/* Mode toggle */}
-        <div className="flex gap-1 p-1 mb-6 rounded-lg" style={{ backgroundColor: 'rgba(0,0,0,0.25)' }}>
+        {/* ── Authentication Mode Toggle ── */}
+        <div className="flex gap-1 p-1 mb-5 rounded bg-slate-950 border border-slate-800">
           {[
             { key: 'password', label: 'Password Login' },
-            { key: 'sso',      label: 'SSO Login'      },
-          ].map(m => (
+            { key: 'sso',      label: 'ISRO SSO Login' },
+          ].map((m) => (
             <button
               key={m.key}
-              onClick={() => { setMode(m.key); setLocalErr(''); setError('') }}
+              type="button"
+              onClick={() => {
+                setMode(m.key)
+                setLocalErr('')
+                setError('')
+              }}
               className={`
-                flex-1 py-1.5 rounded-md text-[0.75rem] font-semibold font-grotesk transition-all duration-150
+                flex-1 py-1.5 rounded text-xs font-semibold font-grotesk transition-all duration-150
                 ${mode === m.key
-                  ? 'bg-orange-500 text-slate-900 shadow-sm'
-                  : 'text-white/50 hover:text-white/80'}
+                  ? 'bg-orange-500 text-slate-950 shadow-sm'
+                  : 'text-slate-400 hover:text-white'}
               `}
             >
               {m.label}
@@ -112,68 +102,116 @@ export default function LoginPage() {
           ))}
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-          {mode === 'password' ? (
-            <>
-              <FormField
-                id="loginid"
-                label="LOGIN ID"
-                type="text"
-                value={loginId}
-                onChange={setLoginId}
-                placeholder="Enter your login ID"
-                autoComplete="username"
-                required
-              />
-              <div className="flex flex-col gap-1.5">
-                <FormField
-                  id="password"
-                  label="PASSWORD"
-                  type="password"
-                  value={password}
-                  onChange={setPassword}
-                  placeholder="Enter your password"
-                  autoComplete="current-password"
-                  required
-                />
-                <div className="text-right">
-                  <a href="#" className="text-[0.75rem] text-white/40 hover:text-orange-400 transition-colors duration-150">
-                    Forgot password?
-                  </a>
-                </div>
-              </div>
-            </>
-          ) : (
+        {/* ── Login Form ── */}
+        {mode === 'password' ? (
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <FormField
-              id="ssotoken"
-              label="SSO TOKEN"
+              id="loginid"
+              label="LOGIN ID / EMPLOYEE ID"
               type="text"
-              value={ssoToken}
-              onChange={setSsoToken}
-              placeholder="Paste your SSO token"
+              value={loginId}
+              onChange={setLoginId}
+              placeholder="e.g. 10001 or admin"
+              autoComplete="username"
               required
             />
-          )}
-
-          {displayError && (
-            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-[0.78rem] text-red-400"
-              style={{ backgroundColor: 'rgba(220,38,38,0.07)', border: '1px solid rgba(220,38,38,0.2)' }}>
-              <span className="flex-shrink-0">✕</span>
-              {displayError}
+            <div className="flex flex-col gap-1">
+              <FormField
+                id="password"
+                label="PASSWORD"
+                type="password"
+                value={password}
+                onChange={setPassword}
+                placeholder="Enter your password"
+                autoComplete="current-password"
+                required
+              />
             </div>
-          )}
 
-          <PrimaryBtn type="submit" loading={loading}>
-            {loading
-              ? <><Spinner />{mode === 'sso' ? 'Verifying…' : 'Authenticating…'}</>
-              : mode === 'sso' ? 'Login with SSO' : 'Login'}
-          </PrimaryBtn>
-        </form>
+            {/* Error Notice */}
+            {displayError && (
+              <div className="flex items-start gap-2 p-2.5 rounded bg-red-950/40 border border-red-800/80 text-xs text-red-300">
+                <span className="font-bold flex-shrink-0">✕</span>
+                <span className="leading-tight">{displayError}</span>
+              </div>
+            )}
 
-        <p className="text-center text-[0.65rem] text-white/20 mt-7 pt-4 tracking-[0.04em]"
-          style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          ISRO · Canteen Management System · v1.0
-        </p>
+            <div className="pt-2">
+              <PrimaryBtn type="submit" loading={loading}>
+                {loading ? (
+                  <>
+                    <Spinner />
+                    <span>Authenticating…</span>
+                  </>
+                ) : (
+                  <span>Sign In to Portal</span>
+                )}
+              </PrimaryBtn>
+            </div>
+          </form>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800/80 text-center space-y-3">
+              <div className="w-12 h-12 mx-auto rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-400 flex items-center justify-center text-xl">
+                🛰️
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white font-grotesk">
+                  ISRO Central SSO Gateway
+                </h3>
+                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                  Log in once at the central identity portal to access all ISRO applications seamlessly.
+                </p>
+              </div>
+
+              <a
+                href={import.meta.env.VITE_SSO_PORTAL_URL || 'http://localhost:5174'}
+                className="w-full py-3 px-4 rounded-xl text-xs font-bold bg-orange-500 hover:bg-orange-400 text-slate-950 transition-all shadow-md shadow-orange-500/20 flex items-center justify-center gap-2"
+              >
+                <span>🚀</span>
+                <span>Launch ISRO SSO Portal</span>
+              </a>
+            </div>
+
+            {/* Optional Manual Fallback */}
+            <details className="text-[0.7rem] text-slate-400 border-t border-slate-800 pt-3">
+              <summary className="cursor-pointer hover:text-slate-200 transition-colors font-medium">
+                Advanced: Paste Raw Encrypted SSO Token
+              </summary>
+              <form onSubmit={handleSubmit} className="flex flex-col gap-3 mt-3">
+                <FormField
+                  id="ssotoken"
+                  label="RAW SSO TOKEN"
+                  type="text"
+                  value={ssoToken}
+                  onChange={setSsoToken}
+                  placeholder="Paste base64url encrypted token"
+                  required
+                />
+                {displayError && (
+                  <div className="p-2 rounded bg-red-950/40 border border-red-800/80 text-xs text-red-300">
+                    {displayError}
+                  </div>
+                )}
+                <PrimaryBtn type="submit" loading={loading}>
+                  Verify & Enter
+                </PrimaryBtn>
+              </form>
+            </details>
+          </div>
+        )}
+
+        {/* ── Card Footer ── */}
+        <div className="mt-6 pt-4 border-t border-slate-800/90 text-center space-y-1">
+          <div className="flex items-center justify-center gap-1 text-[0.64rem] text-slate-400">
+            <ShieldCheckIcon className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Authorized Personnel Only · Official ISRO HSFC Network</span>
+          </div>
+          <div className="text-[0.6rem] text-slate-400">
+            CMS Portal v2.4
+          </div>
+        </div>
+
       </div>
     </div>
   )

@@ -27,7 +27,7 @@ export const createUserSchema = z.object({
 
       AUTHID: z.string().trim().max(120).nullable().optional(),
     })
-    .strict(),
+    ,
 });
 
 export const assignUserRoleSchema = z.object({
@@ -38,7 +38,7 @@ export const assignUserRoleSchema = z.object({
       VALIDFROM: z.string().datetime().nullable().optional(),
       VALIDUNTIL: z.string().datetime().nullable().optional(),
     })
-    .strict(),
+    ,
 });
 
 
@@ -48,21 +48,22 @@ export const createCustomerSchema = z.object({
       USERID: z.coerce.number().int().positive().nullable().optional(),
 
       CTYPECODE: z.enum([
-        "PERMANENT",
-        "CONTRACT",
-        "VISITOR",
-        "OTHERCENTRE",
+        "PRM",
+        "CNT",
+        "VIS",
+        "OCE",
+        "OFR",
       ]),
 
       DISPNAME: z.string().trim().min(2).max(120),
 
-      STATUS: z.enum(["A", "D", "P", "EXP", "BLK"]).default("A"),
+      STATUS: z.enum(["ACT", "DIS"]).default("ACT"),
 
       VALIDFROM: z.string().datetime().nullable().optional(),
 
       VALIDUNTIL: z.string().datetime().nullable().optional(),
     })
-    .strict(),
+    ,
 });
 
 export const createPermanentEmployeeSchema = z.object({
@@ -88,5 +89,5 @@ export const createPermanentEmployeeSchema = z.object({
         .min(2, "Designation is required")
         .max(100),
     })
-    .strict(),
+    ,
 });

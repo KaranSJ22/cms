@@ -1,31 +1,66 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { getServices } from '../../services/api/servicesApi';
+import { getCustomerTypes } from '../../common/api/commonApi';
 
 export function MenuForm({ initialData, onSubmit, onCancel, isSubmitting }) {
+  const navigate = useNavigate();
   const isEdit = !!initialData;
-  const [formData, setFormData] = useState({
-    MENUCODE: '',
-    SHORTNAME: '',
-    ITEMNAME: '',
-    ITEMDESCR: '',
-    ISSPECIAL: 0,
-    STATUS: 'A',
+  const [prevInitialData, setPrevInitialData] = useState(initialData);
+  const [services, setServices] = useState([]);
+  const [customerTypes, setCustomerTypes] = useState([]);
+
+  // Base Form Data
+  const [formData, setFormData] = useState(() => ({
+    MENUCODE: initialData?.MENUCODE || '',
+    SHORTNAME: initialData?.SHORTNAME || '',
+    ITEMNAME: initialData?.ITEMNAME || '',
+    ITEMDESCR: initialData?.ITEMDESCR || '',
+    ISSPECIAL: initialData?.ISSPECIAL || 0,
+    SERVICEID: initialData?.SERVICEID || '',
+    STATUS: initialData?.STATUSCODE || initialData?.STATUS || 'ACT',
     CHGREASON: ''
-  });
+  }));
+
+  // Initial Pricing State (Add Mode)
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [effFrom, setEffFrom] = useState(todayStr);
+  const [basePrice, setBasePrice] = useState('');
+  const [prices, setPrices] = useState({});
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
-    if (initialData) {
-      setFormData({
-        MENUCODE: initialData.MENUCODE || '',
-        SHORTNAME: initialData.SHORTNAME || '',
-        ITEMNAME: initialData.ITEMNAME || '',
-        ITEMDESCR: initialData.ITEMDESCR || '',
-        ISSPECIAL: initialData.ISSPECIAL || 0,
-        STATUS: initialData.STATUS || 'A',
-        CHGREASON: '' // reset change reason
-      });
-    }
-  }, [initialData]);
+    Promise.all([
+      getServices().catch(() => []),
+      getCustomerTypes().catch(() => [])
+    ]).then(([servicesData, ctypesData]) => {
+      setServices(Array.isArray(servicesData) ? servicesData : []);
+      const ctypes = Array.isArray(ctypesData) ? ctypesData : [];
+      setCustomerTypes(ctypes);
+
+      if (!isEdit) {
+        const initialPrices = {};
+        ctypes.forEach((ct) => {
+          initialPrices[ct.CTYPECODE] = '';
+        });
+        setPrices(initialPrices);
+      }
+    });
+  }, [isEdit]);
+
+  if (initialData !== prevInitialData) {
+    setPrevInitialData(initialData);
+    setFormData({
+      MENUCODE: initialData?.MENUCODE || '',
+      SHORTNAME: initialData?.SHORTNAME || '',
+      ITEMNAME: initialData?.ITEMNAME || '',
+      ITEMDESCR: initialData?.ITEMDESCR || '',
+      ISSPECIAL: initialData?.ISSPECIAL || 0,
+      SERVICEID: initialData?.SERVICEID || '',
+      STATUS: initialData?.STATUSCODE || initialData?.STATUS || 'ACT',
+      CHGREASON: ''
+    });
+  }
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -33,19 +68,53 @@ export function MenuForm({ initialData, onSubmit, onCancel, isSubmitting }) {
       ...prev,
       [name]: type === 'checkbox' ? (checked ? 1 : 0) : value
     }));
-    // Clear error for field
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
 
+  const handlePriceChange = (ctypeCode, val) => {
+    setPrices(prev => ({
+      ...prev,
+      [ctypeCode]: val
+    }));
+    if (errors[`price_${ctypeCode}`] || errors.pricing) {
+      setErrors(prev => ({ ...prev, [`price_${ctypeCode}`]: '', pricing: '' }));
+    }
+  };
+
+  const handleApplyBasePrice = () => {
+    if (basePrice === '' || isNaN(basePrice) || Number(basePrice) < 0) return;
+    const updated = {};
+    customerTypes.forEach(ct => {
+      updated[ct.CTYPECODE] = basePrice;
+    });
+    setPrices(updated);
+    setErrors(prev => ({ ...prev, pricing: '' }));
+  };
+
   const validate = () => {
     const newErrors = {};
-    if (!isEdit && !formData.MENUCODE.trim()) newErrors.MENUCODE = 'Menu Code is required';
     if (!formData.SHORTNAME.trim()) newErrors.SHORTNAME = 'Short Name is required';
     if (!formData.ITEMNAME.trim()) newErrors.ITEMNAME = 'Item Name is required';
     if (isEdit && !formData.CHGREASON?.trim()) newErrors.CHGREASON = 'Change reason is required';
-    
+
+    // In Add Mode, validate pricing
+    if (!isEdit) {
+      if (!effFrom) newErrors.effFrom = 'Effective Date is required';
+      
+      const priceEntries = Object.entries(prices).filter(([, val]) => val !== '' && !isNaN(val));
+      if (priceEntries.length === 0) {
+        newErrors.pricing = 'Please provide at least one customer type price rate.';
+      } else {
+        priceEntries.forEach(([code, val]) => {
+          if (Number(val) < 0) {
+            newErrors[`price_${code}`] = 'Price cannot be negative';
+          }
+        });
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -57,29 +126,56 @@ export function MenuForm({ initialData, onSubmit, onCancel, isSubmitting }) {
     // Clean up payload
     const payload = { ...formData };
     if (!payload.ITEMDESCR) payload.ITEMDESCR = null;
+    payload.SERVICEID = payload.SERVICEID ? Number(payload.SERVICEID) : null;
     
-    // MENUCODE shouldn't be sent on PUT per schema, but API might ignore it. Better to explicitly omit if edit.
-    if (isEdit) {
-      delete payload.MENUCODE;
-    } else {
+    // MENUCODE is auto-generated by procedure CMSGENAUTO on insert
+    delete payload.MENUCODE;
+    if (!isEdit) {
       delete payload.STATUS;
       delete payload.CHGREASON;
+
+      // Attach initial pricing payload
+      const validPrices = Object.entries(prices)
+        .filter(([, val]) => val !== '' && !isNaN(val) && Number(val) >= 0)
+        .map(([code, val]) => ({
+          CTYPECODE: code,
+          PRICE: parseFloat(val)
+        }));
+
+      if (validPrices.length > 0) {
+        payload.PRICING = {
+          EFFFROM: effFrom || todayStr,
+          PRICES: validPrices
+        };
+      }
     }
 
     onSubmit(payload);
   };
 
+  const handleNavigateToPricing = () => {
+    if (initialData?.MENUITEMID) {
+      onCancel();
+      navigate(`/pricing?itemId=${initialData.MENUITEMID}`);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col my-8 max-h-[90vh]">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between" style={{ backgroundColor: '#0F172A' }}>
-          <h2 className="text-lg font-bold font-grotesk text-white">
-            {isEdit ? 'Edit Menu Item' : 'Add Menu Item'}
-          </h2>
+          <div>
+            <h2 className="text-lg font-bold font-grotesk text-white">
+              {isEdit ? 'Edit Menu Item' : 'Add New Menu Item & Pricing'}
+            </h2>
+            <p className="text-xs text-slate-300 mt-0.5">
+              {isEdit ? 'Update catalog details or navigate to manage price schedules.' : 'Define item metadata and assign initial customer rates in a single step.'}
+            </p>
+          </div>
           <button 
             onClick={onCancel}
-            className="text-white/60 hover:text-white transition-colors focus:outline-none"
+            className="text-white/60 hover:text-white transition-colors focus:outline-none p-1 rounded-lg hover:bg-white/10"
             type="button"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -90,126 +186,268 @@ export function MenuForm({ initialData, onSubmit, onCancel, isSubmitting }) {
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
-          <div className="p-6 space-y-4">
+          <div className="p-6 space-y-6">
             
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[0.75rem] font-semibold text-slate-700 mb-1">
-                  Menu Code <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="MENUCODE"
-                  value={formData.MENUCODE}
-                  onChange={handleChange}
-                  disabled={isEdit}
-                  maxLength={20}
-                  className={`w-full px-3 py-2 text-sm border rounded bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all ${
-                    errors.MENUCODE ? 'border-red-300 ring-1 ring-red-300' : 'border-slate-200'
-                  } ${isEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
-                  placeholder="e.g. LUN01"
-                />
-                {errors.MENUCODE && <p className="text-red-500 text-[0.65rem] mt-1">{errors.MENUCODE}</p>}
+            {/* Section 1: Item Details */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 font-grotesk">Item Details</h3>
               </div>
 
-              <div>
-                <label className="block text-[0.75rem] font-semibold text-slate-700 mb-1">
-                  Short Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="SHORTNAME"
-                  value={formData.SHORTNAME}
-                  onChange={handleChange}
-                  maxLength={30}
-                  className={`w-full px-3 py-2 text-sm border rounded bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all ${
-                    errors.SHORTNAME ? 'border-red-300 ring-1 ring-red-300' : 'border-slate-200'
-                  }`}
-                  placeholder="e.g. Veg Thali"
-                />
-                {errors.SHORTNAME && <p className="text-red-500 text-[0.65rem] mt-1">{errors.SHORTNAME}</p>}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-[0.75rem] font-semibold text-slate-700 mb-1">
-                Full Item Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="ITEMNAME"
-                value={formData.ITEMNAME}
-                onChange={handleChange}
-                maxLength={100}
-                className={`w-full px-3 py-2 text-sm border rounded bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all ${
-                  errors.ITEMNAME ? 'border-red-300 ring-1 ring-red-300' : 'border-slate-200'
-                }`}
-                placeholder="e.g. Standard Vegetarian Thali"
-              />
-              {errors.ITEMNAME && <p className="text-red-500 text-[0.65rem] mt-1">{errors.ITEMNAME}</p>}
-            </div>
-
-            <div>
-              <label className="block text-[0.75rem] font-semibold text-slate-700 mb-1">
-                Description
-              </label>
-              <textarea
-                name="ITEMDESCR"
-                value={formData.ITEMDESCR}
-                onChange={handleChange}
-                maxLength={255}
-                rows={3}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all resize-none"
-                placeholder="Optional description..."
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="ISSPECIAL"
-                name="ISSPECIAL"
-                checked={formData.ISSPECIAL === 1}
-                onChange={handleChange}
-                className="w-4 h-4 text-orange-500 border-slate-300 rounded focus:ring-orange-500"
-              />
-              <label htmlFor="ISSPECIAL" className="text-sm font-medium text-slate-700 cursor-pointer">
-                Mark as Special Item
-              </label>
-            </div>
-
-            {isEdit && (
-              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[0.75rem] font-semibold text-slate-700 mb-1">
-                    Status <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="STATUS"
-                    value={formData.STATUS}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all"
-                  >
-                    <option value="A">Active</option>
-                    <option value="D">Inactive</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[0.75rem] font-semibold text-slate-700 mb-1">
-                    Reason for Change <span className="text-red-500">*</span>
+                    Menu Code
                   </label>
                   <input
                     type="text"
-                    name="CHGREASON"
-                    value={formData.CHGREASON}
-                    onChange={handleChange}
-                    maxLength={255}
-                    className={`w-full px-3 py-2 text-sm border rounded bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all ${
-                      errors.CHGREASON ? 'border-red-300 ring-1 ring-red-300' : 'border-slate-200'
-                    }`}
-                    placeholder="e.g. Price update"
+                    name="MENUCODE"
+                    value={isEdit ? formData.MENUCODE : 'Auto-generated (e.g. ITM...)'}
+                    disabled
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-100 text-slate-500 font-mono cursor-not-allowed"
                   />
-                  {errors.CHGREASON && <p className="text-red-500 text-[0.65rem] mt-1">{errors.CHGREASON}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-[0.75rem] font-semibold text-slate-700 mb-1">
+                    Short Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="SHORTNAME"
+                    value={formData.SHORTNAME}
+                    onChange={handleChange}
+                    maxLength={30}
+                    className={`w-full px-3 py-2 text-sm border rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all ${
+                      errors.SHORTNAME ? 'border-red-300 ring-1 ring-red-300' : 'border-slate-200'
+                    }`}
+                    placeholder="e.g. Veg Thali"
+                  />
+                  {errors.SHORTNAME && <p className="text-red-500 text-[0.65rem] mt-1">{errors.SHORTNAME}</p>}
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <label className="block text-[0.75rem] font-semibold text-slate-700 mb-1">
+                  Full Item Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="ITEMNAME"
+                  value={formData.ITEMNAME}
+                  onChange={handleChange}
+                  maxLength={100}
+                  className={`w-full px-3 py-2 text-sm border rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all ${
+                    errors.ITEMNAME ? 'border-red-300 ring-1 ring-red-300' : 'border-slate-200'
+                  }`}
+                  placeholder="e.g. Standard Vegetarian Thali"
+                />
+                {errors.ITEMNAME && <p className="text-red-500 text-[0.65rem] mt-1">{errors.ITEMNAME}</p>}
+              </div>
+
+              <div className="mt-4">
+                <label className="block text-[0.75rem] font-semibold text-slate-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  name="ITEMDESCR"
+                  value={formData.ITEMDESCR}
+                  onChange={handleChange}
+                  maxLength={255}
+                  rows={2}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all resize-none"
+                  placeholder="Optional description of ingredients or portion details..."
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                <div>
+                  <label className="block text-[0.75rem] font-semibold text-slate-700 mb-1">
+                    Primary Service / Meal Category
+                  </label>
+                  <select
+                    name="SERVICEID"
+                    value={formData.SERVICEID}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all"
+                  >
+                    <option value="">All Services / Generic (Any Meal)</option>
+                    {services.map((s) => (
+                      <option key={s.SERVICEID} value={s.SERVICEID}>
+                        {s.SERVNAME} ({s.SERVCODE})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[0.65rem] text-slate-400 mt-1">Used for smart menu template matching</p>
+                </div>
+
+                <div className="flex items-center gap-2 pt-4 sm:pt-6">
+                  <input
+                    type="checkbox"
+                    id="ISSPECIAL"
+                    name="ISSPECIAL"
+                    checked={formData.ISSPECIAL === 1}
+                    onChange={handleChange}
+                    className="w-4 h-4 text-orange-500 border-slate-300 rounded focus:ring-orange-500"
+                  />
+                  <label htmlFor="ISSPECIAL" className="text-sm font-medium text-slate-700 cursor-pointer">
+                    Mark as Special Item
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 2: Pricing Configuration (Only in Add Mode) */}
+            {!isEdit ? (
+              <div className="pt-4 border-t border-slate-100">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 font-grotesk">
+                      Initial Price Configuration
+                    </h3>
+                  </div>
+                  <span className="text-[0.68rem] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                    Effective Immediately
+                  </span>
+                </div>
+
+                {errors.pricing && (
+                  <div className="mb-3 p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-xs font-medium">
+                    {errors.pricing}
+                  </div>
+                )}
+
+                {/* Date & Quick Fill Bar */}
+                <div className="bg-slate-50/80 border border-slate-200/80 p-4 rounded-xl space-y-3 mb-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[0.72rem] font-semibold text-slate-700 mb-1">
+                        Effective From Date <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={effFrom}
+                        onChange={(e) => setEffFrom(e.target.value)}
+                        className={`w-full px-3 py-1.5 text-xs bg-white border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/30 ${
+                          errors.effFrom ? 'border-red-300' : 'border-slate-300'
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[0.72rem] font-semibold text-slate-700 mb-1">
+                        Quick Fill Base Rate (₹)
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          placeholder="e.g. 50"
+                          value={basePrice}
+                          onChange={(e) => setBasePrice(e.target.value)}
+                          className="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleApplyBasePrice}
+                          className="px-3 py-1.5 text-xs font-semibold text-slate-800 bg-slate-200 hover:bg-slate-300 rounded-lg transition-colors whitespace-nowrap"
+                        >
+                          Apply to All
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Customer Types Rate Matrix */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {customerTypes.map((ct) => (
+                    <div 
+                      key={ct.CTYPECODE}
+                      className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl hover:border-slate-300 transition-all shadow-2xs"
+                    >
+                      <div>
+                        <div className="text-xs font-bold text-slate-800">{ct.CTYPENAME}</div>
+                        <div className="text-[0.65rem] font-mono text-slate-400 uppercase">{ct.CTYPECODE}</div>
+                      </div>
+                      <div className="w-28 relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">
+                          ₹
+                        </span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="0.00"
+                          value={prices[ct.CTYPECODE] || ''}
+                          onChange={(e) => handlePriceChange(ct.CTYPECODE, e.target.value)}
+                          className={`w-full pl-6 pr-2 py-1.5 text-xs font-bold text-right text-slate-900 border rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 ${
+                            errors[`price_${ct.CTYPECODE}`] ? 'border-red-300 ring-1 ring-red-300' : 'border-slate-300'
+                          }`}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[0.68rem] text-slate-400 mt-2">
+                  * Future price revisions, histories, and deactivations can be scheduled at any time on the Pricing page.
+                </p>
+              </div>
+            ) : (
+              /* Edit Mode: Change Reason + Pricing Link Callout */
+              <div className="pt-4 border-t border-slate-100 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[0.75rem] font-semibold text-slate-700 mb-1">
+                      Status <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      name="STATUS"
+                      value={formData.STATUS}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all"
+                    >
+                      <option value="ACT">Active</option>
+                      <option value="DIS">Inactive</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[0.75rem] font-semibold text-slate-700 mb-1">
+                      Reason for Change <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="CHGREASON"
+                      value={formData.CHGREASON}
+                      onChange={handleChange}
+                      maxLength={255}
+                      className={`w-full px-3 py-2 text-sm border rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all ${
+                        errors.CHGREASON ? 'border-red-300 ring-1 ring-red-300' : 'border-slate-200'
+                      }`}
+                      placeholder="e.g. Updated item recipe description"
+                    />
+                    {errors.CHGREASON && <p className="text-red-500 text-[0.65rem] mt-1">{errors.CHGREASON}</p>}
+                  </div>
+                </div>
+
+                {/* Dedicated Pricing Callout in Edit Mode */}
+                <div className="p-4 bg-blue-50/70 border border-blue-100 rounded-xl flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-blue-900">Need to update or schedule item prices?</div>
+                    <div className="text-[0.7rem] text-blue-700/80 mt-0.5">
+                      Price changes are date-versioned and audited through the Pricing module.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleNavigateToPricing}
+                    className="px-3.5 py-1.5 text-xs font-semibold text-blue-700 bg-white border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors shadow-2xs whitespace-nowrap"
+                  >
+                    Manage Price Bands →
+                  </button>
                 </div>
               </div>
             )}
@@ -221,7 +459,7 @@ export function MenuForm({ initialData, onSubmit, onCancel, isSubmitting }) {
             <button
               type="button"
               onClick={onCancel}
-              className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded hover:bg-slate-50 hover:text-slate-900 transition-colors focus:outline-none"
+              className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-900 transition-colors focus:outline-none"
               disabled={isSubmitting}
             >
               Cancel
@@ -229,7 +467,7 @@ export function MenuForm({ initialData, onSubmit, onCancel, isSubmitting }) {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-5 py-2 text-sm font-medium text-slate-900 bg-orange-500 rounded hover:bg-orange-400 transition-colors shadow-sm focus:outline-none disabled:opacity-70 flex items-center gap-2"
+              className="px-5 py-2 text-sm font-semibold text-slate-900 bg-orange-500 rounded-lg hover:bg-orange-400 transition-colors shadow-sm focus:outline-none disabled:opacity-70 flex items-center gap-2"
             >
               {isSubmitting && (
                 <svg className="animate-spin h-4 w-4 text-slate-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -237,7 +475,7 @@ export function MenuForm({ initialData, onSubmit, onCancel, isSubmitting }) {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
               )}
-              {isEdit ? 'Save Changes' : 'Add Item'}
+              {isEdit ? 'Save Changes' : 'Save & Publish Item'}
             </button>
           </div>
         </form>
@@ -245,3 +483,4 @@ export function MenuForm({ initialData, onSubmit, onCancel, isSubmitting }) {
     </div>
   );
 }
+

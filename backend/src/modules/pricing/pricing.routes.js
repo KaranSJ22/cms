@@ -19,7 +19,7 @@ import {
 } from "./pricing.validation.js";
 
 
-const canManagePrices = authorizeAnyCanteenRole("CTNMNG", "CTNAST");
+const canManagePrices = authorizeAnyCanteenRole("CNTMGR", "CNTAST");
 router.post(
   "/menu-items/:menuItemId/prices",
   authenticate,

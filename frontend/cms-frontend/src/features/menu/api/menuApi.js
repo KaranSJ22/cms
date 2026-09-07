@@ -23,3 +23,21 @@ export async function updateMenuItem(id, body) {
   const res = await api.put(`/menu-items/${id}`, body)
   return res.data.DATA
 }
+
+/** GET /api/menu-items/:id/price-readiness */
+export async function checkPriceReadiness(id, serviceDate) {
+  const res = await api.get(`/menu-items/${id}/price-readiness`, { params: { serviceDate } })
+  return res.data
+}
+
+export const menuApi = {
+  getMenus: getMenuItems,
+  getMenuItems,
+  getMenuItem,
+  createMenuItem,
+  updateMenuItem,
+  checkPriceReadiness,
+}
+
+export default menuApi
+

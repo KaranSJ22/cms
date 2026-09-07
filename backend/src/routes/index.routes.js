@@ -17,6 +17,10 @@ import dayMenuRoutes, {
 } from "../modules/daymenu/daymenu.routes.js";
 import bookingRoutes from "../modules/booking/booking.routes.js";
 import walletRoutes from "../modules/wallet/wallet.routes.js";
+import menuTemplateRoutes from "../modules/menutemplates/menutemplate.routes.js";
+import holidayRoutes from "../modules/holidays/holiday.routes.js";
+import reportRoutes from "../modules/reports/report.routes.js";
+import kioskRoutes from "../modules/kiosk/kiosk.routes.js";
 
 const router = express.Router();
 
@@ -28,10 +32,15 @@ router.use("/canteens", canteenRoutes);
 router.use("/menu-items", menuRoutes);
 router.use("/", pricingRoutes);
 router.use("/day-slots", daySlotRoutes);
-router.use("/day-menus", dayMenuRoutes);
+router.use("/day-slots", dayMenuRoutes); // for /:id/menu
+router.use("/day-menus", dayMenuRoutes); // for /pending
 router.use("/menus", publishedMenuRoutes);
 router.use("/bookings", bookingRoutes);
 router.use("/wallets", walletRoutes);
+router.use("/menu-templates", menuTemplateRoutes);
+router.use("/holidays", holidayRoutes);
+router.use("/reports", reportRoutes);
+router.use("/kiosk", kioskRoutes);
 
 router.get("/me", authenticate, (req, res) => {
   return res.status(200).json({
@@ -44,7 +53,7 @@ router.get("/me", authenticate, (req, res) => {
 router.get(
   "/admin/test",
   authenticate,
-  authorizeSystemRoles("ADMIN"),
+  authorizeSystemRoles("SYSADM"),
   (req, res) => {
     return res.status(200).json({
       SUCCESS: true,

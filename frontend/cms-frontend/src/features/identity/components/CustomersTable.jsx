@@ -44,12 +44,12 @@ export function CustomersTable({ customers, loading, error }) {
                 </span>
               </td>
               <td className="px-4 py-3">
-                <span className={`px-2 py-0.5 rounded text-[0.65rem] font-bold tracking-wide uppercase ${
-                  customer.STATUS === 'A' ? 'bg-emerald-100 text-emerald-700' :
-                  customer.STATUS === 'BLK' ? 'bg-red-100 text-red-700' :
+                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                  customer.STATUSCODE === 'ACT' ? 'bg-emerald-100 text-emerald-700' :
+                  customer.STATUSCODE === 'BLK' ? 'bg-red-100 text-red-700' :
                   'bg-amber-100 text-amber-700'
                 }`}>
-                  {customer.STATUS}
+                  {customer.STATUSCODE}
                 </span>
               </td>
               <td className="px-4 py-3 text-[0.75rem]">

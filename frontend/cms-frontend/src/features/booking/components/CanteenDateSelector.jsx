@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { getActiveCanteens } from "../../dayslot/api/daySlotsApi";
 
 export default function CanteenDateSelector({ onContextChange }) {

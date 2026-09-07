@@ -1,0 +1,39 @@
+/* ============================================================
+   MODULE: KIOSK & TERMINAL DEVICE MANAGEMENT
+   ============================================================ */
+
+USE cms_db;
+
+SET FOREIGN_KEY_CHECKS = 0;
+
+DROP TABLE IF EXISTS CMS_KIOSK_DEVICE;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- ------------------------------------------------------------
+-- Hardware Kiosk Device Registry
+-- Maps Raspberry Pi network IPs and physical stations to canteens and kiosk profiles
+-- ------------------------------------------------------------
+CREATE TABLE CMS_KIOSK_DEVICE (
+    KIOSKID INT AUTO_INCREMENT PRIMARY KEY,
+    DEVICECODE VARCHAR(30) NOT NULL UNIQUE,                -- e.g. 'KSK-COUNTER-01', 'KSK-LOBBY-01'
+    DEVICENAME VARCHAR(100) NOT NULL,                      -- e.g. 'Main Canteen Serving Counter 1'
+    IPADDRESS VARCHAR(45) NOT NULL UNIQUE,                 -- Raspberry Pi Static IPv4 / IPv6
+    MACADDRESS VARCHAR(17) NULL,                           -- Hardware MAC address
+    CANTEENID INT NOT NULL,                                -- Scoped Canteen Facility
+    KIOSKTYPE ENUM('STAFF_COUNTER', 'EMP_SELF_SERVICE') NOT NULL DEFAULT 'EMP_SELF_SERVICE',
+    STATUSID INT NOT NULL DEFAULT 10,                      -- 10 = 'ACT' (Active)
+    ISACTIVE TINYINT(1) NOT NULL DEFAULT 1,
+    LASTHEARTBEATAT DATETIME NULL,
+    LASTSEENIP VARCHAR(45) NULL,
+    CREATEDBY INT NULL,
+    CREATEDAT DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UPDATEDBY INT NULL,
+    UPDATEDAT DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT FK_KD_CANTEEN FOREIGN KEY (CANTEENID) REFERENCES CMS_CANTEEN(CANTEENID),
+    CONSTRAINT FK_KD_STATUS FOREIGN KEY (STATUSID) REFERENCES CMS_STATUS(STATUSID),
+    CONSTRAINT FK_KD_CREATEDBY FOREIGN KEY (CREATEDBY) REFERENCES CMS_USER(USERID),
+    CONSTRAINT FK_KD_UPDATEDBY FOREIGN KEY (UPDATEDBY) REFERENCES CMS_USER(USERID),
+    KEY IX_KD_IP (IPADDRESS),
+    KEY IX_KD_CANTEEN_TYPE (CANTEENID, KIOSKTYPE)
+) ENGINE=InnoDB;

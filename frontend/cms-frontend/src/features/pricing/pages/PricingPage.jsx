@@ -1,17 +1,28 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { getMenuItems } from "../../menu/api/menuApi";
 import { getCustomerTypes } from "../../common/api/commonApi";
 import { getEffectiveItemPrices, createItemPrice, deactivateItemPrice, getItemPriceHistory } from "../api/pricingApi";
 
 export default function PricingPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const paramItemId = searchParams.get("itemId") || searchParams.get("item") || "";
+
   const [menuItems, setMenuItems] = useState([]);
   const [customerTypes, setCustomerTypes] = useState([]);
   
-  const [selectedItem, setSelectedItem] = useState("");
+  const [selectedItem, setSelectedItem] = useState(paramItemId);
   const [effectivePrices, setEffectivePrices] = useState([]);
   const [priceHistory, setPriceHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Sync if URL query param changes
+  useEffect(() => {
+    if (paramItemId && paramItemId !== selectedItem) {
+      setSelectedItem(paramItemId);
+    }
+  }, [paramItemId]);
 
   // Form state
   const [effFrom, setEffFrom] = useState("");
@@ -22,7 +33,7 @@ export default function PricingPage() {
     async function loadInitial() {
       try {
         const [itemsRes, ctypesRes] = await Promise.all([
-          getMenuItems({ status: "A" }),
+          getMenuItems({ status: "ACT" }),
           getCustomerTypes()
         ]);
         setMenuItems(itemsRes);
@@ -35,7 +46,7 @@ export default function PricingPage() {
         });
         setNewPrices(initialPrices);
         
-      } catch (err) {
+      } catch {
         setError("Failed to load initial data");
       } finally {
         setLoading(false);
@@ -45,12 +56,9 @@ export default function PricingPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedItem) {
-      setEffectivePrices([]);
-      setPriceHistory([]);
-      return;
-    }
+    if (!selectedItem) return;
 
+    let ignore = false;
     async function loadItemPricing() {
       try {
         const today = new Date().toISOString().split('T')[0];
@@ -58,13 +66,16 @@ export default function PricingPage() {
           getEffectiveItemPrices(selectedItem, { serviceDate: today }),
           getItemPriceHistory(selectedItem)
         ]);
-        setEffectivePrices(effRes);
-        setPriceHistory(histRes);
-      } catch (err) {
-        setError("Failed to load item pricing");
+        if (!ignore) {
+          setEffectivePrices(effRes);
+          setPriceHistory(histRes);
+        }
+      } catch {
+        if (!ignore) setError("Failed to load item pricing");
       }
     }
     loadItemPricing();
+    return () => { ignore = true; };
   }, [selectedItem]);
 
   const handlePriceChange = (ctypeCode, val) => {
@@ -165,7 +176,15 @@ export default function PricingPage() {
         <label className="block text-sm font-medium text-slate-700 mb-2">Select Menu Item to Price</label>
         <select
           value={selectedItem}
-          onChange={(e) => setSelectedItem(e.target.value)}
+          onChange={(e) => {
+            const val = e.target.value;
+            setSelectedItem(val);
+            if (val) {
+              setSearchParams({ itemId: val }, { replace: true });
+            } else {
+              setSearchParams({}, { replace: true });
+            }
+          }}
           className="w-full max-w-md bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
         >
           <option value="">-- Choose an Item --</option>
@@ -289,16 +308,16 @@ export default function PricingPage() {
                         </td>
                         <td className="px-6 py-4">
                           <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${
-                            hist.STATUS === 'A' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                            hist.STATUSCODE === 'ACT' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
                           }`}>
-                            {hist.STATUS === 'A' ? 'Active' : 'Inactive'}
+                            {hist.STATUSCODE === 'ACT' ? 'Active' : 'Inactive'}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-xs">
                           {new Date(hist.CREATEDAT).toLocaleString()}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          {hist.STATUS === 'A' && new Date(hist.EFFFROM) > new Date() && (
+                          {hist.STATUSCODE === 'ACT' && new Date(hist.EFFFROM) > new Date() && (
                             <button
                               onClick={() => handleDeactivate(hist.ITEMPRICEID)}
                               className="text-rose-600 hover:text-rose-800 font-medium text-sm transition-colors"

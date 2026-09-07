@@ -1,26 +1,26 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { getBookings, getBooking, cancelBooking } from "../api/bookingApi";
 import { useAuth } from "../../../hooks/useAuth";
 
 export default function MyBookingsPage() {
-  const { user } = useAuth();
+  const { user, customer } = useAuth();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [cancellingId, setCancellingId] = useState(null);
 
-  useEffect(() => {
-    loadBookings();
-  }, []);
-
-  async function loadBookings() {
+  const loadBookings = useCallback(async () => {
     try {
       setLoading(true);
-      // Fetch only active/served bookings for simplicity, or just recent ones.
-      // We will fetch all for the customer and filter on frontend for now.
-      const headers = await getBookings({ customerId: user.CUSTOMERID });
+      if (!customer?.CUSTOMERID) {
+        setBookings([]);
+        setLoading(false);
+        return;
+      }
+
+      const headers = await getBookings({ customerId: customer?.CUSTOMERID });
       
-      // Fetch full details for each booking to get the itemized list and CANCELUNTIL
+      // Fetch full details for each booking to get the itemized list
       const detailedBookings = await Promise.all(
         headers.map(h => getBooking(h.BOOKID))
       );
@@ -30,11 +30,15 @@ export default function MyBookingsPage() {
       
       setBookings(detailedBookings);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to load bookings.");
+      setError(err.response?.data?.message || err.response?.data?.MESSAGE || "Failed to load bookings.");
     } finally {
       setLoading(false);
     }
-  }
+  }, [customer?.CUSTOMERID]);
+
+  useEffect(() => {
+    loadBookings();
+  }, [loadBookings]);
 
   const handleCancel = async (bookingId) => {
     if (!window.confirm("Are you sure you want to cancel this booking?")) return;
@@ -45,7 +49,7 @@ export default function MyBookingsPage() {
       alert("Booking cancelled successfully.");
       await loadBookings();
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to cancel booking. The cancellation window may have closed.");
+      alert(err.response?.data?.message || err.response?.data?.MESSAGE || "Failed to cancel booking. The cancellation window may have closed.");
     } finally {
       setCancellingId(null);
     }
@@ -89,19 +93,8 @@ export default function MyBookingsPage() {
         <div className="space-y-6">
           {bookings.map((booking) => {
             const { HEADER, ITEMS } = booking;
-            const isCancellable = HEADER.STATUS === 'CR'; // Only created bookings can be cancelled
-
-            // Check if ANY item in the booking is past CANCELUNTIL
-            // Note: Since all items are in the same slot, usually CANCELUNTIL is the same, but we check all.
-            const now = new Date();
-            let pastCancelCutoff = false;
-            ITEMS.forEach(item => {
-              // Wait, ITEMS from CMSGETBOOK doesn't include CANCELUNTIL!
-              // CMSGETBOOK returns BOOKDTID, BOOKINGID, DAYMENUID, QTY, RATE, AMOUNT, STATUS.
-              // To properly evaluate cancel cutoff on frontend, we would need DAYMENU.CANCELUNTIL.
-              // For MVP, the frontend will show the button if STATUS === 'CR'.
-              // If the window is closed, the backend will reject it gracefully and we show the error.
-            });
+            const statusCode = HEADER.STATUSCODE || HEADER.STATUS;
+            const isCancellable = statusCode === 'CRT';
 
             return (
               <div key={HEADER.BOOKID} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col md:flex-row">
@@ -116,21 +109,21 @@ export default function MyBookingsPage() {
                   </div>
                   
                   <div className="text-sm font-semibold text-slate-500 uppercase tracking-widest mb-1">
-                    Employee ID
+                    Customer
                   </div>
-                  <div className="text-2xl font-bold text-[#F4C430] tracking-wider mb-4">
-                    {user.LOGINID}
+                  <div className="text-xl font-bold text-[#F4C430] tracking-wider mb-4">
+                    {HEADER.CUSTOMERNAME || user?.LOGINID}
                   </div>
 
                   <span className={`px-4 py-1.5 text-sm font-bold uppercase tracking-wider rounded-full ${
-                    HEADER.STATUS === 'CR' ? 'bg-blue-100 text-blue-700' :
-                    HEADER.STATUS === 'SRV' ? 'bg-emerald-100 text-emerald-700' :
-                    HEADER.STATUS === 'CANC' ? 'bg-rose-100 text-rose-700' :
+                    statusCode === 'CRT' ? 'bg-blue-100 text-blue-700' :
+                    statusCode === 'SRV' ? 'bg-emerald-100 text-emerald-700' :
+                    statusCode === 'CAN' ? 'bg-rose-100 text-rose-700' :
                     'bg-slate-100 text-slate-700'
                   }`}>
-                    {HEADER.STATUS === 'CR' ? 'Active' : 
-                     HEADER.STATUS === 'SRV' ? 'Served' : 
-                     HEADER.STATUS === 'CANC' ? 'Cancelled' : HEADER.STATUS}
+                    {statusCode === 'CRT' ? 'Active' : 
+                     statusCode === 'SRV' ? 'Served' : 
+                     statusCode === 'CAN' ? 'Cancelled' : statusCode}
                   </span>
                 </div>
 
@@ -155,17 +148,23 @@ export default function MyBookingsPage() {
                   <div className="flex-1">
                     <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Itemized List</h4>
                     <ul className="space-y-3">
-                      {ITEMS.map(item => (
-                        <li key={item.BOOKDTID} className="flex justify-between items-center py-2 border-b border-slate-100 last:border-0">
-                          <div className="flex items-center gap-3">
-                            <span className="font-bold text-slate-800">{item.ITEMNAME || `Item #${item.DAYMENUID}`}</span>
-                            <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded">x{item.QTY}</span>
-                          </div>
-                          <div className="font-semibold text-slate-700">
-                            ₹{parseFloat(item.AMOUNT).toFixed(2)}
-                          </div>
-                        </li>
-                      ))}
+                      {ITEMS.map(item => {
+                        const isItemCancelled = item.STATUSCODE === 'CAN' || item.STATUSID === 33;
+                        return (
+                          <li key={item.BOOKITEMID || item.BOOKDTID} className={`flex justify-between items-center py-2 border-b border-slate-100 last:border-0 ${isItemCancelled ? 'opacity-50 line-through' : ''}`}>
+                            <div className="flex items-center gap-3">
+                              <span className="font-bold text-slate-800">{item.ITEMNAME || `Item #${item.DAYMENUID}`}</span>
+                              <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded">x{item.QTY}</span>
+                              {isItemCancelled && (
+                                <span className="text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded font-bold uppercase no-underline">Cancelled</span>
+                              )}
+                            </div>
+                            <div className="font-semibold text-slate-700">
+                              ₹{parseFloat(item.AMOUNT).toFixed(2)}
+                            </div>
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
 

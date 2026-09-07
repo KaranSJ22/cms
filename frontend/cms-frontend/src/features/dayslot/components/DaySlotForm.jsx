@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import * as servicesApi from "../../services/api/servicesApi";
 import { getActiveCanteens } from "../api/daySlotsApi";
+import { useAuth } from "../../../hooks/useAuth";
 
 export default function DaySlotForm({
   initialData = null,
@@ -9,20 +10,35 @@ export default function DaySlotForm({
   isSubmitting = false,
 }) {
   const isEditMode = !!initialData;
+  const { user } = useAuth();
+  const [prevInitialData, setPrevInitialData] = useState(initialData);
 
-  const [formData, setFormData] = useState({
-    CANTEENID: "",
-    SERVICEID: "",
-    SERVDATE: "",
-    STARTTIME: "",
-    ENDTIME: "",
-    STATUS: "A",
+  const [formData, setFormData] = useState(() => ({
+    CANTEENID: initialData?.CANTEENID || "",
+    SERVICEID: initialData?.SERVICEID || "",
+    SERVDATE: initialData?.SERVDATE ? initialData.SERVDATE.substring(0, 10) : "",
+    STARTTIME: initialData?.STARTTIME ? initialData.STARTTIME.substring(0, 5) : "",
+    ENDTIME: initialData?.ENDTIME ? initialData.ENDTIME.substring(0, 5) : "",
+    STATUS: initialData?.STATUSCODE || initialData?.STATUS || "ACT",
     CHGREASON: "",
-  });
+  }));
 
   const [errors, setErrors] = useState({});
   const [canteens, setCanteens] = useState([]);
   const [services, setServices] = useState([]);
+
+  if (initialData !== prevInitialData) {
+    setPrevInitialData(initialData);
+    setFormData({
+      CANTEENID: initialData?.CANTEENID || "",
+      SERVICEID: initialData?.SERVICEID || "",
+      SERVDATE: initialData?.SERVDATE ? initialData.SERVDATE.substring(0, 10) : "",
+      STARTTIME: initialData?.STARTTIME ? initialData.STARTTIME.substring(0, 5) : "",
+      ENDTIME: initialData?.ENDTIME ? initialData.ENDTIME.substring(0, 5) : "",
+      STATUS: initialData?.STATUSCODE || initialData?.STATUS || "ACT",
+      CHGREASON: "",
+    });
+  }
 
   useEffect(() => {
     // Load canteens and services for dropdowns
@@ -32,31 +48,27 @@ export default function DaySlotForm({
           getActiveCanteens(),
           servicesApi.getServices(),
         ]);
-        setCanteens(canteenData || []);
+        
+        // Filter canteens to only those the user has a role in
+        const userCanteenIds = (user?.CANTEENROLES || []).map(r => r.CANTEENID);
+        const hasAdminRole = (user?.SYSTEMROLES || []).includes('ADMIN');
+        
+        let filteredCanteens = canteenData || [];
+        if (!hasAdminRole) {
+          filteredCanteens = filteredCanteens.filter(c => userCanteenIds.includes(c.CANTEENID));
+        }
+        
+        setCanteens(filteredCanteens);
         
         // Filter only active services
-        const activeServices = (serviceData || []).filter(s => s.STATUS === 'A');
+        const activeServices = (serviceData || []).filter(s => s.STATUSCODE === 'ACT');
         setServices(activeServices);
       } catch (err) {
         console.error("Failed to load dropdowns", err);
       }
     }
     loadDropdowns();
-  }, []);
-
-  useEffect(() => {
-    if (initialData) {
-      setFormData({
-        CANTEENID: initialData.CANTEENID || "",
-        SERVICEID: initialData.SERVICEID || "",
-        SERVDATE: initialData.SERVDATE ? initialData.SERVDATE.substring(0, 10) : "",
-        STARTTIME: initialData.STARTTIME ? initialData.STARTTIME.substring(0, 5) : "",
-        ENDTIME: initialData.ENDTIME ? initialData.ENDTIME.substring(0, 5) : "",
-        STATUS: initialData.STATUS || "A",
-        CHGREASON: "",
-      });
-    }
-  }, [initialData]);
+  }, [user]);
 
   // When a service is selected, default its start and end times if empty
   const handleServiceChange = (e) => {
@@ -87,7 +99,7 @@ export default function DaySlotForm({
       newErrors.ENDTIME = "End time must be after start time";
     }
 
-    if (isEditMode && formData.STATUS !== "A" && !formData.CHGREASON.trim()) {
+    if (isEditMode && formData.STATUS !== "ACT" && !formData.CHGREASON.trim()) {
       newErrors.CHGREASON = "Reason is required when deactivating";
     }
 
@@ -289,15 +301,15 @@ export default function DaySlotForm({
                   onChange={handleChange}
                   className="w-full px-4 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all"
                 >
-                  <option value="A">Active</option>
-                  <option value="D">Inactive</option>
+                  <option value="ACT">Active</option>
+                  <option value="DIS">Inactive</option>
                 </select>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Change Reason{" "}
-                  {formData.STATUS !== "A" && (
+                  {formData.STATUS !== "ACT" && (
                     <span className="text-rose-500">*</span>
                   )}
                 </label>

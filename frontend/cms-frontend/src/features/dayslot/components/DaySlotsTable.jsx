@@ -1,5 +1,3 @@
-import React from "react";
-
 export default function DaySlotsTable({ daySlots, onEdit }) {
   if (!daySlots || daySlots.length === 0) {
     return (
@@ -56,12 +54,12 @@ export default function DaySlotsTable({ daySlots, onEdit }) {
                 <td className="py-4 px-6 text-center">
                   <span
                     className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      slot.STATUS === "A"
+                      slot.STATUSCODE === "ACT"
                         ? "bg-emerald-100 text-emerald-800"
                         : "bg-rose-100 text-rose-800"
                     }`}
                   >
-                    {slot.STATUS === "A" ? "Active" : "Inactive"}
+                    {slot.STATUSCODE === "ACT" ? "Active" : "Inactive"}
                   </span>
                 </td>
                 <td className="py-4 px-6 text-right">

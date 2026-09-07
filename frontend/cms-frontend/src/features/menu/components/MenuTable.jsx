@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 export function MenuTable({ menus, loading, error, onEdit }) {
   if (loading) {
     return (
@@ -33,6 +35,7 @@ export function MenuTable({ menus, loading, error, onEdit }) {
           <tr className="bg-slate-50 text-[0.7rem] font-grotesk tracking-wider text-slate-500 uppercase border-b border-slate-200">
             <th className="px-4 py-3 font-semibold">Menu Code</th>
             <th className="px-4 py-3 font-semibold">Item Name</th>
+            <th className="px-4 py-3 font-semibold">Category / Service</th>
             <th className="px-4 py-3 font-semibold">Description</th>
             <th className="px-4 py-3 font-semibold text-center">Special</th>
             <th className="px-4 py-3 font-semibold text-center">Status</th>
@@ -50,6 +53,17 @@ export function MenuTable({ menus, loading, error, onEdit }) {
                 <div className="text-[0.65rem] text-slate-400 mt-0.5">{menu.SHORTNAME}</div>
               </td>
               <td className="px-4 py-3 font-medium text-slate-900">{menu.ITEMNAME}</td>
+              <td className="px-4 py-3">
+                {menu.SERVNAME ? (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.65rem] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                    {menu.SERVNAME}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.65rem] font-medium bg-slate-100 text-slate-500">
+                    All Services
+                  </span>
+                )}
+              </td>
               <td className="px-4 py-3 text-slate-500 truncate max-w-[250px]" title={menu.ITEMDESCR}>
                 {menu.ITEMDESCR || '-'}
               </td>
@@ -63,21 +77,30 @@ export function MenuTable({ menus, loading, error, onEdit }) {
                 )}
               </td>
               <td className="px-4 py-3 text-center">
-                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[0.65rem] font-bold uppercase tracking-wide ${
-                  menu.STATUS === 'A' ? 'bg-green-100 text-green-700' : 
-                  menu.STATUS === 'D' ? 'bg-red-100 text-red-700' :
-                  'bg-slate-100 text-slate-600'
+                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                  menu.STATUSCODE === 'ACT' ? 'bg-green-100 text-green-700' : 
+                  menu.STATUSCODE === 'DIS' ? 'bg-red-100 text-red-700' :
+                  'bg-gray-100 text-gray-800'
                 }`}>
-                  {menu.STATUS === 'A' ? 'Active' : menu.STATUS === 'D' ? 'Inactive' : menu.STATUS}
+                  {menu.STATUSCODE === 'ACT' ? 'Active' : menu.STATUSCODE === 'DIS' ? 'Inactive' : menu.STATUSCODE}
                 </span>
               </td>
               <td className="px-4 py-3 text-right">
-                <button
-                  onClick={() => onEdit(menu)}
-                  className="text-[0.75rem] font-medium text-blue-600 hover:text-blue-800 hover:underline transition-colors focus:outline-none"
-                >
-                  Edit
-                </button>
+                <div className="flex items-center justify-end gap-3">
+                  <Link
+                    to={`/pricing?itemId=${menu.MENUITEMID}`}
+                    className="text-[0.75rem] font-semibold text-slate-600 hover:text-orange-600 bg-slate-50 hover:bg-orange-50 px-2 py-1 rounded border border-slate-200 hover:border-orange-200 transition-colors inline-flex items-center gap-1"
+                    title="Manage & schedule price bands"
+                  >
+                    <span>₹ Prices</span>
+                  </Link>
+                  <button
+                    onClick={() => onEdit(menu)}
+                    className="text-[0.75rem] font-medium text-blue-600 hover:text-blue-800 hover:underline transition-colors focus:outline-none"
+                  >
+                    Edit
+                  </button>
+                </div>
               </td>
             </tr>
           ))}

@@ -1,19 +1,21 @@
 import { Outlet } from 'react-router-dom'
 
-/** Unauthenticated layout — dark navy background with dot-grid pattern (Login page) */
+/**
+ * ISRO HSFC Authentication Layout
+ * Professional Deep Space Blue canvas with subtle structural grid.
+ */
 export default function AuthLayout() {
   return (
-    <div className="relative min-h-screen overflow-hidden flex items-center justify-center font-inter"
-      style={{ backgroundColor: '#0F172A' }}>
-      {/* Base dot grid */}
-      <div className="absolute inset-0 pointer-events-none"
-        style={{ backgroundImage: 'radial-gradient(circle at center,rgba(0,0,0,0.04) 1.2px,transparent 1.4px)', backgroundSize: '22px 22px' }} />
-      {/* Saffron radial glow */}
-      <div className="absolute pointer-events-none"
-        style={{ width: 520, height: 520, borderRadius: '50%', top: '50%', left: '50%',
-          transform: 'translate(-50%,-50%)',
-          background: 'radial-gradient(circle,rgba(249,115,22,0.1) 0%,transparent 70%)' }} />
-      <div className="relative z-10 w-full">
+    <div className="relative min-h-screen w-full overflow-hidden flex items-center justify-center font-inter bg-slate-950 text-slate-100 px-4 py-8">
+      {/* Subtle utilitarian grid pattern */}
+      <div
+        className="absolute inset-0 pointer-events-none opacity-20"
+        style={{
+          backgroundImage: 'linear-gradient(to right, #1e293b 1px, transparent 1px), linear-gradient(to bottom, #1e293b 1px, transparent 1px)',
+          backgroundSize: '32px 32px',
+        }}
+      />
+      <div className="relative z-10 w-full flex justify-center">
         <Outlet />
       </div>
     </div>

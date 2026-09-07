@@ -1,6 +1,6 @@
 import { Spinner } from '../icons/Icons'
 
-/** Primary saffron CTA button */
+/** Primary Saffron CTA button — strictly utilitarian, high reliability */
 export function PrimaryBtn({ children, onClick, type = 'button', loading = false, disabled = false, className = '' }) {
   return (
     <button
@@ -9,22 +9,21 @@ export function PrimaryBtn({ children, onClick, type = 'button', loading = false
       disabled={loading || disabled}
       className={`
         flex items-center justify-center gap-1.5 w-full
-        bg-orange-500 hover:bg-orange-400 active:bg-orange-600
-        text-slate-900 font-bold text-sm font-grotesk
-        rounded-lg px-4 py-2.5
-        shadow-[0_3px_14px_rgba(249,115,22,0.3)]
-        hover:-translate-y-px active:translate-y-0
-        transition-all duration-150
-        disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:translate-y-0
+        bg-orange-500 hover:bg-orange-600 active:bg-orange-700
+        text-slate-950 font-bold text-xs md:text-sm font-grotesk tracking-wide
+        rounded-md px-4 py-2 shadow-sm
+        transition-colors duration-150
+        disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none
+        focus:outline-none focus:ring-2 focus:ring-blue-950 focus:ring-offset-1
         ${className}
       `}
     >
-      {loading ? <><Spinner />{children}</> : children}
+      {loading ? <><Spinner color="#090d16" />{children}</> : children}
     </button>
   )
 }
 
-/** Ghost/outline button */
+/** Ghost/outline button for secondary actions */
 export function GhostBtn({ children, onClick, type = 'button', disabled = false, className = '' }) {
   return (
     <button
@@ -33,12 +32,13 @@ export function GhostBtn({ children, onClick, type = 'button', disabled = false,
       disabled={disabled}
       className={`
         flex items-center justify-center gap-1.5
-        bg-transparent border border-slate-200 hover:border-slate-300
-        text-slate-500 hover:text-slate-900
-        font-semibold text-sm font-grotesk
-        rounded-lg px-4 py-2.5
-        transition-all duration-150
+        bg-white border border-slate-300 hover:bg-slate-50 hover:border-slate-400
+        text-slate-700 hover:text-slate-900
+        font-semibold text-xs md:text-sm font-grotesk
+        rounded-md px-3.5 py-2 shadow-xs
+        transition-colors duration-150
         disabled:opacity-50 disabled:cursor-not-allowed
+        focus:outline-none focus:ring-2 focus:ring-blue-950
         ${className}
       `}
     >
@@ -47,7 +47,7 @@ export function GhostBtn({ children, onClick, type = 'button', disabled = false,
   )
 }
 
-/** Dark ghost button for use on the navy nav bar */
+/** Dark ghost button for use on deep space blue bars */
 export function NavGhostBtn({ children, onClick, type = 'button' }) {
   return (
     <button
@@ -55,11 +55,12 @@ export function NavGhostBtn({ children, onClick, type = 'button' }) {
       onClick={onClick}
       className="
         flex items-center justify-center gap-1
-        bg-transparent border border-white/10 hover:border-white/30
-        text-white/55 hover:text-white
-        font-semibold text-xs font-grotesk
-        rounded px-3 py-1.5
-        transition-all duration-150
+        bg-slate-800/80 border border-slate-700 hover:border-slate-600
+        text-slate-200 hover:text-white
+        font-medium text-xs font-grotesk
+        rounded-md px-2.5 py-1.5
+        transition-colors duration-150
+        focus:outline-none focus:ring-1 focus:ring-slate-500
       "
     >
       {children}
@@ -68,37 +69,42 @@ export function NavGhostBtn({ children, onClick, type = 'button' }) {
 }
 
 /** Small danger-red action button */
-export function DangerBtn({ children, onClick, disabled = false, loading = false }) {
+export function DangerBtn({ children, onClick, disabled = false, loading = false, className = '' }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled || loading}
-      className="
+      className={`
         flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold font-grotesk
-        bg-red-500/20 hover:bg-red-500/30 text-red-400
+        bg-red-600 hover:bg-red-700 active:bg-red-800 text-white shadow-xs
         transition-colors duration-150
         disabled:opacity-50 disabled:cursor-not-allowed
-      "
+        focus:outline-none focus:ring-2 focus:ring-red-500
+        ${className}
+      `}
     >
-      {loading ? <Spinner color="#f87171" /> : null}
+      {loading ? <Spinner color="#ffffff" /> : null}
       {children}
     </button>
   )
 }
 
 /** Small green action button */
-export function SuccessBtn({ children, onClick, disabled = false }) {
+export function SuccessBtn({ children, onClick, disabled = false, loading = false, className = '' }) {
   return (
     <button
       onClick={onClick}
-      disabled={disabled}
-      className="
+      disabled={disabled || loading}
+      className={`
         flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold font-grotesk
-        bg-green-500/15 hover:bg-green-500/28 text-green-400
+        bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white shadow-xs
         transition-colors duration-150
         disabled:opacity-50 disabled:cursor-not-allowed
-      "
+        focus:outline-none focus:ring-2 focus:ring-emerald-500
+        ${className}
+      `}
     >
+      {loading ? <Spinner color="#ffffff" /> : null}
       {children}
     </button>
   )

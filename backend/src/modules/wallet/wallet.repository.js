@@ -6,7 +6,7 @@ import { pool } from "../../db/connection.js";
 export const addWallet = async (customerId, openAmount, createdBy, remarks) => {
   const [rows] = await pool.execute(
     "CALL CMSADDWALLET(?, ?, ?, ?)",
-    [customerId, openAmount, createdBy, remarks]
+    [customerId, openAmount ?? 0, createdBy, remarks ?? null]
   );
   return rows[0]?.[0];
 };
@@ -17,7 +17,14 @@ export const addWallet = async (customerId, openAmount, createdBy, remarks) => {
 export const addWalletAmount = async (customerId, amount, paymentMethod, refNo, createdBy, remarks) => {
   const [rows] = await pool.execute(
     "CALL CMSADDWALLETAMT(?, ?, ?, ?, ?, ?)",
-    [customerId, amount, paymentMethod, refNo, createdBy, remarks]
+    [
+      customerId,
+      amount,
+      paymentMethod ?? "CASH",
+      refNo ?? null,
+      createdBy,
+      remarks ?? null,
+    ]
   );
   return rows[0]?.[0];
 };
@@ -39,7 +46,7 @@ export const getWallet = async (customerId) => {
 export const listWalletTransactions = async (customerId, fromDate = null, toDate = null) => {
   const [rows] = await pool.execute(
     "CALL CMSLISTWALLETTRAN(?, ?, ?)",
-    [customerId, fromDate, toDate]
+    [customerId, fromDate ?? null, toDate ?? null]
   );
   return rows[0];
 };
@@ -50,7 +57,7 @@ export const listWalletTransactions = async (customerId, fromDate = null, toDate
 export const reqWalletWithdrawal = async (customerId, amount, requestedBy, remarks) => {
   const [rows] = await pool.execute(
     "CALL CMSREQWALLETWD(?, ?, ?, ?)",
-    [customerId, amount, requestedBy, remarks]
+    [customerId, amount, requestedBy, remarks ?? null]
   );
   return rows[0]?.[0];
 };
@@ -61,7 +68,13 @@ export const reqWalletWithdrawal = async (customerId, amount, requestedBy, remar
 export const approveWalletWithdrawal = async (walletWdId, processedBy, paymentMethod, refNo, remarks) => {
   const [rows] = await pool.execute(
     "CALL CMSAPPWALLETWD(?, ?, ?, ?, ?)",
-    [walletWdId, processedBy, paymentMethod, refNo, remarks]
+    [
+      walletWdId,
+      processedBy,
+      paymentMethod ?? "CASH",
+      refNo ?? null,
+      remarks ?? null,
+    ]
   );
   return rows[0]?.[0];
 };
@@ -72,7 +85,7 @@ export const approveWalletWithdrawal = async (walletWdId, processedBy, paymentMe
 export const rejectWalletWithdrawal = async (walletWdId, processedBy, remarks) => {
   const [rows] = await pool.execute(
     "CALL CMSREJWALLETWD(?, ?, ?)",
-    [walletWdId, processedBy, remarks]
+    [walletWdId, processedBy, remarks ?? null]
   );
   return rows[0]?.[0];
 };

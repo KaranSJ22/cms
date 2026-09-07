@@ -1,5 +1,3 @@
-import React from "react";
-
 export default function PrepItemCard({ item }) {
   const { ITEMNAME, SHORTNAME, TOTAL_BOOKED, TOTAL_SERVED, REMAINING_QTY } = item;
 

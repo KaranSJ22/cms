@@ -1,5 +1,11 @@
 import api from '../../../config/axios'
 
+/** GET /api/wallets/customer-lookup/:customerId  (CTNMGR) */
+export async function lookupCustomerForWallet(customerId) {
+  const res = await api.get(`/wallets/customer-lookup/${customerId}`)
+  return res.data.DATA
+}
+
 /** POST /api/wallets  (ADMIN, CTNMGR) */
 export async function createWallet(body) {
   const res = await api.post('/wallets', body)

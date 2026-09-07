@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useDaySlots } from "../hooks/useDaySlots";
 import DaySlotsTable from "../components/DaySlotsTable";
 import DaySlotForm from "../components/DaySlotForm";
@@ -27,12 +27,9 @@ export default function DaySlotsPage() {
 
   const handleSubmit = async (formData) => {
     setIsSubmitting(true);
-    let success = false;
-    if (editingSlot) {
-      success = await editDaySlot(editingSlot.DAYSLOTID, formData);
-    } else {
-      success = await addDaySlot(formData);
-    }
+    const success = editingSlot
+      ? await editDaySlot(editingSlot.DAYSLOTID, formData)
+      : await addDaySlot(formData);
     setIsSubmitting(false);
 
     if (success) {

@@ -8,12 +8,6 @@ export async function loginApi(loginId, password) {
 
 /** POST /api/auth/sso */
 export async function ssoLoginApi(ssoToken) {
-  const res = await api.post('/auth/sso', { SSO_TOKEN: ssoToken })
-  return res.data.DATA
-}
-
-/** GET /api/me */
-export async function getMeApi() {
-  const res = await api.get('/me')
+  const res = await api.post('/auth/sso', { token: ssoToken })
   return res.data.DATA
 }

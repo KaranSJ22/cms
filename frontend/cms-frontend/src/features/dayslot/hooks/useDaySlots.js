@@ -3,7 +3,7 @@ import * as daySlotsApi from "../api/daySlotsApi";
 
 export function useDaySlots() {
   const [daySlots, setDaySlots] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const fetchDaySlots = useCallback(async (params = {}) => {
@@ -42,8 +42,20 @@ export function useDaySlots() {
   };
 
   useEffect(() => {
-    fetchDaySlots();
-  }, [fetchDaySlots]);
+    let ignore = false;
+    async function init() {
+      try {
+        const data = await daySlotsApi.getDaySlots({});
+        if (!ignore) setDaySlots(data || []);
+      } catch (err) {
+        if (!ignore) setError(err.response?.data?.message || err.message || "Failed to fetch day slots");
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+    init();
+    return () => { ignore = true; };
+  }, []);
 
   return {
     daySlots,

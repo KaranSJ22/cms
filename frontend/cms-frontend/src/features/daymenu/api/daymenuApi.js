@@ -1,36 +1,43 @@
 import api from '../../../config/axios'
 
-/** GET /api/day-menus  (CTNMNG, CTNAST) */
-export async function getDayMenus(params = {}) {
-  const res = await api.get('/day-menus', { params })
+/** GET /api/day-slots/:id/menu */
+export async function getDayMenuWorkspace(daySlotId) {
+  const res = await api.get(`/day-slots/${daySlotId}/menu`)
   return res.data.DATA
 }
 
-/** GET /api/day-menus/:id  (CTNMNG, CTNAST) */
-export async function getDayMenu(id) {
-  const res = await api.get(`/day-menus/${id}`)
+/** PUT /api/day-slots/:id/menu */
+export async function replaceDayMenuItems(daySlotId, itemsJson) {
+  const res = await api.put(`/day-slots/${daySlotId}/menu`, { ITEMSJSON: itemsJson })
   return res.data.DATA
 }
 
-/** POST /api/day-menus  (CTNMNG, CTNAST) */
-export async function createDayMenu(body) {
-  const res = await api.post('/day-menus', body)
+/** POST /api/day-slots/:id/menu/submit */
+export async function submitDayMenu(daySlotId) {
+  const res = await api.post(`/day-slots/${daySlotId}/menu/submit`)
   return res.data.DATA
 }
 
-/** PATCH /api/day-menus/:id/approve  (CTNMNG only) */
-export async function approveDayMenu(id, body = {}) {
-  const res = await api.patch(`/day-menus/${id}/approve`, body)
+/** POST /api/day-slots/:id/menu/approve */
+export async function approveDayMenu(daySlotId, remarks = null) {
+  const res = await api.post(`/day-slots/${daySlotId}/menu/approve`, { REMARKS: remarks })
   return res.data.DATA
 }
 
-/** PATCH /api/day-menus/:id/reject  (CTNMNG only) */
-export async function rejectDayMenu(id, body = {}) {
-  const res = await api.patch(`/day-menus/${id}/reject`, body)
+/** POST /api/day-slots/:id/menu/reject */
+export async function rejectDayMenu(daySlotId, remarks = null) {
+  const res = await api.post(`/day-slots/${daySlotId}/menu/reject`, { REMARKS: remarks })
   return res.data.DATA
 }
 
-/** GET /api/menus  (authenticated — published menus for pre-booking) */
+/** GET /api/day-menus/pending */
+export async function getPendingDayMenus(canteenId = null) {
+  const params = canteenId ? { canteenId } : {};
+  const res = await api.get('/day-menus/pending', { params })
+  return res.data.DATA
+}
+
+/** GET /api/menus */
 export async function getPublishedMenus(params = {}) {
   const res = await api.get('/menus', { params })
   return res.data.DATA

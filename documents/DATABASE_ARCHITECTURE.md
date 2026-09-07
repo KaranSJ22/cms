@@ -1,6 +1,6 @@
 # Database Architecture — CMS (Canteen Management System)
 
-> **Source of Truth**: This document is derived exclusively from the SQL files in `database/schema/V1/` and `database/procedures/V1/`.  
+> **Source of Truth**: This document is derived exclusively from the SQL files in `database/schema/` and `database/procedures/`.  
 > **Constraint**: No assumptions have been made. All information is taken from the schema definitions.
 
 ---
@@ -12,177 +12,125 @@
 | RDBMS         | MySQL (InnoDB)   |
 | Database Name | `cms_db`         |
 | Character Set | Server default   |
-| Versioning    | Flyway-style `V1/` prefix directories |
 
 ---
 
 ## 2. Schema Organisation
 
-The schema is organized into **four modules**, each in a separate SQL file:
+The schema is now modularised into specific domain-driven SQL files located in `database/schema/`:
 
-| File                                | Module | Tables Created |
-|------------------------------------|--------|----------------|
-| `00_COMMON_SCHEMA.sql`             | 0 — Common Master & System Config | 4 tables |
-| `01_IDENTITY_ACCESS_SCHEMA.sql`    | 1 — Identity & Access Management | 14 tables |
-| `02_MENU_SERVICE_SCHEMA.sql`       | 2 — Canteen Menu & Service | 10 tables + 1 trigger |
-| `03_BOOKING_SCHEMA.sql`            | 3 — Booking & Serving | 7 tables |
-| `04_WALLET_SCHEMA.sql`             | 4 — Wallet Management | 3 tables |
+| File | Module/Domain |
+|------|---------------|
+| `ACCESSKEY_SCHEMA.sql` | Access Keys (RFID/QR/Kiosk) |
+| `BOOKING_SCHEMA.sql` | Booking management (Pre-book, Kiosk) |
+| `CANTEENROLE_SCHEMA.sql` | Canteen-scoped roles |
+| `CANTEEN_SCHEMA.sql` | Canteen master |
+| `CENTER_SCHEMA.sql` | Center master |
+| `COMMON_SCHEMA.sql` | Master statuses, auto numbers, customer types, screens |
+| `CONSUMERROLE_SCHEMA.sql` | System-wide consumer roles |
+| `CUSTOMER_SCHEMA.sql` | Customer base identity |
+| `DAYMENU_SCHEMA.sql` | Day-wise menu assignments |
+| `DAYSLOT_SCHEMA.sql` | Operating slots per day |
+| `EMPLOYEES_VISITOR_SCHEMA.sql` | Employee (Perm, Cont, OCE) and Visitor profiles |
+| `HOLIDAY_SCHEMA.sql` | System-wide holidays |
+| `MENUITEM_PRICE_SCHEMA.sql` | Menu items and effective-date pricing |
+| `MENUTEMPLATE_SCHEMA.sql` | Recurring menu templates |
+| `ROLE_SCHEMA.sql` | Role master |
+| `SERVICE_SCHEMA.sql` | Canteen service catalogue (Breakfast, Lunch, etc.) |
+| `USER_SCHEMA.sql` | Login identity |
+| `WALLET_SCHEMA.sql` | Wallet transactions and withdrawals |
 
 ---
 
 ## 3. Complete Table Inventory
 
-### Module 0 — Common Master & System Config
+### Common & Master Config
+- **`CMS_STATUS`**: System-wide status lookup.
+- **`CMS_AUTONOS`**: Auto-number generation configuration.
+- **`CMS_CUSTTYPE`**: Customer type master.
+- **`CMS_SCREEN`**: Screen and route path configuration for RBAC.
+- **`CMS_HOLIDAY`**: System-wide holidays.
 
-| Table           | PK             | Purpose                                       |
-|----------------|----------------|-----------------------------------------------|
-| `CMS_STATUS`   | `STATUSID`     | System-wide status lookup (code + group)       |
-| `CMS_CUSTTYPE` | `CTYPEID`      | Customer type master (PERMANENT, CONTRACT, etc.) |
-| `CMS_AUTONOS`  | `AUTONOID`     | Auto-number generation configuration           |
+### Identity & Access
+- **`CMS_CENTER`**: ISRO centre master.
+- **`CMS_CANTEEN`**: Canteen master (scoped under centre).
+- **`CMS_USER`**: System user accounts (login).
+- **`CMS_ROLE`**: Role master.
+- **`CMS_CONSUMERROLE`**: System-wide user–role assignments.
+- **`CMS_CANTEENROLE`**: Canteen-scoped user–role assignments.
+- **`CMS_CUSTOMER`**: Customer identity (linked to user).
+- **`CMS_PERMEMP`**: Permanent employee profile.
+- **`CMS_CONTEMP`**: Contract employee profile.
+- **`CMS_OCEEMP`**: Other centre employee profile.
+- **`CMS_VISITOR`**: Visitor profile.
+- **`CMS_ACCKEY`**: Access key/credential for kiosk/QR/RFID.
 
-### Module 1 — Identity & Access Management
+### Menu & Service
+- **`CMS_SERVICE`**, **`CMS_SERVHIST`**: Canteen service catalog and audit.
+- **`CMS_MENUITEM`**, **`CMS_MENUHIST`**: Shared menu item catalog and audit.
+- **`CMS_ITEMPRICE`**, **`CMS_ITEMPRICEDT`**: Price bands and per-customer-type prices.
+- **`CMS_DAYSLOT`**, **`CMS_SLOTHIST`**: Dated service instances (day + time window) and audit.
+- **`CMS_DAYMENU`**, **`CMS_DMENUHIST`**: Menu items assigned to a day-slot and audit.
+- **`CMS_MENUTPL`**, **`CMS_MENUTPLDT`**: Recurring menu template headers and details.
 
-| Table              | PK              | Purpose                                              |
-|-------------------|-----------------|------------------------------------------------------|
-| `CMS_CENTER`      | `CENTERID`      | ISRO centre master                                    |
-| `CMS_CANTEEN`     | `CANTEENID`     | Canteen master, scoped under a centre                 |
-| `CMS_USER`        | `USERID`        | System user accounts (login credentials)              |
-| `CMS_ROLE`        | `ROLEID`        | Role master (ADMIN, MANAGER, STAFF, etc.)             |
-| `CMS_CONSUMERROLE`| `USRROLEID`     | System-wide (consumer) user–role assignments          |
-| `CMS_CANTEENROLE` | `USRCANROLEID`  | Canteen-scoped user–role assignments                  |
-| `CMS_CUSTOMER`    | `CUSTOMERID`    | Customer identity (linked to user, typed by CTYPECODE)|
-| `CMS_PERMEMP`     | `PERMEMPID`     | Permanent employee profile                            |
-| `CMS_CONTEMP`     | `CONTEMPID`     | Contract employee profile                             |
-| `CMS_OCEEMP`      | `OCEEMPID`      | Other centre employee profile                         |
-| `CMS_VISITOR`     | `VISITORID`     | Visitor profile                                       |
-| `CMS_ACCKEY`      | `ACCKEYID`      | Access key/credential for kiosk/QR/RFID               |
+### Booking
+- **`CMS_BOOKTYPE`**: Booking type master.
+- **`CMS_BOOKCTR`**: Booking number counter.
+- **`CMS_BOOKING`**, **`CMS_BOOKHIST`**: Booking header and audit transitions.
+- **`CMS_BOOKITEM`**, **`CMS_BOOKITMHS`**: Booking line items and audit.
+- **`CMS_PBACTIVE`**: Concurrency guard for pre-bookings.
 
-
-### Module 2 — Canteen Menu & Service
-
-| Table             | PK              | Purpose                                              |
-|------------------|-----------------|------------------------------------------------------|
-| `CMS_SERVICE`    | `SERVICEID`     | Canteen-scoped service catalog (Breakfast, Lunch)     |
-| `CMS_SERVHIST`   | `SERVHISTID`    | Service change history (audit trail)                  |
-| `CMS_MENUITEM`   | `MENUITEMID`    | Shared menu item catalog (no price columns)           |
-| `CMS_MENUHIST`   | `MENUHISTID`    | Menu item change history                              |
-| `CMS_ITEMPRICE`  | `ITEMPRICEID`   | Price band header (effective-date SCD style)          |
-| `CMS_ITEMPRICEDT`| `ITEMPRICEDTID` | Price per customer type within a price band           |
-| `CMS_DAYSLOT`    | `DAYSLOTID`     | Dated service instance (specific day + time window)   |
-| `CMS_SLOTHIST`   | `SLOTHISTID`    | Day slot change history                               |
-| `CMS_DAYMENU`    | `DAYMENUID`     | Menu item offered on a specific day-slot              |
-| `CMS_DMENUHIST`  | `DMENUHISTID`   | Day menu change history                               |
-| `CMS_MENUTPL`    | `MENUTPLID`     | Recurring menu template header                        |
-| `CMS_MENUTPLDT`  | `MENUTPLDTID`   | Template detail (item defaults)                       |
-
-### Module 3 — Booking & Serving
-
-| Table             | PK              | Purpose                                              |
-|------------------|-----------------|------------------------------------------------------|
-| `CMS_BOOKTYPE`   | `BOOKTYPEID`    | Booking type master (PB = Pre-Book, KS = Kiosk)      |
-| `CMS_BOOKCTR`    | `(BOOKTYPEID, SERVICEID)` | Lifetime booking number counter          |
-| `CMS_BOOKING`    | `BOOKID`        | Booking header                                        |
-| `CMS_BOOKITEM`   | `BOOKITEMID`    | Booking line items (day menu + qty + rate)             |
-| `CMS_PBACTIVE`   | `(CUSTOMERID, SERVICEID, SERVICEDATE)` | Concurrency guard for one active PB per customer/service/date |
-| `CMS_BOOKHIST`   | `BOOKHISTID`    | Booking header history (terminal transitions)         |
-| `CMS_BOOKITMHS`  | `BOOKITMHSID`   | Booking item history                                  |
-
-### Module 4 — Wallet Management
-
-| Table              | PK              | Purpose                                              |
-|-------------------|-----------------|------------------------------------------------------|
-| `CMS_WALLET`      | `WALLETID`      | Wallet header, holds BALANCE and RESERVEDAMT          |
-| `CMS_WALLETTRAN`  | `TRANID`        | Transaction ledger (CREDIT/DEBIT history)             |
-| `CMS_WALLETWD`    | `WALLETWDID`    | Withdrawal requests and approvals                     |
+### Wallet
+- **`CMS_WALLET`**: Wallet header (balance).
+- **`CMS_WALLETTRAN`**: Transaction ledger.
+- **`CMS_WALLETWD`**: Withdrawal requests.
 
 ---
 
 ## 4. Key Design Patterns
 
 ### 4.1 History/Audit Tables (`*HIST` suffix)
-
-Most entity tables have a companion `*HIST` table that stores a full snapshot of the row before each change. This pattern is used for:
-- `CMS_SERVHIST` (service changes)
-- `CMS_MENUHIST` (menu item changes)
-- `CMS_SLOTHIST` (day slot changes)
-- `CMS_DMENUHIST` (day menu changes)
-- `CMS_BOOKHIST` / `CMS_BOOKITMHS` (booking terminal transitions)
-
-History rows include `CHANGEDBY`, `CHANGEDAT`, and `CHGREASON` columns.
+Most entity tables have a companion `*HIST` table that stores a full snapshot of the row before each change. History rows include `CHANGEDBY`, `CHANGEDAT`, and `CHGREASON` columns.
 
 ### 4.2 Effective-Date Pricing (Type-2 SCD)
-
 Menu item pricing uses a **Slowly Changing Dimension Type-2** pattern:
-- `CMS_ITEMPRICE` stores the header with `MENUITEMID` and `EFFFROM` (effective date).
-- `CMS_ITEMPRICEDT` stores per-customer-type prices within each price band.
-- No `EFFUNTIL` column — the end of a price band is implied by the `EFFFROM` of the next active row.
-- Price resolution: find the latest active `EFFFROM <= serviceDate` for a given `(MENUITEMID, CTYPECODE)`.
+- `CMS_ITEMPRICE` stores the header with `EFFFROM`.
+- `CMS_ITEMPRICEDT` stores per-customer-type prices within that price band.
+- Price resolution finds the latest active `EFFFROM <= serviceDate`.
 
 ### 4.3 Auto-Number Generation
-
-`CMS_AUTONOS` stores auto-number configuration (prefix, length, last number). The `CMSGENAUTO` stored procedure increments the counter under a `FOR UPDATE` lock within the caller's transaction.
+`CMS_AUTONOS` stores auto-number configuration. The `CMSGENAUTO` stored procedure increments the counter under a `FOR UPDATE` lock within the caller's transaction.
 
 ### 4.4 Status Pattern
-
-Most tables use a `STATUS` column with check constraints:
-- `'A'` = Active, `'D'` = Deactivated/Disabled
-- Some tables use `ISACTIVE` (TINYINT 0/1) instead
-- `CMS_DAYMENU` has dual status: `STATUS` (operational A/D) + `APPRSTATUS` (approval PEN/APP/REJ)
-- `CMS_BOOKING`: `'CR'` (Created), `'SRV'` (Served), `'CAN'` (Cancelled), `'NOS'` (No-Show), `'PRT'` (Partially Served)
+Most tables use a `STATUSID` (referencing `CMS_STATUS`) or a `STATUSCODE`. `CMS_DAYMENU` also utilizes an `APPRSTATUS` for approval tracking (PEN, APP, REJ).
 
 ### 4.5 Concurrency Guard — `CMS_PBACTIVE`
-
-MySQL lacks partial unique indexes. To enforce "one active pre-booking per customer/service/date", the system uses a separate `CMS_PBACTIVE` table. A row is inserted atomically during `CMSADDBOOK` (PB type), and deleted during `CMSCANCELBOOK`.
-
----
-
-## 5. Foreign Key Relationships (Major)
-
-```
-CMS_CENTER ──┬── CMS_CANTEEN ──┬── CMS_SERVICE ──── CMS_DAYSLOT ──── CMS_DAYMENU
-              │                  │                                        │
-              │                  └── CMS_CANTEENROLE                     │
-              │                                                          │
-CMS_USER ────┼── CMS_CONSUMERROLE                                       │
-              │                                                          │
-              └── CMS_CUSTOMER ──┬── CMS_PERMEMP                   CMS_BOOKING
-                                  ├── CMS_CONTEMP                       │
-                                  ├── CMS_OCEEMP                   CMS_BOOKITEM
-                                  ├── CMS_VISITOR
-                                  └── CMS_ACCKEY
-
-CMS_MENUITEM ──┬── CMS_ITEMPRICE ── CMS_ITEMPRICEDT
-                ├── CMS_DAYMENU
-                ├── CMS_MENUTPLDT
-                └── CMS_BOOKITEM
-
-CMS_ROLE ──┬── CMS_CONSUMERROLE
-            └── CMS_CANTEENROLE
-            
-            
-
-CMS_CUSTTYPE ──── CMS_CUSTOMER
-                   CMS_ITEMPRICEDT
-```
+To enforce "one active pre-booking per customer/service/date", a row is inserted atomically during booking (`CMS_PBACTIVE`) and deleted upon cancellation.
 
 ---
 
-## 6. Trigger Inventory
+## 5. Stored Procedure Organization
 
-| Trigger                    | Table          | Event          | Purpose                                                           |
-|---------------------------|----------------|----------------|-------------------------------------------------------------------|
-| `TRG_DAYMENU_APPR_RESET` | `CMS_DAYMENU`  | `BEFORE UPDATE`| If an approved row's AVAILQTY/MAXQTY/ISSPECIAL/ISPREBOOK/ISKIOSK changes, resets APPRSTATUS back to 'PEN' and clears APPROVEDBY/APPROVEDAT |
+The stored procedures are logically split into corresponding domain files in `database/procedures/`:
+- `ACCESSKEY_PROCEDURES.sql`
+- `BOOKING_PROCEDURES.sql`
+- `CANTEENROLE_PROCEDURES.sql`
+- `CANTEEN_PROCEDURES.sql`
+- `CENTER_PROCEDURES.sql`
+- `COMMON_PROCEDURES.sql`
+- `CONSUMERROLE_PROCEDURES.sql`
+- `CUSTOMER_PROCEDURES.sql`
+- `DAYMENU_PROCEDURES.sql`
+- `DAYSLOT_PROCEDURES.sql`
+- `EMPLOYEES_VISITOR_PROCEDURES.sql`
+- `HOLIDAY_PROCEDURES.sql`
+- `LOOKUP_PROCEDURES.sql`
+- `MENUITEM_PRICE_PROCEDURES.sql`
+- `MENUTEMPLATE_PROCEDURES.sql`
+- `REPORTING_SERVING_PROCEDURES.sql`
+- `ROLE_PROCEDURES.sql`
+- `SERVICE_PROCEDURES.sql`
+- `USER_PROCEDURES.sql`
+- `WALLET_PROCEDURES.sql`
 
----
-
-## 7. Stored Procedure Organization
-
-| File                                   | Module | Procedure Count | Coverage                              |
-|---------------------------------------|--------|-----------------|---------------------------------------|
-| `03_COMMON_PROCEDURES.sql`            | 0      | 20              | Status, CustType, Screen, RoleSCN, AutoNo |
-| `04_IDENTITY_ACCESS_PROCEDURES.sql`   | 1      | 55+             | Center, Canteen, User, Role, ConsumerRole, CanteenRole, Customer, PermEmp, ContEmp, OceEmp, Visitor, AccKey, LoginInfo, Composite Registration |
-| `05_MENU_SERVICE_PROCEDURES.sql`      | 2      | 40+             | Service, MenuItem, ItemPrice, DaySlot, DayMenu, MenuTemplate, ViewMenu |
-| `06_BOOKING_PROCEDURES.sql`           | 3      | 6               | AddBook, UpdBookItem, CancelBook, ServeBook, NoShowBook, ToggleKiosk |
-| `07_WALLET_PROCEDURES.sql`            | 4      | 8               | AddWallet, AddWalletAmt, GetWallet, ListWalletTran, ReqWalletWd, AppWalletWd, RejWalletWd, ListWalletWd |
-
----
+Each procedure handles CRUD and specific domain logic while preserving historical data.

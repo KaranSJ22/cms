@@ -5,13 +5,13 @@ import api from '../../../config/axios'
  * because pricing.routes.js is mounted with router.use("/", pricingRoutes)
  */
 
-/** POST /api/menu-items/:menuItemId/prices  (CTNMNG, CTNAST) */
+/** POST /api/menu-items/:menuItemId/prices  (CTNMGR, CTNAST) */
 export async function createItemPrice(menuItemId, body) {
   const res = await api.post(`/menu-items/${menuItemId}/prices`, body)
   return res.data.DATA
 }
 
-/** GET /api/menu-items/:menuItemId/prices  (CTNMNG, CTNAST) — price history */
+/** GET /api/menu-items/:menuItemId/prices  (CTNMGR, CTNAST) — price history */
 export async function getItemPriceHistory(menuItemId, params = {}) {
   const res = await api.get(`/menu-items/${menuItemId}/prices`, { params })
   return res.data.DATA
@@ -29,7 +29,7 @@ export async function getEffectiveItemPrice(menuItemId, customerTypeCode) {
   return res.data.DATA
 }
 
-/** PATCH /api/item-prices/:itemPriceId/deactivate  (CTNMNG, CTNAST) */
+/** PATCH /api/item-prices/:itemPriceId/deactivate  (CTNMGR, CTNAST) */
 export async function deactivateItemPrice(itemPriceId) {
   const res = await api.patch(`/item-prices/${itemPriceId}/deactivate`)
   return res.data.DATA

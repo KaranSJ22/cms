@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useServices } from "../hooks/useServices";
 import ServicesTable from "../components/ServicesTable";
 import ServiceForm from "../components/ServiceForm";
@@ -27,12 +27,9 @@ export default function ServicesPage() {
 
   const handleSubmit = async (formData) => {
     setIsSubmitting(true);
-    let success = false;
-    if (editingService) {
-      success = await editService(editingService.SERVICEID, formData);
-    } else {
-      success = await addService(formData);
-    }
+    const success = editingService
+      ? await editService(editingService.SERVICEID, formData)
+      : await addService(formData);
     setIsSubmitting(false);
 
     if (success) {

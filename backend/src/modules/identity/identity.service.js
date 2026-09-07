@@ -130,7 +130,7 @@ export const createCustomer = async (customerData) => {
     USERID: customerData.USERID || null,
     CTYPECODE: customerData.CTYPECODE,
     DISPNAME: customerData.DISPNAME,
-    STATUS: customerData.STATUS || "A",
+    STATUS: customerData.STATUS || "ACT",
     VALIDFROM: customerData.VALIDFROM || null,
     VALIDUNTIL: customerData.VALIDUNTIL || null,
   });
@@ -155,13 +155,13 @@ export const createPermanentEmployee = async (employeeData) => {
     throw error;
   }
 
-  if (customer.CTYPECODE !== "PERMANENT") {
+  if (customer.CTYPECODE !== "PRM") {
     const error = new Error("Customer type must be PERMANENT");
     error.statusCode = 400;
     throw error;
   }
 
-  if (customer.STATUS !== "A") {
+  if (customer.STATUS !== 10) {
     const error = new Error("Cannot create permanent employee profile for inactive customer");
     error.statusCode = 400;
     throw error;

@@ -1,160 +1,76 @@
+import { asyncHandler } from "../../utils/asyncHandler.js";
+import { sendSuccess } from "../../utils/apiResponse.js";
 import { WalletService } from "./wallet.service.js";
 
 export class WalletController {
-  static async createWallet(req, res, next) {
-    try {
-      const { customerId, openAmount, remarks } = req.body;
-      const createdBy = req.user.USERID;
+  static customerLookup = asyncHandler(async (req, res) => {
+    const { customerId } = req.validated.params;
 
-      const result = await WalletService.addWallet(customerId, openAmount, createdBy, remarks);
-      if (!result.success) {
-        return res.status(400).json({ SUCCESS: false, MESSAGE: result.error });
-      }
+    const data = await WalletService.customerLookup(customerId);
+    return sendSuccess(res, data, "Customer wallet lookup successful");
+  });
 
-      return res.status(201).json({
-        SUCCESS: true,
-        MESSAGE: "Wallet created successfully",
-        DATA: result.data,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
+  static createWallet = asyncHandler(async (req, res) => {
+    const { customerId, openAmount, remarks } = req.validated.body;
+    const createdBy = req.user.USERID;
 
-  static async topupWallet(req, res, next) {
-    try {
-      const { customerId, amount, paymentMethod, refNo, remarks } = req.body;
-      const createdBy = req.user.USERID;
+    const data = await WalletService.addWallet(customerId, openAmount, createdBy, remarks);
+    return sendSuccess(res, data, "Wallet created successfully", 201);
+  });
 
-      const result = await WalletService.topUpWallet(customerId, amount, paymentMethod, refNo, createdBy, remarks);
-      if (!result.success) {
-        return res.status(400).json({ SUCCESS: false, MESSAGE: result.error });
-      }
+  static topupWallet = asyncHandler(async (req, res) => {
+    const { customerId, amount, paymentMethod, refNo, remarks } = req.validated.body;
+    const createdBy = req.user.USERID;
 
-      return res.status(200).json({
-        SUCCESS: true,
-        MESSAGE: "Wallet top-up successful",
-        DATA: result.data,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
+    const data = await WalletService.topUpWallet(customerId, amount, paymentMethod, refNo, createdBy, remarks);
+    return sendSuccess(res, data, "Wallet top-up successful");
+  });
 
-  static async fetchWallet(req, res, next) {
-    try {
-      const { customerId } = req.params;
+  static fetchWallet = asyncHandler(async (req, res) => {
+    const { customerId } = req.validated.params;
 
-      const result = await WalletService.getWallet(customerId);
-      if (!result.success) {
-        return res.status(404).json({ SUCCESS: false, MESSAGE: result.error });
-      }
+    const data = await WalletService.getWallet(customerId);
+    return sendSuccess(res, data, "Wallet fetched successfully");
+  });
 
-      return res.status(200).json({
-        SUCCESS: true,
-        DATA: result.data,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
+  static fetchWalletTransactions = asyncHandler(async (req, res) => {
+    const { customerId } = req.validated.params;
+    const { fromDate, toDate } = req.validated.query || {};
 
-  static async fetchWalletTransactions(req, res, next) {
-    try {
-      const { customerId } = req.params;
-      const { fromDate, toDate } = req.query;
+    const data = await WalletService.listTransactions(customerId, fromDate, toDate);
+    return sendSuccess(res, data, "Wallet transactions fetched successfully");
+  });
 
-      const result = await WalletService.listTransactions(customerId, fromDate, toDate);
-      if (!result.success) {
-        return res.status(400).json({ SUCCESS: false, MESSAGE: result.error });
-      }
+  static requestWithdrawal = asyncHandler(async (req, res) => {
+    const { customerId, amount, remarks } = req.validated.body;
+    const requestedBy = req.user.USERID;
 
-      return res.status(200).json({
-        SUCCESS: true,
-        DATA: result.data,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
+    const data = await WalletService.requestWithdrawal(customerId, amount, requestedBy, remarks);
+    return sendSuccess(res, data, "Withdrawal requested successfully", 201);
+  });
 
-  static async requestWithdrawal(req, res, next) {
-    try {
-      const { customerId, amount, remarks } = req.body;
-      const requestedBy = req.user.USERID;
+  static approveWithdrawal = asyncHandler(async (req, res) => {
+    const { walletWdId } = req.validated.params;
+    const { paymentMethod, refNo, remarks } = req.validated.body;
+    const processedBy = req.user.USERID;
 
-      const result = await WalletService.requestWithdrawal(customerId, amount, requestedBy, remarks);
-      if (!result.success) {
-        return res.status(400).json({ SUCCESS: false, MESSAGE: result.error });
-      }
+    const data = await WalletService.approveWithdrawal(walletWdId, processedBy, paymentMethod, refNo, remarks);
+    return sendSuccess(res, data, "Withdrawal approved successfully");
+  });
 
-      return res.status(201).json({
-        SUCCESS: true,
-        MESSAGE: "Withdrawal requested successfully",
-        DATA: result.data,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
+  static rejectWithdrawal = asyncHandler(async (req, res) => {
+    const { walletWdId } = req.validated.params;
+    const { remarks } = req.validated.body;
+    const processedBy = req.user.USERID;
 
-  static async approveWithdrawal(req, res, next) {
-    try {
-      const { walletWdId } = req.params;
-      const { paymentMethod, refNo, remarks } = req.body;
-      const processedBy = req.user.USERID;
+    const data = await WalletService.rejectWithdrawal(walletWdId, processedBy, remarks);
+    return sendSuccess(res, data, "Withdrawal rejected successfully");
+  });
 
-      const result = await WalletService.approveWithdrawal(walletWdId, processedBy, paymentMethod, refNo, remarks);
-      if (!result.success) {
-        return res.status(400).json({ SUCCESS: false, MESSAGE: result.error });
-      }
+  static fetchWithdrawals = asyncHandler(async (req, res) => {
+    const { customerId, status } = req.validated.query || {};
 
-      return res.status(200).json({
-        SUCCESS: true,
-        MESSAGE: "Withdrawal approved successfully",
-        DATA: result.data,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  static async rejectWithdrawal(req, res, next) {
-    try {
-      const { walletWdId } = req.params;
-      const { remarks } = req.body;
-      const processedBy = req.user.USERID;
-
-      const result = await WalletService.rejectWithdrawal(walletWdId, processedBy, remarks);
-      if (!result.success) {
-        return res.status(400).json({ SUCCESS: false, MESSAGE: result.error });
-      }
-
-      return res.status(200).json({
-        SUCCESS: true,
-        MESSAGE: "Withdrawal rejected successfully",
-        DATA: result.data,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  static async fetchWithdrawals(req, res, next) {
-    try {
-      const { customerId, status } = req.query;
-
-      const result = await WalletService.listWithdrawals(customerId, status);
-      if (!result.success) {
-        return res.status(400).json({ SUCCESS: false, MESSAGE: result.error });
-      }
-
-      return res.status(200).json({
-        SUCCESS: true,
-        DATA: result.data,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
+    const data = await WalletService.listWithdrawals(customerId ?? null, status ?? null);
+    return sendSuccess(res, data, "Withdrawal requests fetched successfully");
+  });
 }
