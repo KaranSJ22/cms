@@ -5,6 +5,7 @@ import {
   getEffectiveItemPrices,
   getItemPriceHistory,
 } from "./pricing.repository.js";
+import { NotFoundError, DatabaseError } from "../../common/errors/appError.js";
 
 export const createItemPrice = async (menuItemId, priceData, createdByUserId) => {
   const created = await addItemPriceRepository({
@@ -15,9 +16,7 @@ export const createItemPrice = async (menuItemId, priceData, createdByUserId) =>
   });
 
   if (!created?.ITEMPRICEID) {
-    const error = new Error("Item price creation failed");
-    error.statusCode = 500;
-    throw error;
+    throw new DatabaseError("Item price creation failed");
   }
 
   return created;
@@ -41,9 +40,7 @@ export const fetchEffectiveItemPrice = async (
   );
 
   if (!price) {
-    const error = new Error("No effective price found for this customer type");
-    error.statusCode = 404;
-    throw error;
+    throw new NotFoundError("No effective price found for this customer type");
   }
 
   return price;
@@ -53,10 +50,9 @@ export const deactivateItemPrice = async (itemPriceId) => {
   const result = await deactivateItemPriceRepository(itemPriceId);
 
   if (!result?.ITEMPRICEID) {
-    const error = new Error("Item price deactivation failed");
-    error.statusCode = 500;
-    throw error;
+    throw new DatabaseError("Item price deactivation failed");
   }
 
   return result;
 };
+

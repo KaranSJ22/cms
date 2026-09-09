@@ -227,9 +227,7 @@ export const getCurrentSlot = async (canteenId = null, kioskId = null) => {
 export const resolveServingBooking = async (identifier, canteenId = null, kioskId = null, daySlotId = null) => {
   const booking = await KioskRepository.resolveKioskBooking(identifier, canteenId, kioskId, daySlotId);
   if (!booking) {
-    const error = new Error("No active booking found for this identifier in this canteen facility");
-    error.statusCode = 404;
-    throw error;
+    throw new NotFoundError("No active booking found for this identifier in this canteen facility");
   }
   return booking;
 };

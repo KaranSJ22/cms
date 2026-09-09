@@ -1,8 +1,8 @@
 import express from "express";
 
-import { authenticate } from "../../middlwares/auth.middleware.js";
-import { authorizeRoles } from "../../middlwares/role.middleware.js";
-import { validate } from "../../middlwares/validate.middleware.js";
+import { authenticate } from "../../middlewares/auth.middleware.js";
+import { authorizeRoles } from "../../middlewares/role.middleware.js";
+import { validate } from "../../middlewares/validate.middleware.js";
 import {
   createUserSchema,
   assignUserRoleSchema,

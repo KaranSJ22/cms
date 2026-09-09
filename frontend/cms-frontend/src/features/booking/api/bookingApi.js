@@ -95,3 +95,15 @@ export async function resolveBooking(identifier, params = {}) {
   const res = await api.get(`/bookings/resolve/${identifier}`, { params })
   return res.data.DATA
 }
+
+/** GET /api/bookings/weekly-menu (authenticated) */
+export async function getWeeklyPublishedMenu(params = {}) {
+  const res = await api.get('/bookings/weekly-menu', { params })
+  return res.data.DATA
+}
+
+/** POST /api/bookings/weekly-batch (authenticated) */
+export async function createWeeklyBookingBatch(body) {
+  const res = await api.post('/bookings/weekly-batch', body)
+  return res.data.DATA
+}

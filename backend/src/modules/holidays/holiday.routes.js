@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { authorizeRoles as authorize } from "../../middlwares/role.middleware.js";
-import { authenticate } from "../../middlwares/auth.middleware.js";
-import { validate } from "../../middlwares/validate.middleware.js";
+import { authorizeRoles as authorize } from "../../middlewares/role.middleware.js";
+import { authenticate } from "../../middlewares/auth.middleware.js";
+import { validate } from "../../middlewares/validate.middleware.js";
 import * as HolidayController from "./holiday.controller.js";
 import * as validation from "./holiday.validation.js";
 

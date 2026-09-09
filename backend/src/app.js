@@ -10,9 +10,9 @@ import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./config/swagger.config.js";
 
 import { testDbConnection } from "./db/connection.js";
-import { requestLogger } from "./middlwares/requestLogger.middleware.js";
-import { errorHandler } from "./middlwares/error.middleware.js";
-import { detectKiosk } from "./middlwares/kioskDevice.middleware.js";
+import { requestLogger } from "./middlewares/requestLogger.middleware.js";
+import { errorHandler } from "./middlewares/error.middleware.js";
+import { detectKiosk } from "./middlewares/kioskDevice.middleware.js";
 
 const app = express();
 

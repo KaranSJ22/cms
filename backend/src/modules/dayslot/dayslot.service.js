@@ -4,8 +4,15 @@ import {
   getDaySlots,
   getDaySlotById,
 } from "./dayslot.repository.js";
+import { NotFoundError, DatabaseError } from "../../common/errors/appError.js";
 
 export const fetchDaySlots = async (params = {}) => {
+  const DAYSLOTID = params.DAYSLOTID ?? params.daySlotId ?? null;
+  if (DAYSLOTID) {
+    const slot = await getDaySlotById(Number(DAYSLOTID));
+    return slot ? [slot] : [];
+  }
+
   const CANTEENID = params.CANTEENID ?? params.canteenId ?? null;
   const SERVICEID = params.SERVICEID ?? params.serviceId ?? null;
   const DATEFROM = params.DATEFROM ?? params.dateFrom ?? params.servingDate ?? null;
@@ -23,9 +30,7 @@ export const fetchDaySlot = async (DAYSLOTID) => {
   const daySlot = await getDaySlotById(DAYSLOTID);
 
   if (!daySlot) {
-    const error = new Error("Day slot not found");
-    error.statusCode = 404;
-    throw error;
+    throw new NotFoundError("Day slot not found");
   }
 
   return daySlot;
@@ -42,13 +47,12 @@ export const createDaySlot = async (daySlotData, createdByUserId) => {
   });
 
   if (!created?.DAYSLOTID) {
-    const error = new Error("Day slot creation failed");
-    error.statusCode = 500;
-    throw error;
+    throw new DatabaseError("Day slot creation failed");
   }
 
   return await getDaySlotById(created.DAYSLOTID);
 };
+
 
 export const updateDaySlot = async (
   DAYSLOTID,

@@ -1,36 +1,35 @@
 import api from '../../../config/axios'
 
 /**
- * Pricing routes are mounted at /api (not /api/pricing)
- * because pricing.routes.js is mounted with router.use("/", pricingRoutes)
+ * Pricing routes are mounted at /api/pricing
  */
 
-/** POST /api/menu-items/:menuItemId/prices  (CTNMGR, CTNAST) */
+/** POST /api/pricing/menu-items/:menuItemId  (CTNMGR, CTNAST) */
 export async function createItemPrice(menuItemId, body) {
-  const res = await api.post(`/menu-items/${menuItemId}/prices`, body)
+  const res = await api.post(`/pricing/menu-items/${menuItemId}`, body)
   return res.data.DATA
 }
 
-/** GET /api/menu-items/:menuItemId/prices  (CTNMGR, CTNAST) — price history */
+/** GET /api/pricing/menu-items/:menuItemId  (CTNMGR, CTNAST) — price history */
 export async function getItemPriceHistory(menuItemId, params = {}) {
-  const res = await api.get(`/menu-items/${menuItemId}/prices`, { params })
+  const res = await api.get(`/pricing/menu-items/${menuItemId}`, { params })
   return res.data.DATA
 }
 
-/** GET /api/menu-items/:menuItemId/prices/effective  (authenticated) — all effective prices */
+/** GET /api/pricing/menu-items/:menuItemId/effective  (authenticated) — all effective prices */
 export async function getEffectiveItemPrices(menuItemId, params = {}) {
-  const res = await api.get(`/menu-items/${menuItemId}/prices/effective`, { params })
+  const res = await api.get(`/pricing/menu-items/${menuItemId}/effective`, { params })
   return res.data.DATA
 }
 
-/** GET /api/menu-items/:menuItemId/prices/effective/:customerTypeCode  (authenticated) */
+/** GET /api/pricing/menu-items/:menuItemId/effective/:customerTypeCode  (authenticated) */
 export async function getEffectiveItemPrice(menuItemId, customerTypeCode) {
-  const res = await api.get(`/menu-items/${menuItemId}/prices/effective/${customerTypeCode}`)
+  const res = await api.get(`/pricing/menu-items/${menuItemId}/effective/${customerTypeCode}`)
   return res.data.DATA
 }
 
-/** PATCH /api/item-prices/:itemPriceId/deactivate  (CTNMGR, CTNAST) */
+/** PATCH /api/pricing/item-prices/:itemPriceId/deactivate  (CTNMGR, CTNAST) */
 export async function deactivateItemPrice(itemPriceId) {
-  const res = await api.patch(`/item-prices/${itemPriceId}/deactivate`)
+  const res = await api.patch(`/pricing/item-prices/${itemPriceId}/deactivate`)
   return res.data.DATA
 }

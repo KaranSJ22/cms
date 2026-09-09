@@ -24,6 +24,7 @@ import {
   ChevronDoubleRightIcon,
   BuildingOffice2Icon,
   ShieldCheckIcon,
+  DocumentChartBarIcon,
 } from '@heroicons/react/24/outline'
 
 // Icon mapping dictionary
@@ -46,6 +47,7 @@ const ICON_MAP = {
   ShoppingBagIcon,
   DocumentTextIcon,
   CreditCardIcon,
+  DocumentChartBarIcon,
 }
 
 export default function AppSidebar({

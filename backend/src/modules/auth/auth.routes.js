@@ -1,6 +1,6 @@
 import express from "express";
 
-import { validate } from "../../middlwares/validate.middleware.js";
+import { validate } from "../../middlewares/validate.middleware.js";
 import { loginSchema, ssoLoginSchema } from "./auth.validation.js";
 import { login, ssoLogin } from "./auth.controller.js";
 

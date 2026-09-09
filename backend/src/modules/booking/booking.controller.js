@@ -138,3 +138,20 @@ export const resolveBookingController = asyncHandler(async (req, res) => {
   return sendSuccess(res, data, "Booking resolved successfully");
 });
 
+export const createWeeklyBookingBatchController = asyncHandler(async (req, res) => {
+  const result = await bookingService.createWeeklyBookingBatch(req.body, req.user);
+  return sendSuccess(res, result, "Weekly meal pass booked successfully!", 201);
+});
+
+export const getWeeklyPublishedMenuController = asyncHandler(async (req, res) => {
+  const result = await bookingService.getWeeklyPublishedMenu(
+    {
+      canteenId: req.query.canteenId,
+      startDate: req.query.startDate,
+      endDate: req.query.endDate,
+    },
+    req.user
+  );
+  return sendSuccess(res, result, "Weekly published menu retrieved successfully");
+});
+

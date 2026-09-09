@@ -1,7 +1,7 @@
 import express from "express";
-import { validate } from "../../middlwares/validate.middleware.js";
-import { authenticate } from "../../middlwares/auth.middleware.js";
-import { authorizeAnyCanteenRole } from "../../middlwares/role.middleware.js";
+import { validate } from "../../middlewares/validate.middleware.js";
+import { authenticate } from "../../middlewares/auth.middleware.js";
+import { authorizeAnyCanteenRole } from "../../middlewares/role.middleware.js";
 import {
   getActiveBookingController,
   getBookingController,
@@ -18,6 +18,8 @@ import {
   scanRfidController,
   serveBookingItemController,
   resolveBookingController,
+  createWeeklyBookingBatchController,
+  getWeeklyPublishedMenuController,
 } from "./booking.controller.js";
 import {
   getActiveBookingSchema,
@@ -27,13 +29,32 @@ import {
   cancelBookingItemSchema,
   cancelBookingSchema,
   serveBookingSchema,
+  serveBookingItemSchema,
   noShowBookingSchema,
   toggleKioskSchema,
   scanRfidSchema,
   getKitchenPrepSchema,
+  createWeeklyBookingBatchSchema,
+  getWeeklyPublishedMenuSchema,
 } from "./booking.validation.js";
 
 const router = express.Router();
+
+// Fetch weekly published menu (with base items, holidays & existing bookings)
+router.get(
+  "/weekly-menu",
+  authenticate,
+  validate(getWeeklyPublishedMenuSchema),
+  getWeeklyPublishedMenuController
+);
+
+// Create weekly / 5-day booking batch
+router.post(
+  "/weekly-batch",
+  authenticate,
+  validate(createWeeklyBookingBatchSchema),
+  createWeeklyBookingBatchController
+);
 
 // Fetch active booking for context
 router.get(
@@ -110,7 +131,7 @@ router.patch(
   "/:id/items/:itemId/serve",
   authenticate,
   authorizeAnyCanteenRole("CNTMGR", "CNTSTF"),
-  validate(serveBookingSchema),
+  validate(serveBookingItemSchema),
   serveBookingItemController
 );
 

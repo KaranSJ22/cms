@@ -1,6 +1,6 @@
 /**
  * @swagger
- * /api/menu-items/{menuItemId}/prices:
+ * /api/pricing/menu-items/{menuItemId}:
  *   get:
  *     summary: Get price history for a menu item
  *     description: Admin or canteen manager API to fetch all historical and current prices for a specific menu item.
@@ -80,7 +80,7 @@
 
 /**
  * @swagger
- * /api/menu-items/{menuItemId}/prices/effective:
+ * /api/pricing/menu-items/{menuItemId}/effective:
  *   get:
  *     summary: Get effective prices for a menu item
  *     description: Fetches the currently active prices for a menu item across all customer types.
@@ -104,7 +104,7 @@
 
 /**
  * @swagger
- * /api/menu-items/{menuItemId}/prices/effective/{customerTypeCode}:
+ * /api/pricing/menu-items/{menuItemId}/effective/{customerTypeCode}:
  *   get:
  *     summary: Get effective price for a menu item and customer type
  *     description: Fetches the currently active price for a menu item tailored for a specific customer type.
@@ -134,7 +134,7 @@
 
 /**
  * @swagger
- * /api/item-prices/{itemPriceId}/deactivate:
+ * /api/pricing/item-prices/{itemPriceId}/deactivate:
  *   patch:
  *     summary: Deactivate an item price
  *     description: Admin or canteen manager API to deactivate a specific price record.

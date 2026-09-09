@@ -18,17 +18,16 @@ const booleanFlagSchema = z.coerce
   .int()
   .refine((value) => value === 0 || value === 1, "Invalid boolean value");
 
-export const dayMenuIdSchema = z.object({
-  params: z
-    .object({
-      id: z.coerce.number().int().positive(),
-    })
-    ,
+export const daySlotParamSchema = z.object({
+  params: z.object({
+    daySlotId: z.coerce.number().int().positive("Day Slot ID must be a positive integer"),
+  }),
 });
+export const dayMenuIdSchema = daySlotParamSchema;
 
 export const replaceDayMenuSchema = z.object({
   params: z.object({
-    id: z.coerce.number().int().positive(),
+    daySlotId: z.coerce.number().int().positive("Day Slot ID must be a positive integer"),
   }),
   body: z.object({
     ITEMSJSON: z.array(
@@ -49,16 +48,12 @@ export const replaceDayMenuSchema = z.object({
 });
 
 export const approveDayMenuSchema = z.object({
-  params: z
-    .object({
-      id: z.coerce.number().int().positive(),
-    })
-    ,
-  body: z
-    .object({
-      REMARKS: z.string().trim().max(255).nullable().optional(),
-    })
-    ,
+  params: z.object({
+    daySlotId: z.coerce.number().int().positive("Day Slot ID must be a positive integer"),
+  }),
+  body: z.object({
+    REMARKS: z.string().trim().max(255).nullable().optional(),
+  }),
 });
 
 export const publishedMenuSchema = z.object({

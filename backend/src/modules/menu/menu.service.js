@@ -6,6 +6,7 @@ import {
   checkPriceReadiness as checkPriceReadinessRepo,
 } from "./menu.repository.js";
 import { addItemPrice as addItemPriceRepository } from "../pricing/pricing.repository.js";
+import { NotFoundError, DatabaseError } from "../../common/errors/appError.js";
 
 export const fetchMenus = async (isSpecial = null, status = null) => {
   return await getMenus(isSpecial, status);
@@ -15,9 +16,7 @@ export const fetchMenu = async (MENUITEMID) => {
   const menu = await getMenuById(MENUITEMID);
 
   if (!menu) {
-    const error = new Error("Menu item not found");
-    error.statusCode = 404;
-    throw error;
+    throw new NotFoundError("Menu item not found");
   }
 
   return menu;
@@ -35,10 +34,9 @@ export const createMenu = async (menuData, createdByUserId) => {
   });
 
   if (!created?.MENUITEMID) {
-    const error = new Error("Menu item creation failed");
-    error.statusCode = 500;
-    throw error;
+    throw new DatabaseError("Menu item creation failed");
   }
+
 
   // Handle optional initial pricing if provided
   if (

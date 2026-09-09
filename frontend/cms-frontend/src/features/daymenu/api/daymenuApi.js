@@ -1,32 +1,32 @@
 import api from '../../../config/axios'
 
-/** GET /api/day-slots/:id/menu */
+/** GET /api/day-menus/slots/:daySlotId */
 export async function getDayMenuWorkspace(daySlotId) {
-  const res = await api.get(`/day-slots/${daySlotId}/menu`)
+  const res = await api.get(`/day-menus/slots/${daySlotId}`)
   return res.data.DATA
 }
 
-/** PUT /api/day-slots/:id/menu */
+/** PUT /api/day-menus/slots/:daySlotId */
 export async function replaceDayMenuItems(daySlotId, itemsJson) {
-  const res = await api.put(`/day-slots/${daySlotId}/menu`, { ITEMSJSON: itemsJson })
+  const res = await api.put(`/day-menus/slots/${daySlotId}`, { ITEMSJSON: itemsJson })
   return res.data.DATA
 }
 
-/** POST /api/day-slots/:id/menu/submit */
+/** POST /api/day-menus/slots/:daySlotId/submit */
 export async function submitDayMenu(daySlotId) {
-  const res = await api.post(`/day-slots/${daySlotId}/menu/submit`)
+  const res = await api.post(`/day-menus/slots/${daySlotId}/submit`)
   return res.data.DATA
 }
 
-/** POST /api/day-slots/:id/menu/approve */
+/** POST /api/day-menus/slots/:daySlotId/approve */
 export async function approveDayMenu(daySlotId, remarks = null) {
-  const res = await api.post(`/day-slots/${daySlotId}/menu/approve`, { REMARKS: remarks })
+  const res = await api.post(`/day-menus/slots/${daySlotId}/approve`, { REMARKS: remarks })
   return res.data.DATA
 }
 
-/** POST /api/day-slots/:id/menu/reject */
+/** POST /api/day-menus/slots/:daySlotId/reject */
 export async function rejectDayMenu(daySlotId, remarks = null) {
-  const res = await api.post(`/day-slots/${daySlotId}/menu/reject`, { REMARKS: remarks })
+  const res = await api.post(`/day-menus/slots/${daySlotId}/reject`, { REMARKS: remarks })
   return res.data.DATA
 }
 
@@ -37,8 +37,8 @@ export async function getPendingDayMenus(canteenId = null) {
   return res.data.DATA
 }
 
-/** GET /api/menus */
+/** GET /api/day-menus/published */
 export async function getPublishedMenus(params = {}) {
-  const res = await api.get('/menus', { params })
+  const res = await api.get('/day-menus/published', { params })
   return res.data.DATA
 }
