@@ -5,7 +5,7 @@ import DayMenuTable from "../components/DayMenuTable";
 import { useAuth } from "../../../hooks/useAuth";
 
 import * as servicesApi from "../../services/api/servicesApi";
-import { getActiveCanteens, getDaySlots } from "../../dayslot/api/daySlotsApi";
+import { getActiveCanteens, getDaySlots, getDaySlot } from "../../dayslot/api/daySlotsApi";
 
 export default function DayMenuPlannerPage() {
   const { user } = useAuth();
@@ -102,9 +102,9 @@ export default function DayMenuPlannerPage() {
     const success = await replaceMenuItems(resolvedSlot.DAYSLOTID, itemsToSave);
     if (success) {
       await fetchDayMenuWorkspace(resolvedSlot.DAYSLOTID);
-      // Also refresh the slot to get updated status
-      const slots = await getDaySlots({ DAYSLOTID: resolvedSlot.DAYSLOTID });
-      if (slots && slots[0]) setResolvedSlot(slots[0]);
+      // Refresh the exact slot to get updated status (e.g. DRF)
+      const updatedSlot = await getDaySlot(resolvedSlot.DAYSLOTID);
+      if (updatedSlot) setResolvedSlot(updatedSlot);
     }
     setIsSubmitting(false);
   };
@@ -115,8 +115,8 @@ export default function DayMenuPlannerPage() {
     const success = await actionFn(resolvedSlot.DAYSLOTID, ...args);
     if (success) {
       await fetchDayMenuWorkspace(resolvedSlot.DAYSLOTID);
-      const slots = await getDaySlots({ DAYSLOTID: resolvedSlot.DAYSLOTID });
-      if (slots && slots[0]) setResolvedSlot(slots[0]);
+      const updatedSlot = await getDaySlot(resolvedSlot.DAYSLOTID);
+      if (updatedSlot) setResolvedSlot(updatedSlot);
       if (actionName === 'reject') setShowRejectModal(false);
       setRemarks("");
     }
@@ -144,8 +144,8 @@ export default function DayMenuPlannerPage() {
         const approveSuccess = await approveMenu(resolvedSlot.DAYSLOTID, remarks || "Direct approval by Manager");
         if (approveSuccess) {
           await fetchDayMenuWorkspace(resolvedSlot.DAYSLOTID);
-          const slots = await getDaySlots({ DAYSLOTID: resolvedSlot.DAYSLOTID });
-          if (slots && slots[0]) setResolvedSlot(slots[0]);
+          const updatedSlot = await getDaySlot(resolvedSlot.DAYSLOTID);
+          if (updatedSlot) setResolvedSlot(updatedSlot);
         }
       }
     } catch (err) {
@@ -167,8 +167,8 @@ export default function DayMenuPlannerPage() {
         const approveSuccess = await approveMenu(resolvedSlot.DAYSLOTID, "Direct approval on save");
         if (approveSuccess) {
           await fetchDayMenuWorkspace(resolvedSlot.DAYSLOTID);
-          const slots = await getDaySlots({ DAYSLOTID: resolvedSlot.DAYSLOTID });
-          if (slots && slots[0]) setResolvedSlot(slots[0]);
+          const updatedSlot = await getDaySlot(resolvedSlot.DAYSLOTID);
+          if (updatedSlot) setResolvedSlot(updatedSlot);
         }
       }
     }

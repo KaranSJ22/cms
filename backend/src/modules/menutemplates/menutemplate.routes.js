@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { authenticate } from "../../middlwares/auth.middleware.js";
-import { validate } from "../../middlwares/validate.middleware.js";
+import { authenticate } from "../../middlewares/auth.middleware.js";
+import { validate } from "../../middlewares/validate.middleware.js";
 import * as MenuTemplateController from "./menutemplate.controller.js";
 import * as validation from "./menutemplate.validation.js";
 

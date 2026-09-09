@@ -7,4 +7,6 @@ coverage/
 .vscode/
 .DS_Store
 *:Zone.Identifier
+.agents
+review_docs
 

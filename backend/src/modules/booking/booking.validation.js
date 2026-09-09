@@ -99,6 +99,16 @@ export const serveBookingSchema = z.object({
   }).optional().default({}),
 });
 
+export const serveBookingItemSchema = z.object({
+  params: z.object({
+    id: z.string().regex(/^\d+$/, "Booking ID must be a positive integer"),
+    itemId: z.string().regex(/^\d+$/, "Booking Item ID must be a positive integer"),
+  }),
+  body: z.object({
+    PSERVEREASON: z.string().max(255).optional().nullable(),
+  }).optional().default({}),
+});
+
 export const noShowBookingSchema = z.object({
   params: z.object({
     id: z.string().regex(/^\d+$/, "Booking ID must be a positive integer"),
@@ -121,5 +131,37 @@ export const scanRfidSchema = z.object({
   body: z.object({
     PRFIDHASH: z.string().min(1, "RFID hash is required"),
     PSERVICEID: z.number().int().positive("Service ID must be positive"),
+  }),
+});
+
+export const getWeeklyPublishedMenuSchema = z.object({
+  query: z.object({
+    canteenId: z.coerce.number().int().positive("Canteen ID must be a positive integer"),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid start date (YYYY-MM-DD)"),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid end date (YYYY-MM-DD)"),
+  }),
+});
+
+export const createWeeklyBookingBatchSchema = z.object({
+  body: z.object({
+    PBOOKTYPECODE: z.enum(["PB", "KS"]).optional().default("PB"),
+    PCUSTOMERID: z.number().int().positive().optional(),
+    PBOOKINGSJSON: z
+      .array(
+        z.object({
+          SERVICEDATE: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
+          SERVICEID: z.number().int().positive(),
+          ITEMS: z
+            .array(
+              z.object({
+                DAYMENUID: z.number().int().positive(),
+                QTY: z.number().int().positive(),
+              })
+            )
+            .min(1, "At least one item is required for each active day"),
+        })
+      )
+      .min(1, "At least one day must be included in weekly booking"),
+    PREMARKS: z.string().max(255).optional().nullable(),
   }),
 });

@@ -8,6 +8,7 @@ import {
   viewPublishedMenu,
   bulkCreateMenuForWeek,
 } from "./daymenu.repository.js";
+import { BadRequestError } from "../../common/errors/appError.js";
 
 export const getWorkspace = async (DAYSLOTID) => {
   return await getDayMenuWorkspace(DAYSLOTID);
@@ -58,17 +59,13 @@ export const bulkCreateDayMenu = async (payload, createdBy) => {
 
   // Cross-field time validation (Zod schema can't express this simply)
   if (ENDTIME <= STARTTIME) {
-    const error = new Error("ENDTIME must be strictly after STARTTIME");
-    error.statusCode = 400;
-    throw error;
+    throw new BadRequestError("ENDTIME must be strictly after STARTTIME");
   }
 
   // Ensure at least one day has items
   const hasAnyItems = DAYS.some((d) => d.ITEMS && d.ITEMS.length > 0);
   if (!hasAnyItems) {
-    const error = new Error("At least one day must have menu items configured");
-    error.statusCode = 400;
-    throw error;
+    throw new BadRequestError("At least one day must have menu items configured");
   }
 
   return await bulkCreateMenuForWeek({
@@ -81,3 +78,4 @@ export const bulkCreateDayMenu = async (payload, createdBy) => {
     createdBy,
   });
 };
+

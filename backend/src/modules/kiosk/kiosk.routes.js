@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { validate } from "../../middlwares/validate.middleware.js";
-import { detectKiosk, requireKiosk } from "../../middlwares/kioskDevice.middleware.js";
+import { validate } from "../../middlewares/validate.middleware.js";
+import { detectKiosk, requireKiosk } from "../../middlewares/kioskDevice.middleware.js";
 import * as KioskController from "./kiosk.controller.js";
 import * as validation from "./kiosk.validation.js";
 

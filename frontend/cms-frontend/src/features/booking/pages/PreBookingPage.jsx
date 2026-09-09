@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import CanteenDateSelector from "../components/CanteenDateSelector";
 import PreBookItemCard from "../components/PreBookItemCard";
 import CartSummaryPanel from "../components/CartSummaryPanel";
+import WeeklyMealPlanner from "../components/WeeklyMealPlanner";
 import { usePublishedMenu } from "../hooks/usePublishedMenu";
 import { useBookingCart } from "../hooks/useBookingCart";
 import {
@@ -18,9 +19,12 @@ import {
   LockClosedIcon,
   XCircleIcon,
   CheckCircleIcon,
+  SparklesIcon,
+  CalendarDaysIcon,
 } from "@heroicons/react/24/outline";
 
 export default function PreBookingPage() {
+  const [plannerMode, setPlannerMode] = useState("WEEKLY"); // "WEEKLY" | "DAILY"
   const { menuItems, loading, error, fetchPublishedMenus } = usePublishedMenu();
   const { cart, addToCart, removeFromCart, clearCart, totalAmount, totalItemsCount } = useBookingCart();
 
@@ -263,13 +267,48 @@ export default function PreBookingPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto pb-10">
-      <div className="mb-8">
+    <div className="max-w-[1550px] mx-auto pb-10 px-4 sm:px-6">
+      <div className="mb-6">
         <h1 className="text-3xl font-bold text-[#0F172A] mb-2">Pre-Book Meals</h1>
-        <p className="text-slate-500">Plan ahead, update active reservations, or reserve meals to avoid the rush.</p>
+        <p className="text-slate-500">Plan ahead, reserve weekly passes, or update reservations to avoid the rush.</p>
       </div>
 
-      <CanteenDateSelector onContextChange={handleContextChange} />
+      {/* Mode Switcher */}
+      <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl w-fit mb-6 shadow-xs border border-slate-200">
+        <button
+          type="button"
+          onClick={() => setPlannerMode("WEEKLY")}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+            plannerMode === "WEEKLY"
+              ? "bg-[#0F172A] text-white shadow-sm"
+              : "text-slate-600 hover:text-slate-900"
+          }`}
+        >
+          <SparklesIcon className="w-4 h-4 text-orange-400" />
+          <span>5-Day Weekly Pass</span>
+          <span className="px-1.5 py-0.5 bg-orange-500 text-white text-[9px] font-extrabold rounded-md uppercase">
+            Recommended
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setPlannerMode("DAILY")}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+            plannerMode === "DAILY"
+              ? "bg-[#0F172A] text-white shadow-sm"
+              : "text-slate-600 hover:text-slate-900"
+          }`}
+        >
+          <CalendarDaysIcon className="w-4 h-4" />
+          <span>Single Day Booking</span>
+        </button>
+      </div>
+
+      {plannerMode === "WEEKLY" ? (
+        <WeeklyMealPlanner />
+      ) : (
+        <>
+          <CanteenDateSelector onContextChange={handleContextChange} />
 
       {/* Main Grid: Menu vs Cart */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -420,6 +459,8 @@ export default function PreBookingPage() {
           />
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

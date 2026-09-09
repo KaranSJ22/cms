@@ -18,6 +18,12 @@ import {
 } from "./identity.repository.js";
 
 import bcrypt from "bcrypt";
+import {
+  BadRequestError,
+  NotFoundError,
+  ConflictError,
+  DatabaseError,
+} from "../../common/errors/appError.js";
 
 export const fetchUsers = async (ISACTIVE = null) => {
   return await getAllUsers(ISACTIVE);
@@ -35,9 +41,7 @@ export const createUser = async (userData) => {
   const existingUser = await findUserByLoginId(userData.LOGINID);
 
   if (existingUser) {
-    const error = new Error("LOGINID already exists");
-    error.statusCode = 409;
-    throw error;
+    throw new ConflictError("LOGINID already exists");
   }
 
   const passwordHash = await bcrypt.hash(userData.PASSWORD, 10);
@@ -53,9 +57,7 @@ export const createUser = async (userData) => {
   });
 
   if (!created?.USERID) {
-    const error = new Error("User creation failed");
-    error.statusCode = 500;
-    throw error;
+    throw new DatabaseError("User creation failed");
   }
 
   return await getUserById(created.USERID);
@@ -65,29 +67,21 @@ export const assignUserRole = async (roleData, assignedByUserId) => {
   const user = await findUserById(roleData.USERID);
 
   if (!user) {
-    const error = new Error("User not found");
-    error.statusCode = 404;
-    throw error;
+    throw new NotFoundError("User not found");
   }
 
   if (Number(user.ISACTIVE) !== 1) {
-    const error = new Error("Cannot assign role to inactive user");
-    error.statusCode = 400;
-    throw error;
+    throw new BadRequestError("Cannot assign role to inactive user");
   }
 
   const role = await findRoleById(roleData.ROLEID);
 
   if (!role) {
-    const error = new Error("Role not found");
-    error.statusCode = 404;
-    throw error;
+    throw new NotFoundError("Role not found");
   }
 
   if (Number(role.ISACTIVE) !== 1) {
-    const error = new Error("Cannot assign inactive role");
-    error.statusCode = 400;
-    throw error;
+    throw new BadRequestError("Cannot assign inactive role");
   }
 
   await assignRoleUsingProcedure({
@@ -106,23 +100,17 @@ export const createCustomer = async (customerData) => {
     const user = await findUserById(customerData.USERID);
 
     if (!user) {
-      const error = new Error("User not found");
-      error.statusCode = 404;
-      throw error;
+      throw new NotFoundError("User not found");
     }
 
     if (Number(user.ISACTIVE) !== 1) {
-      const error = new Error("Cannot create customer for inactive user");
-      error.statusCode = 400;
-      throw error;
+      throw new BadRequestError("Cannot create customer for inactive user");
     }
 
     const existingCustomer = await findCustomerByUserId(customerData.USERID);
 
     if (existingCustomer) {
-      const error = new Error("Customer already exists for this user");
-      error.statusCode = 409;
-      throw error;
+      throw new ConflictError("Customer already exists for this user");
     }
   }
 
@@ -136,9 +124,7 @@ export const createCustomer = async (customerData) => {
   });
 
   if (!created?.CUSTOMERID) {
-    const error = new Error("Customer creation failed");
-    error.statusCode = 500;
-    throw error;
+    throw new DatabaseError("Customer creation failed");
   }
 
   return await getCustomerById(created.CUSTOMERID);
@@ -150,21 +136,15 @@ export const createPermanentEmployee = async (employeeData) => {
   const customer = await findCustomerById(employeeData.CUSTOMERID);
 
   if (!customer) {
-    const error = new Error("Customer not found");
-    error.statusCode = 404;
-    throw error;
+    throw new NotFoundError("Customer not found");
   }
 
   if (customer.CTYPECODE !== "PRM") {
-    const error = new Error("Customer type must be PERMANENT");
-    error.statusCode = 400;
-    throw error;
+    throw new BadRequestError("Customer type must be PERMANENT");
   }
 
   if (customer.STATUS !== 10) {
-    const error = new Error("Cannot create permanent employee profile for inactive customer");
-    error.statusCode = 400;
-    throw error;
+    throw new BadRequestError("Cannot create permanent employee profile for inactive customer");
   }
 
   const existingProfile = await findPermanentEmployeeByCustomerId(
@@ -172,9 +152,7 @@ export const createPermanentEmployee = async (employeeData) => {
   );
 
   if (existingProfile) {
-    const error = new Error("Permanent employee profile already exists for this customer");
-    error.statusCode = 409;
-    throw error;
+    throw new ConflictError("Permanent employee profile already exists for this customer");
   }
 
   const created = await createPermanentEmployeeUsingProcedure({
@@ -185,9 +163,7 @@ export const createPermanentEmployee = async (employeeData) => {
   });
 
   if (!created?.PERMEMPID) {
-    const error = new Error("Permanent employee profile creation failed");
-    error.statusCode = 500;
-    throw error;
+    throw new DatabaseError("Permanent employee profile creation failed");
   }
 
   // Use CMSGETPERM (via findPermanentEmployeeByCustomerId) to return the

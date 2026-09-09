@@ -13,13 +13,15 @@ import {
 } from "./daymenu.service.js";
 
 export const getDayMenuWorkspaceController = asyncHandler(async (req, res) => {
-  const data = await getWorkspace(req.params.id);
+  const daySlotId = req.validated?.params?.daySlotId || req.params.daySlotId || req.params.id;
+  const data = await getWorkspace(daySlotId);
   return sendSuccess(res, data, "Day menu workspace fetched successfully");
 });
 
 export const updateMenuItemsController = asyncHandler(async (req, res) => {
+  const daySlotId = req.validated?.params?.daySlotId || req.params.daySlotId || req.params.id;
   const data = await updateMenuItems(
-    req.params.id,
+    daySlotId,
     req.validated.body.ITEMSJSON,
     req.user.USERID,
     req.validated.body.REMARKS ?? null
@@ -28,13 +30,15 @@ export const updateMenuItemsController = asyncHandler(async (req, res) => {
 });
 
 export const submitDayMenuController = asyncHandler(async (req, res) => {
-  const data = await submitDayMenu(req.params.id, req.user.USERID);
+  const daySlotId = req.validated?.params?.daySlotId || req.params.daySlotId || req.params.id;
+  const data = await submitDayMenu(daySlotId, req.user.USERID);
   return sendSuccess(res, data, "Day menu submitted for approval successfully");
 });
 
 export const approveDayMenuController = asyncHandler(async (req, res) => {
+  const daySlotId = req.validated?.params?.daySlotId || req.params.daySlotId || req.params.id;
   const data = await approveDayMenu(
-    req.params.id,
+    daySlotId,
     req.validated.body.REMARKS,
     req.user.USERID
   );
@@ -42,8 +46,9 @@ export const approveDayMenuController = asyncHandler(async (req, res) => {
 });
 
 export const rejectDayMenuController = asyncHandler(async (req, res) => {
+  const daySlotId = req.validated?.params?.daySlotId || req.params.daySlotId || req.params.id;
   const data = await rejectDayMenu(
-    req.params.id,
+    daySlotId,
     req.validated.body.REMARKS,
     req.user.USERID
   );

@@ -1,5 +1,6 @@
 import * as walletRepo from "./wallet.repository.js";
 import { getCustomerById } from "../identity/identity.repository.js";
+import { NotFoundError } from "../../common/errors/appError.js";
 
 export class WalletService {
   /**
@@ -8,9 +9,7 @@ export class WalletService {
   static async customerLookup(customerId) {
     const customer = await getCustomerById(customerId);
     if (!customer) {
-      const error = new Error("Customer record not found");
-      error.statusCode = 404;
-      throw error;
+      throw new NotFoundError("Customer record not found");
     }
 
     const isEligible = ["CNT", "VIS", "CONTEMP", "VISITOR"].includes(customer.CTYPECODE);
@@ -66,9 +65,7 @@ export class WalletService {
   static async getWallet(customerId) {
     const result = await walletRepo.getWallet(customerId);
     if (!result) {
-      const error = new Error("Wallet not found");
-      error.statusCode = 404;
-      throw error;
+      throw new NotFoundError("Wallet not found");
     }
     return result;
   }

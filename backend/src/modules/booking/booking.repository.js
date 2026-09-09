@@ -1,4 +1,5 @@
 import { pool } from "../../db/connection.js";
+import { BadRequestError, NotFoundError, ForbiddenError } from "../../common/errors/appError.js";
 
 export const getBooking = async (bookingId) => {
   const [resultSets] = await pool.query("CALL CMSGETBOOK(?)", [bookingId]);
@@ -54,6 +55,125 @@ export const createBooking = async ({
   return result;
 };
 
+export const createWeeklyBookingBatch = async ({
+  PBOOKTYPECODE = "PB",
+  PCUSTOMERID,
+  PBOOKINGSJSON,
+  PBOOKEDBY,
+  PREMARKS = "5-Day Weekly Pass",
+}) => {
+  const [resultSets] = await pool.query(
+    "CALL CMSADDBOOKWEEKLY(?, ?, ?, ?, ?)",
+    [
+      PBOOKTYPECODE,
+      PCUSTOMERID,
+      JSON.stringify(PBOOKINGSJSON),
+      PBOOKEDBY,
+      PREMARKS || null,
+    ]
+  );
+  return resultSets[0] || [];
+};
+
+export const getWeeklyPublishedMenu = async ({ canteenId, startDate, endDate, ctypeCode }) => {
+  const menuQuery = `
+    SELECT
+        DS.CANTEENID,
+        C.CANTEENNAME,
+        DS.DAYSLOTID,
+        S.SERVICEID,
+        S.SERVCODE,
+        S.SERVNAME,
+        DATE_FORMAT(DS.SERVDATE, '%Y-%m-%d') AS SERVDATE,
+        DS.STARTTIME,
+        DS.ENDTIME,
+        DM.DAYMENUID,
+        DM.DMENUNO,
+        MI.MENUITEMID,
+        MI.MENUCODE,
+        MI.SHORTNAME,
+        MI.ITEMNAME,
+        MI.ITEMDESCR,
+        DM.ISBASE,
+        DM.ISSPECIAL,
+        DM.ISPREBOOK,
+        DM.ISKIOSK,
+        DM.AVAILQTY,
+        DM.MAXQTY,
+        DM.BOOKUNTIL,
+        DM.CANCELUNTIL,
+        (
+            SELECT IPD.PRICE
+            FROM   CMS_ITEMPRICE IP
+            JOIN   CMS_ITEMPRICEDT IPD ON IPD.ITEMPRICEID = IP.ITEMPRICEID
+            JOIN   CMS_STATUS IPST ON IPST.STATUSID = IP.STATUSID
+            WHERE  IP.MENUITEMID  = MI.MENUITEMID
+              AND  IP.EFFFROM    <= DS.SERVDATE
+              AND  IPST.STATUSCODE = 'ACT'
+              AND  (IPD.CTYPECODE = ? OR IPD.CTYPECODE = 'VIS')
+            ORDER BY 
+              IP.EFFFROM DESC,
+              CASE WHEN IPD.CTYPECODE = ? THEN 1 ELSE 2 END
+            LIMIT 1
+        ) AS DISPLAYPRICE
+    FROM CMS_DAYMENU DM
+    JOIN CMS_DAYSLOT DS  ON DS.DAYSLOTID  = DM.DAYSLOTID
+    JOIN CMS_SERVICE S   ON S.SERVICEID   = DS.SERVICEID
+    JOIN CMS_CANTEEN C   ON C.CANTEENID   = DS.CANTEENID
+    JOIN CMS_MENUITEM MI ON MI.MENUITEMID = DM.MENUITEMID
+    JOIN CMS_STATUS DS_ST ON DS_ST.STATUSID = DS.STATUSID
+    JOIN CMS_STATUS DS_AST ON DS_AST.STATUSID = DS.APPRSTATUSID
+    JOIN CMS_STATUS DM_ST ON DM_ST.STATUSID = DM.STATUSID
+    JOIN CMS_STATUS S_ST ON S_ST.STATUSID = S.STATUSID
+    JOIN CMS_STATUS MI_ST ON MI_ST.STATUSID = MI.STATUSID
+    WHERE DS.CANTEENID  = ?
+      AND DS.SERVDATE  >= ?
+      AND DS.SERVDATE  <= ?
+      AND DS_AST.STATUSCODE = 'APR'
+      AND DM_ST.STATUSCODE  = 'ACT'
+      AND DS_ST.STATUSCODE  = 'ACT'
+      AND S_ST.STATUSCODE   = 'ACT'
+      AND MI_ST.STATUSCODE  = 'ACT'
+      AND DM.ISPREBOOK      = 1
+    ORDER BY DS.SERVDATE, DS.STARTTIME, S.SERVNAME, DM.ISBASE DESC, MI.ITEMNAME
+  `;
+
+  const holidayQuery = `
+    SELECT HOLIDAYID, HOLIDAYNAME, DATE_FORMAT(HOLIDAYDATE, '%Y-%m-%d') AS HOLIDAYDATE, ISRECURRING
+    FROM CMS_HOLIDAY
+    WHERE STATUSID = 10
+      AND (
+        (HOLIDAYDATE >= ? AND HOLIDAYDATE <= ?)
+        OR ISRECURRING = 1
+      )
+  `;
+
+  const [[menuRows], [holidayRows]] = await Promise.all([
+    pool.query(menuQuery, [ctypeCode || "VIS", ctypeCode || "VIS", canteenId, startDate, endDate]),
+    pool.query(holidayQuery, [startDate, endDate]),
+  ]);
+
+  return {
+    menuItems: menuRows || [],
+    holidays: holidayRows || [],
+  };
+};
+
+export const getExistingBookingsInRange = async ({ customerId, startDate, endDate }) => {
+  const [rows] = await pool.query(
+    `SELECT B.BOOKID, B.BOOKNO, B.SERVICEID, S.SERVNAME, DATE_FORMAT(B.SERVICEDATE, '%Y-%m-%d') AS SERVICEDATE, B.TOTALITEMS, B.TOTALQTY, B.TOTALAMOUNT, ST.STATUSCODE
+     FROM CMS_BOOKING B
+     JOIN CMS_SERVICE S ON S.SERVICEID = B.SERVICEID
+     JOIN CMS_STATUS ST ON ST.STATUSID = B.STATUSID
+     WHERE B.CUSTOMERID = ?
+       AND B.SERVICEDATE >= ?
+       AND B.SERVICEDATE <= ?
+       AND ST.STATUSCODE <> 'CAN'`,
+    [customerId, startDate, endDate]
+  );
+  return rows || [];
+};
+
 export const updateBookingItem = async ({
   PBOOKINGID,
   PITEMSJSON,
@@ -63,11 +183,25 @@ export const updateBookingItem = async ({
     "CALL CMSUPDBOOKITEM(?, ?, ?)",
     [
       PBOOKINGID,
-      PITEMSJSON,
+      typeof PITEMSJSON === "string" ? PITEMSJSON : JSON.stringify(PITEMSJSON || []),
       PCHANGEDBY
     ]
   );
   return result;
+};
+
+export const serveBookingItem = async ({
+  PBOOKINGID,
+  PBOOKITEMID,
+  PSERVEDBY,
+  PKIOSKID = null,
+  PCHGREASON = "Served at counter",
+}) => {
+  const [resultSets] = await pool.query(
+    "CALL CMSSERVEBOOKITEM(?, ?, ?, ?, ?)",
+    [PBOOKINGID, PBOOKITEMID, PSERVEDBY, PKIOSKID, PCHGREASON]
+  );
+  return resultSets[0]?.[0] || null;
 };
 
 export const cancelBooking = async ({
@@ -75,10 +209,13 @@ export const cancelBooking = async ({
   PCANCELLEDBY,
   PISSTAFFOVERRIDE = 0,
   PCANCELREASON,
+  CANCELREASON,
 }) => {
+  const reason = PCANCELREASON || CANCELREASON || "Cancelled by user";
+  const override = PISSTAFFOVERRIDE ? 1 : 0;
   const [result] = await pool.query(
     "CALL CMSCANCELBOOK(?, ?, ?, ?)",
-    [PBOOKINGID, PCANCELLEDBY, PISSTAFFOVERRIDE, PCANCELREASON || null]
+    [PBOOKINGID, PCANCELLEDBY, override, reason]
   );
   return result;
 };
@@ -260,27 +397,19 @@ export const addBookingItemIncremental = async ({
     );
 
     if (!booking) {
-      const err = new Error("Booking not found");
-      err.statusCode = 404;
-      throw err;
+      throw new NotFoundError("Booking not found");
     }
 
     if (customerId && booking.CUSTOMERID !== customerId) {
-      const err = new Error("You do not have permission to modify this booking");
-      err.statusCode = 403;
-      throw err;
+      throw new ForbiddenError("You do not have permission to modify this booking");
     }
 
     if (booking.BOOKTYPECODE !== "PB") {
-      const err = new Error("Only pre-bookings can be updated");
-      err.statusCode = 400;
-      throw err;
+      throw new BadRequestError("Only pre-bookings can be updated");
     }
 
     if (booking.STATUSCODE !== "CRT") {
-      const err = new Error("Booking is not in an editable state");
-      err.statusCode = 400;
-      throw err;
+      throw new BadRequestError("Booking is not in an editable state");
     }
 
     // 2. Lock and validate DayMenu item
@@ -298,35 +427,27 @@ export const addBookingItemIncremental = async ({
     );
 
     if (!dayMenu) {
-      const err = new Error("Day menu item not found");
-      err.statusCode = 404;
-      throw err;
+      throw new NotFoundError("Day menu item not found");
     }
 
     if (dayMenu.DM_STATUS !== "ACT" || dayMenu.DS_STATUS !== "ACT" || dayMenu.DS_APPRSTATUS !== "APR" || dayMenu.ISPREBOOK !== 1) {
-      const err = new Error("This item is not available for pre-booking");
-      err.statusCode = 400;
-      throw err;
+      throw new BadRequestError("This item is not available for pre-booking");
     }
 
-    if (dayMenu.SERVICEID !== booking.SERVICEID || dayMenu.SERVDATE.toISOString().split("T")[0] !== booking.SERVICEDATE.toISOString().split("T")[0]) {
-      const err = new Error("Item does not match the service and date of this booking");
-      err.statusCode = 400;
-      throw err;
+    const dmDateStr = typeof dayMenu.SERVDATE === "string" ? dayMenu.SERVDATE.slice(0, 10) : dayMenu.SERVDATE.toISOString().split("T")[0];
+    const bkDateStr = typeof booking.SERVICEDATE === "string" ? booking.SERVICEDATE.slice(0, 10) : booking.SERVICEDATE.toISOString().split("T")[0];
+    if (dayMenu.SERVICEID !== booking.SERVICEID || dmDateStr !== bkDateStr) {
+      throw new BadRequestError("Item does not match the service and date of this booking");
     }
 
     // Check BOOKUNTIL cutoff
     const now = new Date();
     if (now > new Date(dayMenu.BOOKUNTIL)) {
-      const err = new Error(`Booking window has closed for item: ${dayMenu.ITEMNAME}`);
-      err.statusCode = 400;
-      throw err;
+      throw new BadRequestError(`Booking window has closed for item: ${dayMenu.ITEMNAME}`);
     }
 
     if (qty < 1 || qty > dayMenu.MAXQTY) {
-      const err = new Error(`Quantity must be between 1 and ${dayMenu.MAXQTY}`);
-      err.statusCode = 400;
-      throw err;
+      throw new BadRequestError(`Quantity must be between 1 and ${dayMenu.MAXQTY}`);
     }
 
     // 3. Capacity check
@@ -344,9 +465,7 @@ export const addBookingItemIncremental = async ({
       );
 
       if (Number(capacity.BOOKEDQTY) + qty > dayMenu.AVAILQTY) {
-        const err = new Error(`Insufficient available capacity for item: ${dayMenu.ITEMNAME}`);
-        err.statusCode = 400;
-        throw err;
+        throw new BadRequestError(`Insufficient available capacity for item: ${dayMenu.ITEMNAME}`);
       }
     }
 
@@ -378,9 +497,7 @@ export const addBookingItemIncremental = async ({
     );
 
     if (existingItem && existingItem.STATUSCODE === "CRT") {
-      const err = new Error("This item already exists in the booking; use quantity update instead");
-      err.statusCode = 400;
-      throw err;
+      throw new BadRequestError("This item already exists in the booking; use quantity update instead");
     }
 
     // 6. Handle wallet reservations for CNT / VIS
@@ -395,16 +512,12 @@ export const addBookingItemIncremental = async ({
       );
 
       if (!wallet) {
-        const err = new Error("Active wallet not found for customer");
-        err.statusCode = 400;
-        throw err;
+        throw new BadRequestError("Active wallet not found for customer");
       }
 
       const availableBal = Number(wallet.BALANCE) - Number(wallet.RESERVEDAMT);
       if (amount > availableBal) {
-        const err = new Error("Insufficient available wallet balance to add item");
-        err.statusCode = 400;
-        throw err;
+        throw new BadRequestError("Insufficient available wallet balance to add item");
       }
 
       await conn.query(
@@ -500,27 +613,19 @@ export const updateBookingItemQtyIncremental = async ({
     );
 
     if (!booking) {
-      const err = new Error("Booking not found");
-      err.statusCode = 404;
-      throw err;
+      throw new NotFoundError("Booking not found");
     }
 
     if (customerId && booking.CUSTOMERID !== customerId) {
-      const err = new Error("You do not have permission to modify this booking");
-      err.statusCode = 403;
-      throw err;
+      throw new ForbiddenError("You do not have permission to modify this booking");
     }
 
     if (booking.BOOKTYPECODE !== "PB") {
-      const err = new Error("Only pre-bookings can be updated");
-      err.statusCode = 400;
-      throw err;
+      throw new BadRequestError("Only pre-bookings can be updated");
     }
 
     if (booking.STATUSCODE !== "CRT") {
-      const err = new Error("Booking is not in an editable state");
-      err.statusCode = 400;
-      throw err;
+      throw new BadRequestError("Booking is not in an editable state");
     }
 
     // 2. Lock and validate booking item
@@ -535,29 +640,21 @@ export const updateBookingItemQtyIncremental = async ({
     );
 
     if (!item) {
-      const err = new Error("Booking item not found");
-      err.statusCode = 404;
-      throw err;
+      throw new NotFoundError("Booking item not found");
     }
 
     if (item.STATUSCODE !== "CRT") {
-      const err = new Error("Cannot modify quantity of a cancelled or served item");
-      err.statusCode = 400;
-      throw err;
+      throw new BadRequestError("Cannot modify quantity of a cancelled or served item");
     }
 
     // Check BOOKUNTIL cutoff
     const now = new Date();
     if (now > new Date(item.BOOKUNTIL)) {
-      const err = new Error(`Booking window has closed for item: ${item.ITEMNAME}`);
-      err.statusCode = 400;
-      throw err;
+      throw new BadRequestError(`Booking window has closed for item: ${item.ITEMNAME}`);
     }
 
     if (qty < 1 || qty > item.MAXQTY) {
-      const err = new Error(`Quantity must be between 1 and ${item.MAXQTY}`);
-      err.statusCode = 400;
-      throw err;
+      throw new BadRequestError(`Quantity must be between 1 and ${item.MAXQTY}`);
     }
 
     const qtyDiff = qty - item.QTY;
@@ -589,9 +686,7 @@ export const updateBookingItemQtyIncremental = async ({
       );
 
       if (Number(capacity.BOOKEDQTY) + qty > item.AVAILQTY) {
-        const err = new Error(`Insufficient available capacity for item: ${item.ITEMNAME}`);
-        err.statusCode = 400;
-        throw err;
+        throw new BadRequestError(`Insufficient available capacity for item: ${item.ITEMNAME}`);
       }
     }
 
@@ -613,9 +708,7 @@ export const updateBookingItemQtyIncremental = async ({
         if (amountDiff > 0) {
           const availableBal = Number(wallet.BALANCE) - Number(wallet.RESERVEDAMT);
           if (amountDiff > availableBal) {
-            const err = new Error("Insufficient available wallet balance for quantity increase");
-            err.statusCode = 400;
-            throw err;
+            throw new BadRequestError("Insufficient available wallet balance for quantity increase");
           }
         }
 
@@ -701,21 +794,15 @@ export const cancelBookingItemIncremental = async ({
     );
 
     if (!booking) {
-      const err = new Error("Booking not found");
-      err.statusCode = 404;
-      throw err;
+      throw new NotFoundError("Booking not found");
     }
 
     if (customerId && booking.CUSTOMERID !== customerId) {
-      const err = new Error("You do not have permission to modify this booking");
-      err.statusCode = 403;
-      throw err;
+      throw new ForbiddenError("You do not have permission to modify this booking");
     }
 
     if (booking.STATUSCODE !== "CRT") {
-      const err = new Error("Booking is not in an editable state");
-      err.statusCode = 400;
-      throw err;
+      throw new BadRequestError("Booking is not in an editable state");
     }
 
     // 2. Lock and validate booking item
@@ -730,23 +817,17 @@ export const cancelBookingItemIncremental = async ({
     );
 
     if (!item) {
-      const err = new Error("Booking item not found");
-      err.statusCode = 404;
-      throw err;
+      throw new NotFoundError("Booking item not found");
     }
 
     if (item.STATUSCODE !== "CRT") {
-      const err = new Error("Item is already cancelled or served");
-      err.statusCode = 400;
-      throw err;
+      throw new BadRequestError("Item is already cancelled or served");
     }
 
     // Check BOOKUNTIL cutoff
     const now = new Date();
     if (now > new Date(item.BOOKUNTIL)) {
-      const err = new Error(`Cancellation window has closed for item: ${item.ITEMNAME}`);
-      err.statusCode = 400;
-      throw err;
+      throw new BadRequestError(`Cancellation window has closed for item: ${item.ITEMNAME}`);
     }
 
     // 3. Soft-cancel the item (STATUSID = 33 'CAN')

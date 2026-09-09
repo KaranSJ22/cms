@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { UnauthorizedError } from "../common/errors/appError.js";
 
 // Ensure the secret is exactly 16 bytes for AES-128
 const SECRET_KEY = process.env.SSO_SECRET_KEY || "1234567890123456";
@@ -32,7 +33,7 @@ export const decryptToken = (token) => {
 
     return decrypted;
   } catch (error) {
-    throw new Error("Invalid or corrupted SSO token");
+    throw new UnauthorizedError("Invalid or corrupted SSO token");
   }
 };
 

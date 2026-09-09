@@ -1,6 +1,6 @@
 /**
  * @swagger
- * /api/day-slots/{id}/menu:
+ * /api/day-menus/slots/{daySlotId}:
  *   get:
  *     summary: Get day menu workspace
  *     description: Canteen manager or assistant API to fetch the full menu workspace for a specific day slot.
@@ -10,7 +10,7 @@
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: daySlotId
  *         required: true
  *         schema:
  *           type: integer
@@ -29,7 +29,7 @@
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: daySlotId
  *         required: true
  *         schema:
  *           type: integer
@@ -77,7 +77,7 @@
  *       403:
  *         description: Permission denied
  *
- * /api/day-slots/{id}/menu/submit:
+ * /api/day-menus/slots/{daySlotId}/submit:
  *   post:
  *     summary: Submit day menu for approval
  *     description: API to submit a draft menu for approval.
@@ -87,7 +87,7 @@
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: daySlotId
  *         required: true
  *         schema:
  *           type: integer
@@ -97,7 +97,7 @@
  *       403:
  *         description: Permission denied
  *
- * /api/day-slots/{id}/menu/approve:
+ * /api/day-menus/slots/{daySlotId}/approve:
  *   post:
  *     summary: Approve day menu
  *     description: Admin or canteen manager API to approve a pending day menu.
@@ -107,7 +107,7 @@
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: daySlotId
  *         required: true
  *         schema:
  *           type: integer
@@ -129,7 +129,7 @@
  *       403:
  *         description: Permission denied
  *
- * /api/day-slots/{id}/menu/reject:
+ * /api/day-menus/slots/{daySlotId}/reject:
  *   post:
  *     summary: Reject day menu
  *     description: Admin or canteen manager API to reject a pending day menu.
@@ -139,7 +139,7 @@
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: daySlotId
  *         required: true
  *         schema:
  *           type: integer
@@ -181,7 +181,7 @@
  *       403:
  *         description: Permission denied
  *
- * /api/menus:
+ * /api/day-menus/published:
  *   get:
  *     summary: View published menu
  *     description: Authenticated user API to fetch approved published menu for a service date.

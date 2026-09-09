@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 
 import { findLoginInfoByLoginId } from "./auth.repository.js";
 import { decryptToken } from "../../utils/ssoCrypto.js";
+import { UnauthorizedError } from "../../common/errors/appError.js";
 
 const generateLoginResponse = (user, CONSUMERROLES, CANTEENROLES) => {
 
@@ -69,9 +70,7 @@ export const loginUser = async ({ LOGINID, PASSWORD }) => {
   } = await findLoginInfoByLoginId(LOGINID);
 
   if (!user) {
-    const error = new Error("Invalid login ID or password");
-    error.statusCode = 401;
-    throw error;
+    throw new UnauthorizedError("Invalid login ID or password");
   }
 
   const isPasswordValid = await bcrypt.compare(
@@ -80,9 +79,7 @@ export const loginUser = async ({ LOGINID, PASSWORD }) => {
   );
 
   if (!isPasswordValid) {
-    const error = new Error("Invalid login ID or password");
-    error.statusCode = 401;
-    throw error;
+    throw new UnauthorizedError("Invalid login ID or password");
   }
 
   return generateLoginResponse(user, CONSUMERROLES, CANTEENROLES);
@@ -94,25 +91,19 @@ export const ssoLoginUser = async ({ token, SSO_TOKEN }) => {
   try {
     rawToken = decryptToken(effectiveToken);
   } catch (err) {
-    const error = new Error("Invalid SSO token");
-    error.statusCode = 401;
-    throw error;
+    throw new UnauthorizedError("Invalid SSO token");
   }
 
   const parts = rawToken.split(":");
   if (parts.length !== 2) {
-    const error = new Error("Malformed SSO token");
-    error.statusCode = 401;
-    throw error;
+    throw new UnauthorizedError("Malformed SSO token");
   }
 
   const [username, expiryStr] = parts;
   const expiry = parseInt(expiryStr, 10);
 
   if (isNaN(expiry) || Date.now() > expiry) {
-    const error = new Error("SSO token expired");
-    error.statusCode = 401;
-    throw error;
+    throw new UnauthorizedError("SSO token expired");
   }
 
   const {
@@ -122,9 +113,7 @@ export const ssoLoginUser = async ({ token, SSO_TOKEN }) => {
   } = await findLoginInfoByLoginId(username);
 
   if (!user) {
-    const error = new Error("User not found via SSO");
-    error.statusCode = 401;
-    throw error;
+    throw new UnauthorizedError("User not found via SSO");
   }
 
   return generateLoginResponse(user, CONSUMERROLES, CANTEENROLES);

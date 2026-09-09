@@ -8,7 +8,8 @@
 
 export const ADMIN_NAV = [
   { key: 'identity', label: 'Identity & Access', category: 'admin', icon: 'IdentificationIcon' },
-  { key: 'holidays', label: 'Canteen Holidays', category: 'admin', icon: 'CalendarDaysIcon' }
+  { key: 'holidays', label: 'Canteen Holidays', category: 'admin', icon: 'CalendarDaysIcon' },
+  { key: 'reports/payroll', label: 'Monthly Payroll', category: 'admin', icon: 'DocumentChartBarIcon' },
 ]
 
 export const CANTEEN_MANAGER_NAV = [
@@ -31,6 +32,7 @@ export const CANTEEN_MANAGER_NAV = [
   // Finance & Admin
   { key: 'pricing', label: 'Pricing', category: 'finance', icon: 'CurrencyRupeeIcon' },
   { key: 'wallet', label: 'Wallet Management', category: 'finance', icon: 'WalletIcon', hasBadge: true, badgeKey: 'pendingWithdrawals' },
+  { key: 'reports/payroll', label: 'Monthly Payroll', category: 'finance', icon: 'DocumentChartBarIcon' },
   { key: 'holidays', label: 'Canteen Holidays', category: 'finance', icon: 'CalendarDaysIcon' },
 ]
 
@@ -49,6 +51,9 @@ export const CANTEEN_ASSISTANT_NAV = [
 
   // Terminals
   { key: 'kiosk/serving-terminal', label: 'Serving Terminal', category: 'terminals', icon: 'ComputerDesktopIcon' },
+
+  // Finance & Reports
+  { key: 'reports/payroll', label: 'Monthly Payroll', category: 'finance', icon: 'DocumentChartBarIcon' },
 ]
 
 export const CANTEEN_STAFF_NAV = [

@@ -1,5 +1,5 @@
 import { sendSuccess } from "../../utils/apiResponse.js";
-import { getClientIp } from "../../middlwares/kioskDevice.middleware.js";
+import { getClientIp } from "../../middlewares/kioskDevice.middleware.js";
 import * as KioskService from "./kiosk.service.js";
 
 /**

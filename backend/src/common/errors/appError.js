@@ -37,3 +37,15 @@ export class DatabaseError extends AppError {
         super(message, 500);
     }
 }
+
+export class UnauthorizedError extends AppError {
+    constructor(message = 'Unauthorized') {
+        super(message, 401);
+    }
+}
+
+export class ConflictError extends AppError {
+    constructor(message = 'Resource conflict or duplicate entry') {
+        super(message, 409);
+    }
+}

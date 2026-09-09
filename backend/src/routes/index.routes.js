@@ -1,8 +1,8 @@
 import express from "express";
 
 import authRoutes from "../modules/auth/auth.routes.js";
-import { authenticate } from "../middlwares/auth.middleware.js";
-import { authorizeSystemRoles } from "../middlwares/role.middleware.js";
+import { authenticate } from "../middlewares/auth.middleware.js";
+import { authorizeSystemRoles } from "../middlewares/role.middleware.js";
 
 
 import commonRoutes from "../modules/common/common.routes.js";
@@ -12,9 +12,7 @@ import canteenRoutes from "../modules/canteen/canteen.routes.js";
 import menuRoutes from "../modules/menu/menu.routes.js";
 import pricingRoutes from "../modules/pricing/pricing.routes.js";
 import daySlotRoutes from "../modules/dayslot/dayslot.routes.js";
-import dayMenuRoutes, {
-  publishedMenuRoutes,
-} from "../modules/daymenu/daymenu.routes.js";
+import dayMenuRoutes from "../modules/daymenu/daymenu.routes.js";
 import bookingRoutes from "../modules/booking/booking.routes.js";
 import walletRoutes from "../modules/wallet/wallet.routes.js";
 import menuTemplateRoutes from "../modules/menutemplates/menutemplate.routes.js";
@@ -30,11 +28,9 @@ router.use("/identity", identityRoutes);
 router.use("/services", serviceRoutes);
 router.use("/canteens", canteenRoutes);
 router.use("/menu-items", menuRoutes);
-router.use("/", pricingRoutes);
+router.use("/pricing", pricingRoutes);
 router.use("/day-slots", daySlotRoutes);
-router.use("/day-slots", dayMenuRoutes); // for /:id/menu
-router.use("/day-menus", dayMenuRoutes); // for /pending
-router.use("/menus", publishedMenuRoutes);
+router.use("/day-menus", dayMenuRoutes);
 router.use("/bookings", bookingRoutes);
 router.use("/wallets", walletRoutes);
 router.use("/menu-templates", menuTemplateRoutes);

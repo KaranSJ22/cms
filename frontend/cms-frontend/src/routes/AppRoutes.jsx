@@ -24,6 +24,7 @@ const BookingsMonitorPage = lazy(() => import('../features/booking/pages/Booking
 const PricingPage       = lazy(() => import('../features/pricing/pages/PricingPage'))
 const WalletPage        = lazy(() => import('../features/wallet/pages/WalletPage'))
 const MenuTemplatesPage = lazy(() => import('../features/menutemplates/pages/MenuTemplatesPage'))
+const MonthlyPayrollReportPage = lazy(() => import('../features/reports/pages/MonthlyPayrollReportPage'))
 
 // SYSADM pages
 const IdentityPage      = lazy(() => import('../features/identity/pages/IdentityPage'))
@@ -98,6 +99,11 @@ export default function AppRoutes() {
           </ProtectedRoute>
         } />
         <Route path="/reports/kitchen-summary" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/reports/payroll" element={
+          <ProtectedRoute allowedRoles={['SYSADM', 'CNTMGR', 'CNTAST']}>
+            <PageSuspense><MonthlyPayrollReportPage /></PageSuspense>
+          </ProtectedRoute>
+        } />
         
         {/* SYSADM routes */}
         <Route path="/identity"   element={

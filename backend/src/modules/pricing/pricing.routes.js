@@ -1,8 +1,8 @@
 import express from "express";
 const router = express.Router();
-import { authenticate } from "../../middlwares/auth.middleware.js";
-import { authorizeAnyCanteenRole } from "../../middlwares/role.middleware.js";
-import { validate } from "../../middlwares/validate.middleware.js";
+import { authenticate } from "../../middlewares/auth.middleware.js";
+import { authorizeAnyCanteenRole } from "../../middlewares/role.middleware.js";
+import { validate } from "../../middlewares/validate.middleware.js";
 import {
   createItemPriceController,
   deactivateItemPriceController,
@@ -20,32 +20,42 @@ import {
 
 
 const canManagePrices = authorizeAnyCanteenRole("CNTMGR", "CNTAST");
+
+// POST /pricing/menu-items/:menuItemId
 router.post(
-  "/menu-items/:menuItemId/prices",
+  "/menu-items/:menuItemId",
   authenticate,
   canManagePrices,
   validate(createItemPriceSchema),
   createItemPriceController
 );
+
+// GET /pricing/menu-items/:menuItemId
 router.get(
-  "/menu-items/:menuItemId/prices",
+  "/menu-items/:menuItemId",
   authenticate,
   canManagePrices,
   validate(itemPriceHistorySchema),
   getItemPriceHistoryController
 );
+
+// GET /pricing/menu-items/:menuItemId/effective
 router.get(
-  "/menu-items/:menuItemId/prices/effective",
+  "/menu-items/:menuItemId/effective",
   authenticate,
   validate(effectiveItemPricesSchema),
   getEffectiveItemPricesController
 );
+
+// GET /pricing/menu-items/:menuItemId/effective/:customerTypeCode
 router.get(
-  "/menu-items/:menuItemId/prices/effective/:customerTypeCode",
+  "/menu-items/:menuItemId/effective/:customerTypeCode",
   authenticate,
   validate(effectiveItemPriceSchema),
   getEffectiveItemPriceController
 );
+
+// PATCH /pricing/item-prices/:itemPriceId/deactivate
 router.patch(
   "/item-prices/:itemPriceId/deactivate",
   authenticate,
