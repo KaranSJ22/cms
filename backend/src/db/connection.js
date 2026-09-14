@@ -11,6 +11,8 @@ export const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
+  dateStrings: true,
+  ssl: env.DB_SSL ? { rejectUnauthorized: false } : undefined,
 });
 
 export const testDbConnection = async () => {

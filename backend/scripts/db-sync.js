@@ -85,33 +85,44 @@ async function run() {
   console.log(" ISRO CMS — Database Stored Procedure Sync Tool   ");
   console.log("==================================================");
 
-  // Parse CLI args (e.g. npm run db:sync -- --user=root --password=secret CMSADDBOOKWEEKLY.sql)
+  // Parse CLI args (e.g. npm run db:sync -- --user=root --password=secret --host=... --port=... --database=... --ssl=true CMSADDBOOKWEEKLY.sql)
   const args = process.argv.slice(2);
   let customUser = null;
   let customPassword = null;
+  let customHost = null;
+  let customPort = null;
+  let customDb = null;
+  let customSsl = null;
   let targetArg = null;
 
   for (const arg of args) {
-    if (arg.startsWith("--user=")) {
+    if (arg.startsWith("--user=") || arg.startsWith("-u=")) {
       customUser = arg.split("=")[1];
-    } else if (arg.startsWith("-u=")) {
-      customUser = arg.split("=")[1];
-    } else if (arg.startsWith("--password=")) {
+    } else if (arg.startsWith("--password=") || arg.startsWith("-p=")) {
       customPassword = arg.split("=")[1];
-    } else if (arg.startsWith("-p=")) {
-      customPassword = arg.split("=")[1];
+    } else if (arg.startsWith("--host=") || arg.startsWith("-h=")) {
+      customHost = arg.split("=")[1];
+    } else if (arg.startsWith("--port=") || arg.startsWith("-P=")) {
+      customPort = arg.split("=")[1];
+    } else if (arg.startsWith("--database=") || arg.startsWith("-d=")) {
+      customDb = arg.split("=")[1];
+    } else if (arg.startsWith("--ssl=")) {
+      customSsl = arg.split("=")[1];
     } else if (!arg.startsWith("-")) {
       targetArg = arg;
     }
   }
 
+  const useSsl = customSsl !== null ? customSsl === "true" : process.env.DB_SSL === "true";
+
   const connConfig = {
-    host: process.env.DB_HOST || "127.0.0.1",
-    port: Number(process.env.DB_PORT) || 3306,
+    host: customHost || process.env.DB_HOST || "127.0.0.1",
+    port: customPort ? Number(customPort) : (Number(process.env.DB_PORT) || 3306),
     user: customUser || process.env.DB_USER || "cms_app",
     password: customPassword !== null ? customPassword : (process.env.DB_PASSWORD || "StrongPassword@123"),
-    database: process.env.DB_NAME || "CMS_DB",
+    database: customDb || process.env.DB_NAME || "CMS_DB",
     multipleStatements: true,
+    ssl: useSsl ? { rejectUnauthorized: false } : undefined,
   };
 
   console.log(`Connecting as user '${connConfig.user}' to database '${connConfig.database}' at ${connConfig.host}:${connConfig.port}...`);
