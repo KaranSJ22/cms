@@ -6,25 +6,22 @@ import { decryptToken } from "../../utils/ssoCrypto.js";
 import { UnauthorizedError } from "../../common/errors/appError.js";
 
 const generateLoginResponse = (user, CONSUMERROLES, CANTEENROLES) => {
-
   const systemRoles = CONSUMERROLES.map((role) => role.ROLECODE);
 
   const canteenRoles = CANTEENROLES.map((role) => ({
     CANTEENID: Number(role.CANTEENID),
+    CANTEENNAME: role.CANTEENNAME || `Canteen #${role.CANTEENID}`,
+    CANTEENCODE: role.CANTEENCODE || `CAN-${role.CANTEENID}`,
     ROLECODE: role.ROLECODE,
+    ROLENAME: role.ROLENAME,
     ISDEFAULT: Number(role.ISDEFAULT) === 1,
   }));
 
   const tokenPayload = {
     USERID: user.USERID,
     LOGINID: user.LOGINID, //same as userid for perm employee
-
-    // time 5mins
-    // decode this token and retrive userid for other webapp 
-
     CUSTOMERID: user.CUSTOMERID || null,
     CTYPECODE: user.CTYPECODE || null,
-
     SYSTEMROLES: systemRoles,
     CANTEENROLES: canteenRoles,
   };
@@ -47,7 +44,6 @@ const generateLoginResponse = (user, CONSUMERROLES, CANTEENROLES) => {
       EMAIL: user.EMAIL,
       MOBILENO: user.MOBILENO,
       AUTHPROV: user.AUTHPROV,
-
       SYSTEMROLES: systemRoles,
       CANTEENROLES: canteenRoles,
     },

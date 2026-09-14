@@ -103,7 +103,7 @@ export default function ISROHeader({ onToggleMobileSidebar, isMobileSidebarOpen 
               >
                 {canteenRoles.map((cr) => (
                   <option key={cr.CANTEENID} value={cr.CANTEENID} className="bg-slate-900 text-white">
-                    {cr.CANTEENNAME || `Canteen #${cr.CANTEENID}`}
+                    {cr.CANTEENNAME ? `${cr.CANTEENNAME} (${cr.CANTEENCODE || `CAN-0${cr.CANTEENID}`})` : `Canteen #${cr.CANTEENID}`}
                   </option>
                 ))}
               </select>
@@ -113,7 +113,9 @@ export default function ISROHeader({ onToggleMobileSidebar, isMobileSidebarOpen 
           {canteenRoles.length === 1 && (
             <div className="hidden xl:flex items-center gap-1.5 ml-3 bg-slate-800/60 border border-slate-700/50 rounded px-2 py-0.5 text-[0.68rem] text-slate-300">
               <BuildingOffice2Icon className="w-3 h-3 text-orange-400 flex-shrink-0" />
-              <span className="text-slate-300 font-medium">{canteenRoles[0].CANTEENNAME || `Canteen #${canteenRoles[0].CANTEENID}`}</span>
+              <span className="text-slate-300 font-medium">
+                {canteenRoles[0].CANTEENNAME ? `${canteenRoles[0].CANTEENNAME} (${canteenRoles[0].CANTEENCODE || `CAN-0${canteenRoles[0].CANTEENID}`})` : `Canteen #${canteenRoles[0].CANTEENID}`}
+              </span>
             </div>
           )}
         </div>

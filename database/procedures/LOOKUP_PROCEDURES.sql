@@ -1,4 +1,4 @@
-﻿USE cms_db;
+
 
 /* --- Drop existing procedures --- */
 DROP PROCEDURE IF EXISTS CMSGETCANTEENBYSLOT;

@@ -31,6 +31,9 @@ export const authorizeSystemRoles = (...allowedRoles) => {
 
 const canteenIdFromRequest = (req) =>
   req.params?.canteenId ??
+  req.query?.canteenId ??
+  req.body?.CANTEENID ??
+  req.body?.canteenId ??
   req.validated?.params?.canteenId ??
   req.validated?.body?.CANTEENID ??
   req.validated?.query?.canteenId;
@@ -64,11 +67,13 @@ export const authorizeCanteenRoles = (
         });
       }
 
-      const hasAccess = (req.user.CANTEENROLES || []).some(
-        (assignment) =>
-          assignment.CANTEENID === canteenId &&
-          allowedRoles.includes(assignment.ROLECODE)
-      );
+      const hasAccess =
+        (req.user.SYSTEMROLES || []).includes("SYSADM") ||
+        (req.user.CANTEENROLES || []).some(
+          (assignment) =>
+            assignment.CANTEENID === canteenId &&
+            allowedRoles.includes(assignment.ROLECODE)
+        );
 
       if (!hasAccess) {
         return sendForbidden(res, "You are not assigned to this canteen for this operation");

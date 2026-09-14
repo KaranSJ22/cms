@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { config } from '../config/app.config'
 import api from '../config/axios'
 import { AuthContext } from './authContextDef'
@@ -53,6 +53,47 @@ export function AuthProvider({ children }) {
   const [activeCanteenId, setActiveCanteenIdState] = useState(initial.activeCanteenId)
   const [loading] = useState(false)
   const [error, setError] = useState('')
+
+  // Automatically enrich CANTEENROLES with canonical CANTEENNAME and CANTEENCODE
+  useEffect(() => {
+    if (user?.CANTEENROLES?.length > 0) {
+      api.get('/canteens').then((res) => {
+        const canteensList = res.data.DATA || [];
+        const canteenMap = new Map(canteensList.map(c => [c.CANTEENID, c]));
+
+        let changed = false;
+        const updatedRoles = user.CANTEENROLES.map(r => {
+          const matched = canteenMap.get(r.CANTEENID);
+          if (matched && (r.CANTEENNAME !== matched.CANTEENNAME || r.CANTEENCODE !== matched.CANTEENCODE)) {
+            changed = true;
+            return {
+              ...r,
+              CANTEENNAME: matched.CANTEENNAME,
+              CANTEENCODE: matched.CANTEENCODE,
+            };
+          }
+          return r;
+        });
+
+        if (changed) {
+          const updatedUser = { ...user, CANTEENROLES: updatedRoles };
+          setUser(updatedUser);
+          const savedUser = localStorage.getItem(config.USER_KEY);
+          if (savedUser) {
+            try {
+              const parsed = JSON.parse(savedUser);
+              parsed.USER = updatedUser;
+              localStorage.setItem(config.USER_KEY, JSON.stringify(parsed));
+            } catch {
+              // ignore
+            }
+          }
+        }
+      }).catch((err) => {
+        console.warn("Failed to fetch canteen metadata for session:", err?.message);
+      });
+    }
+  }, [user?.USERID]);
 
   function setActiveCanteenId(id) {
     const numericId = Number(id)

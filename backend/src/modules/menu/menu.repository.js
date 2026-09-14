@@ -24,16 +24,18 @@ export const createMenu = async ({
   ITEMDESCR = null,
   ISSPECIAL = 0,
   SERVICEID = null,
+  OFFSER = 0,
   CREATEDBY,
 }) => {
   const [resultSets] = await pool.execute(
-    "CALL CMSADDMENUITEM(?, ?, ?, ?, ?, ?)",
+    "CALL CMSADDMENUITEM(?, ?, ?, ?, ?, ?, ?)",
     [
       SHORTNAME,
       ITEMNAME,
       ITEMDESCR,
       ISSPECIAL,
       SERVICEID,
+      OFFSER,
       CREATEDBY,
     ]
   );
@@ -49,17 +51,19 @@ export const updateMenu = async ({
   ITEMDESCR = null,
   ISSPECIAL = 0,
   SERVICEID = null,
+  OFFSER = null,
   STATUS,
   CHANGEDBY,
   CHGREASON = null,
 }) => {
-  await pool.execute("CALL CMSUPDMENUITEM(?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+  await pool.execute("CALL CMSUPDMENUITEM(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [
     MENUITEMID,
     SHORTNAME,
     ITEMNAME,
     ITEMDESCR,
     ISSPECIAL,
     SERVICEID,
+    OFFSER,
     STATUS,
     CHANGEDBY,
     CHGREASON,

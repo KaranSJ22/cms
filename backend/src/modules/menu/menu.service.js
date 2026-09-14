@@ -30,6 +30,7 @@ export const createMenu = async (menuData, createdByUserId) => {
     ITEMDESCR: menuData.ITEMDESCR || null,
     ISSPECIAL: menuData.ISSPECIAL ?? 0,
     SERVICEID: menuData.SERVICEID ?? menuData.serviceId ?? null,
+    OFFSER: menuData.OFFSER ?? 0,
     CREATEDBY: createdByUserId,
   });
 
@@ -65,6 +66,7 @@ export const updateMenu = async (MENUITEMID, menuData, changedByUserId) => {
     ITEMDESCR: menuData.ITEMDESCR || null,
     ISSPECIAL: menuData.ISSPECIAL ?? 0,
     SERVICEID: menuData.SERVICEID !== undefined ? menuData.SERVICEID : (menuData.serviceId !== undefined ? menuData.serviceId : null),
+    OFFSER: menuData.OFFSER !== undefined ? menuData.OFFSER : null,
     STATUS: menuData.STATUS || 'ACT',
     CHANGEDBY: changedByUserId,
     CHGREASON: menuData.CHGREASON || null,

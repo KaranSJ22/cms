@@ -25,6 +25,9 @@ import {
   BuildingOffice2Icon,
   ShieldCheckIcon,
   DocumentChartBarIcon,
+  SparklesIcon,
+  CubeIcon,
+  CheckBadgeIcon,
 } from '@heroicons/react/24/outline'
 
 // Icon mapping dictionary
@@ -48,6 +51,10 @@ const ICON_MAP = {
   DocumentTextIcon,
   CreditCardIcon,
   DocumentChartBarIcon,
+  ShieldCheckIcon,
+  SparklesIcon,
+  CubeIcon,
+  CheckBadgeIcon,
 }
 
 export default function AppSidebar({
@@ -189,7 +196,7 @@ export default function AppSidebar({
             >
               {canteenRoles.map((cr) => (
                 <option key={cr.CANTEENID} value={cr.CANTEENID} className="bg-slate-900 text-white">
-                  {cr.CANTEENNAME || `Canteen #${cr.CANTEENID}`} ({cr.ROLECODE})
+                  {cr.CANTEENNAME ? `${cr.CANTEENNAME} (${cr.CANTEENCODE || `CAN-0${cr.CANTEENID}`})` : `Canteen #${cr.CANTEENID}`} ({cr.ROLECODE})
                 </option>
               ))}
             </select>

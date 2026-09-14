@@ -29,6 +29,14 @@ const MonthlyPayrollReportPage = lazy(() => import('../features/reports/pages/Mo
 // SYSADM pages
 const IdentityPage      = lazy(() => import('../features/identity/pages/IdentityPage'))
 const HolidaysPage      = lazy(() => import('../features/holidays/pages/HolidaysPage'))
+const LevelMappingPage  = lazy(() => import('../features/officialrequest/pages/LevelMappingPage'))
+
+// Official Request pages
+const OfficialBookingPage         = lazy(() => import('../features/officialrequest/pages/OfficialBookingPage'))
+const MyOfficialBookingsPage      = lazy(() => import('../features/officialrequest/pages/MyOfficialBookingsPage'))
+const AssignedApprovalsPage       = lazy(() => import('../features/officialrequest/pages/AssignedApprovalsPage'))
+const OfficialServicesManagerPage = lazy(() => import('../features/officialrequest/pages/OfficialServicesManagerPage'))
+const OfficialBookingsMonitorPage = lazy(() => import('../features/officialrequest/pages/OfficialBookingsMonitorPage'))
 
 // Kiosk / Terminal pages
 const KioskBootResolver    = lazy(() => import('../features/kiosk/pages/KioskBootResolver'))
@@ -83,6 +91,16 @@ export default function AppRoutes() {
         } />
         <Route path="/kitchen-prep" element={<Navigate to="/dashboard" replace />} />
         <Route path="/bookings"   element={<PageSuspense><BookingsMonitorPage /></PageSuspense>} />
+        <Route path="/official-bookings" element={
+          <ProtectedRoute allowedRoles={['CNTMGR']}>
+            <PageSuspense><OfficialBookingsMonitorPage /></PageSuspense>
+          </ProtectedRoute>
+        } />
+        <Route path="/official-services" element={
+          <ProtectedRoute allowedRoles={['CNTMGR']}>
+            <PageSuspense><OfficialServicesManagerPage /></PageSuspense>
+          </ProtectedRoute>
+        } />
         <Route path="/pricing"    element={
           <ProtectedRoute requirePermission="canApproveDayMenu">
             <PageSuspense><PricingPage /></PageSuspense>
@@ -111,6 +129,11 @@ export default function AppRoutes() {
             <PageSuspense><IdentityPage /></PageSuspense>
           </ProtectedRoute>
         } />
+        <Route path="/level-mappings" element={
+          <ProtectedRoute allowedRoles={['SYSADM']}>
+            <PageSuspense><LevelMappingPage /></PageSuspense>
+          </ProtectedRoute>
+        } />
         <Route path="/holidays"   element={
           <ProtectedRoute allowedRoles={['SYSADM', 'CNTMGR']}>
             <PageSuspense><HolidaysPage /></PageSuspense>
@@ -122,6 +145,9 @@ export default function AppRoutes() {
         <Route path="/booking"    element={<Navigate to="/prebooking" replace />} />
         <Route path="/prebooking" element={<PageSuspense><PreBookingPage /></PageSuspense>} />
         <Route path="/mybookings" element={<PageSuspense><MyBookingsPage /></PageSuspense>} />
+        <Route path="/official-booking" element={<PageSuspense><OfficialBookingPage /></PageSuspense>} />
+        <Route path="/my-official-bookings" element={<PageSuspense><MyOfficialBookingsPage /></PageSuspense>} />
+        <Route path="/official-approvals" element={<PageSuspense><AssignedApprovalsPage /></PageSuspense>} />
         <Route path="/my-wallet"  element={<PageSuspense><EmpWalletPage /></PageSuspense>} />
         <Route path="/wallet/me"  element={<Navigate to="/my-wallet" replace />} />
 

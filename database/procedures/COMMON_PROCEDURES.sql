@@ -16,7 +16,7 @@
       the common RBAC infrastructure, not identity).
    ============================================================ */
 
-USE cms_db;
+-- USE cms_db;
 
 DROP PROCEDURE IF EXISTS CMSGENAUTO;
 

@@ -37,7 +37,7 @@ export function MenuTable({ menus, loading, error, onEdit }) {
             <th className="px-4 py-3 font-semibold">Item Name</th>
             <th className="px-4 py-3 font-semibold">Category / Service</th>
             <th className="px-4 py-3 font-semibold">Description</th>
-            <th className="px-4 py-3 font-semibold text-center">Special</th>
+            <th className="px-4 py-3 font-semibold text-center">Tags</th>
             <th className="px-4 py-3 font-semibold text-center">Status</th>
             <th className="px-4 py-3 font-semibold text-right">Actions</th>
           </tr>
@@ -68,13 +68,21 @@ export function MenuTable({ menus, loading, error, onEdit }) {
                 {menu.ITEMDESCR || '-'}
               </td>
               <td className="px-4 py-3 text-center">
-                {menu.ISSPECIAL === 1 ? (
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[0.65rem] font-bold bg-amber-100 text-amber-700 uppercase tracking-wide">
-                    Special
-                  </span>
-                ) : (
-                  <span className="text-slate-300">-</span>
-                )}
+                <div className="flex flex-wrap items-center justify-center gap-1">
+                  {menu.ISSPECIAL === 1 && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[0.65rem] font-bold bg-amber-100 text-amber-700 uppercase tracking-wide">
+                      Special
+                    </span>
+                  )}
+                  {menu.OFFSER === 1 && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[0.65rem] font-bold bg-emerald-100 text-emerald-700 uppercase tracking-wide">
+                      Official
+                    </span>
+                  )}
+                  {menu.ISSPECIAL !== 1 && menu.OFFSER !== 1 && (
+                    <span className="text-slate-300">-</span>
+                  )}
+                </div>
               </td>
               <td className="px-4 py-3 text-center">
                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${

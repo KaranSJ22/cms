@@ -8,6 +8,7 @@
 
 export const ADMIN_NAV = [
   { key: 'identity', label: 'Identity & Access', category: 'admin', icon: 'IdentificationIcon' },
+  { key: 'level-mappings', label: 'Approver Levels', category: 'admin', icon: 'ShieldCheckIcon' },
   { key: 'holidays', label: 'Canteen Holidays', category: 'admin', icon: 'CalendarDaysIcon' },
   { key: 'reports/payroll', label: 'Monthly Payroll', category: 'admin', icon: 'DocumentChartBarIcon' },
 ]
@@ -16,9 +17,11 @@ export const CANTEEN_MANAGER_NAV = [
   // Operations
   { key: 'dashboard', label: 'Operations Dashboard', category: 'operations', icon: 'Squares2X2Icon' },
   { key: 'bookings', label: 'Bookings Monitor', category: 'operations', icon: 'TicketIcon' },
+  { key: 'official-bookings', label: 'Official Bookings Monitor', category: 'operations', icon: 'CheckBadgeIcon' },
 
   // Menu & Planning
   { key: 'catalog', label: 'Menu Catalog', category: 'menu', icon: 'BookOpenIcon' },
+  { key: 'official-services', label: 'Official Services', category: 'menu', icon: 'CubeIcon' },
   { key: 'menu-templates', label: 'Menu Templates', category: 'menu', icon: 'RectangleStackIcon' },
   { key: 'services', label: 'Service Slots', category: 'menu', icon: 'ClockIcon' },
   { key: 'dayslots', label: 'Day Slots', category: 'menu', icon: 'CalendarIcon' },
@@ -68,6 +71,12 @@ export const EMPLOYEE_NAV = [
   { key: 'mybookings', label: 'My Bookings', category: 'employee', icon: 'DocumentTextIcon' },
 ]
 
+export const EMPLOYEE_OFFICIAL_EXTRA = [
+  { key: 'official-booking', label: 'Official Request', category: 'employee', icon: 'SparklesIcon' },
+  { key: 'my-official-bookings', label: 'My Official Requests', category: 'employee', icon: 'DocumentTextIcon' },
+  { key: 'official-approvals', label: 'Assigned Approvals', category: 'employee', icon: 'ClipboardDocumentCheckIcon' },
+]
+
 export const EMPLOYEE_CONTRACT_EXTRA = [
   { key: 'my-wallet', label: 'My Wallet', category: 'employee', icon: 'CreditCardIcon' },
 ]
@@ -106,6 +115,18 @@ export function getNavTabs(perms, user, customer, badges = {}) {
   // Employee tabs
   if (perms.isEmployee || base.length === 0) {
     base.push(...EMPLOYEE_NAV)
+
+    // Permanent employee tabs (Official booking & approvals)
+    const isPermanent =
+      customer?.CTYPECODE === 'PRM' ||
+      customer?.CTYPECODE === 'PERMEMP' ||
+      user?.CTYPECODE === 'PRM' ||
+      (!customer?.CTYPECODE && !perms.isCanteenWorker)
+
+    if (isPermanent) {
+      base.push(...EMPLOYEE_OFFICIAL_EXTRA)
+    }
+
     // Contract employees & Visitors get a wallet tab
     const isEligibleCustomer =
       customer?.CTYPECODE === 'CONTEMP' ||
@@ -115,6 +136,16 @@ export function getNavTabs(perms, user, customer, badges = {}) {
 
     if (isEligibleCustomer) {
       base.push(...EMPLOYEE_CONTRACT_EXTRA)
+    }
+  } else {
+    // If user is Canteen Worker or Admin, but is also a permanent employee, they can view assigned approvals
+    const isPermanentOfficer =
+      customer?.CTYPECODE === 'PRM' ||
+      customer?.CTYPECODE === 'PERMEMP' ||
+      user?.CTYPECODE === 'PRM'
+
+    if (isPermanentOfficer) {
+      base.push({ key: 'official-approvals', label: 'Assigned Approvals', category: 'employee', icon: 'ClipboardDocumentCheckIcon' })
     }
   }
 

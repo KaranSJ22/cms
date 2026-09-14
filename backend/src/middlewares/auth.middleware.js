@@ -17,7 +17,10 @@ const asCanteenRoles = (value) =>
         )
         .map((role) => ({
           CANTEENID: Number(role.CANTEENID),
+          CANTEENNAME: role.CANTEENNAME,
+          CANTEENCODE: role.CANTEENCODE,
           ROLECODE: role.ROLECODE,
+          ROLENAME: role.ROLENAME,
           ISDEFAULT: Boolean(role.ISDEFAULT),
         }))
     : [];
