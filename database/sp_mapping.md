@@ -78,6 +78,7 @@ This document maps all database stored procedures with their required parameters
 |-----------|----------------|-----------|
 | `IN` | `PBOOKID` | `INT` |
 | `IN` | `PSERVEDBY` | `INT` |
+| `IN` | `PKIOSKID` | `INT` |
 
 ### `CMSNOSHOWBOOK`
 | Direction | Parameter Name | Data Type |
@@ -1216,5 +1217,33 @@ This document maps all database stored procedures with their required parameters
 |-----------|----------------|-----------|
 | `IN` | `PCUSTOMERID` | `INT` |
 | `IN` | `PSTATUSCODE` | `VARCHAR(20)` |
+
+## REPORTING_SERVING_PROCEDURES.sql
+
+### `CMSGETSALESREPORT`
+| Direction | Parameter Name | Data Type |
+|-----------|----------------|-----------|
+| `IN` | `PFROMDATE` | `DATE` |
+| `IN` | `PTODATE` | `DATE` |
+| `IN` | `PCANTEENID` | `INT` |
+
+### `CMSGETACTIVEBOOKINGS`
+| Direction | Parameter Name | Data Type |
+|-----------|----------------|-----------|
+| `IN` | `PSERVICEDATE` | `DATE` |
+| `IN` | `PSERVICEID` | `INT` |
+
+### `CMSGETBOOKFORSERVING`
+| Direction | Parameter Name | Data Type |
+|-----------|----------------|-----------|
+| `IN` | `PLOGINID` | `VARCHAR(50)` |
+| `IN` | `PBOOKNO` | `VARCHAR(50)` |
+| `IN` | `PCANTEENID` | `INT` |
+| `IN` | `PSERVICEID` | `INT` |
+
+### `CMSGETKITCHENSUMMARY`
+| Direction | Parameter Name | Data Type |
+|-----------|----------------|-----------|
+| `IN` | `PDAYSLOTID` | `INT` |
 
 

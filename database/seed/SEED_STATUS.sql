@@ -25,6 +25,12 @@ CALL CMSADDSTATUS(32, 'SRV', 'Served', 'BOOKING', 'Item delivered to customer');
 CALL CMSADDSTATUS(33, 'CAN', 'Cancelled', 'BOOKING', 'Cancelled by customer or admin');
 CALL CMSADDSTATUS(34, 'NOS', 'No Show', 'BOOKING', 'Time elapsed without claiming');
 
+-- Official Bookings (35-38)
+CALL CMSADDSTATUS(35, 'SUB', 'Submitted', 'OFF_BOOK', 'Official booking submitted, pending approver');
+CALL CMSADDSTATUS(36, 'PENMGR', 'Pending Manager', 'OFF_BOOK', 'Approved by approver, pending canteen manager');
+CALL CMSADDSTATUS(37, 'CNF', 'Confirmed', 'OFF_BOOK', 'Confirmed by canteen manager');
+CALL CMSADDSTATUS(38, 'REJ', 'Rejected', 'OFF_BOOK', 'Rejected by approver or manager');
+
 -- Wallet Transactions (40-49)
 CALL CMSADDSTATUS(40, 'DEP', 'Deposit', 'WALLET_TXN', 'Funds added to wallet');
 CALL CMSADDSTATUS(41, 'WTH', 'Withdrawal', 'WALLET_TXN', 'Funds withdrawn/refunded to user');

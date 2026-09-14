@@ -5,6 +5,7 @@ SET SQL_SAFE_UPDATES = 0;
 
 -- Clean up existing data to avoid duplicate key errors on rerun
 DELETE FROM CMS_HOLIDAY;
+DELETE FROM CMS_LVLMAP;
 DELETE FROM CMS_VISITOR;
 DELETE FROM CMS_OCEEMP;
 DELETE FROM CMS_CONTEMP;
@@ -30,11 +31,12 @@ INSERT INTO CMS_ROLE (ROLEID, ROLECODE, ROLENAME, DESCR) VALUES
 -- ============================================================
 -- 2. SEED CUSTOMER TYPES
 -- ============================================================
-INSERT INTO CMS_CUSTTYPE (CTYPEID, CTYPECODE, CTYPENAME) VALUES 
-(1, 'PRM', 'Permanent Employee'),
-(2, 'CNT', 'Contract Employee'),
-(3, 'OCE', 'Other Center Employee'),
-(4, 'VIS', 'Visitor');
+INSERT INTO CMS_CUSTTYPE (CTYPEID, CTYPECODE, CTYPENAME, DESCR) VALUES 
+(1, 'PRM', 'Permanent Employee', 'Permanent Staff'),
+(2, 'CNT', 'Contract Employee', 'Contract Staff'),
+(3, 'OCE', 'Other Center Employee', 'Other Center Staff'),
+(4, 'VIS', 'Visitor', 'Guest Visitor'),
+(5, 'OFF', 'Official Request', 'Official meeting and event catering');
 
 -- ============================================================
 -- 3. SEED BOOKING TYPES
@@ -118,15 +120,25 @@ INSERT INTO CMS_CUSTOMER (CUSTOMERID, USERID, CTYPECODE, DISPNAME, STATUSID) VAL
 (14, 22, 'OCE', 'OCE Emp 2', 10),
 (15, 23, 'VIS', 'Visitor 1', 10);
 
--- Permanent Employees
-INSERT INTO CMS_PERMEMP (CUSTOMERID, EMPCODE, DEPT, DESIG) VALUES 
-(1, 'P001', 'Propulsion', 'Engineer SE'),
-(2, 'P002', 'Propulsion', 'Engineer SD'),
-(3, 'P003', 'Avionics', 'Scientist SC'),
-(4, 'P004', 'Avionics', 'Technician B'),
-(5, 'P005', 'Admin', 'Admin Officer'),
-(6, 'P006', 'Accounts', 'Accounts Officer'),
-(7, 'P007', 'Directorate', 'Director');
+-- Permanent Employees (with Employee Levels for Official Request approval workflow)
+INSERT INTO CMS_PERMEMP (CUSTOMERID, EMPCODE, DEPT, DESIG, LEVEL) VALUES 
+(1, 'P001', 'Propulsion', 'Engineer SE', 13),
+(2, 'P002', 'Propulsion', 'Engineer SD', 14),
+(3, 'P003', 'Avionics', 'Scientist SC', 15),
+(4, 'P004', 'Avionics', 'Technician B', 11),
+(5, 'P005', 'Admin', 'Admin Officer', 14),
+(6, 'P006', 'Accounts', 'Accounts Officer', 14),
+(7, 'P007', 'Directorate', 'Director', 18);
+
+-- Level Approver Tier Mapping (Levels 13, 14 -> L1; 15, 16, 17, 18 -> L2)
+INSERT INTO CMS_LVLMAP (EMPLEVEL, APPRLVL, ISACTIVE) VALUES 
+(13, 'L1', 1),
+(14, 'L1', 1),
+(15, 'L2', 1),
+(16, 'L2', 1),
+(17, 'L2', 1),
+(18, 'L2', 1)
+ON DUPLICATE KEY UPDATE APPRLVL = VALUES(APPRLVL), ISACTIVE = VALUES(ISACTIVE);
 
 -- Contract Employees
 INSERT INTO CMS_CONTEMP (CUSTOMERID, CONTCODE, VENDORNAME, CONTSTART, CONTEND) VALUES 

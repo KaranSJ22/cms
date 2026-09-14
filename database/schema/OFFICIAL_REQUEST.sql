@@ -13,61 +13,7 @@ DROP TABLE IF EXISTS CMS_LVLMAP;
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- ============================================================
--- 1. ALTER EXISTING TABLES FOR OFFICIAL BOOKING
--- ============================================================
-
--- Add LEVEL to CMS_PERMEMP if not exists
-SET @col_exists = (
-    SELECT COUNT(*) 
-    FROM INFORMATION_SCHEMA.COLUMNS 
-    WHERE TABLE_SCHEMA = DATABASE() 
-      AND TABLE_NAME = 'CMS_PERMEMP' 
-      AND COLUMN_NAME = 'LEVEL'
-);
-
-SET @sql_permemp = IF(@col_exists = 0, 
-    'ALTER TABLE CMS_PERMEMP ADD COLUMN LEVEL INT NOT NULL DEFAULT 13;', 
-    'SELECT 1;'
-);
-PREPARE stmt_pe FROM @sql_permemp;
-EXECUTE stmt_pe;
-DEALLOCATE PREPARE stmt_pe;
-
--- Add OFFSER flag to CMS_MENUITEM if not exists
-SET @col_offser_exists = (
-    SELECT COUNT(*) 
-    FROM INFORMATION_SCHEMA.COLUMNS 
-    WHERE TABLE_SCHEMA = DATABASE() 
-      AND TABLE_NAME = 'CMS_MENUITEM' 
-      AND COLUMN_NAME = 'OFFSER'
-);
-
-SET @sql_menuitem = IF(@col_offser_exists = 0, 
-    'ALTER TABLE CMS_MENUITEM ADD COLUMN OFFSER TINYINT(1) NOT NULL DEFAULT 0;', 
-    'SELECT 1;'
-);
-PREPARE stmt_mi FROM @sql_menuitem;
-EXECUTE stmt_mi;
-DEALLOCATE PREPARE stmt_mi;
-
--- ============================================================
--- 2. SEED CUSTOMER TYPE 'OFF' & STATUS GROUP 'OFF_BOOK'
--- ============================================================
-
-INSERT INTO CMS_CUSTTYPE (CTYPECODE, CTYPENAME, DESCR)
-VALUES ('OFF', 'Official Request', 'Official meeting and event catering')
-ON DUPLICATE KEY UPDATE CTYPENAME = VALUES(CTYPENAME), DESCR = VALUES(DESCR);
-
-INSERT INTO CMS_STATUS (STATUSID, STATUSCODE, STATUSNAME, STATUSGRP, DESCR, ISACTIVE)
-VALUES 
-(35, 'SUB', 'Submitted', 'OFF_BOOK', 'Official booking submitted, pending approver', 1),
-(36, 'PENMGR', 'Pending Manager', 'OFF_BOOK', 'Approved by approver, pending canteen manager', 1),
-(37, 'CNF', 'Confirmed', 'OFF_BOOK', 'Confirmed by canteen manager', 1),
-(38, 'REJ', 'Rejected', 'OFF_BOOK', 'Rejected by approver or manager', 1)
-ON DUPLICATE KEY UPDATE STATUSNAME = VALUES(STATUSNAME), STATUSGRP = VALUES(STATUSGRP), DESCR = VALUES(DESCR);
-
--- ============================================================
--- 3. CMS_LVLMAP: Employee Level to Approver Tier Mapping
+-- 1. CMS_LVLMAP: Employee Level to Approver Tier Mapping
 -- ============================================================
 CREATE TABLE CMS_LVLMAP (
     LVLMAPID INT AUTO_INCREMENT PRIMARY KEY,
@@ -83,28 +29,8 @@ CREATE TABLE CMS_LVLMAP (
     CONSTRAINT CK_LM_APPRLVL CHECK (APPRLVL IN ('L1', 'L2'))
 ) ENGINE=InnoDB;
 
--- Default Level Mappings: 13, 14 -> L1; 15, 16, 17, 18 -> L2
-INSERT INTO CMS_LVLMAP (EMPLEVEL, APPRLVL, ISACTIVE)
-VALUES 
-(13, 'L1', 1),
-(14, 'L1', 1),
-(15, 'L2', 1),
-(16, 'L2', 1),
-(17, 'L2', 1),
-(18, 'L2', 1)
-ON DUPLICATE KEY UPDATE APPRLVL = VALUES(APPRLVL), ISACTIVE = VALUES(ISACTIVE);
-
--- Update sample permanent employees with distinct levels for testing
-UPDATE CMS_PERMEMP SET LEVEL = 13 WHERE EMPCODE = 'P001'; -- Engineer SE (L1)
-UPDATE CMS_PERMEMP SET LEVEL = 14 WHERE EMPCODE = 'P002'; -- Engineer SD (L1)
-UPDATE CMS_PERMEMP SET LEVEL = 15 WHERE EMPCODE = 'P003'; -- Scientist SC (L2)
-UPDATE CMS_PERMEMP SET LEVEL = 11 WHERE EMPCODE = 'P004'; -- Technician B (Regular Employee, not approver)
-UPDATE CMS_PERMEMP SET LEVEL = 14 WHERE EMPCODE = 'P005'; -- Admin Officer (L1)
-UPDATE CMS_PERMEMP SET LEVEL = 14 WHERE EMPCODE = 'P006'; -- Accounts Officer (L1)
-UPDATE CMS_PERMEMP SET LEVEL = 18 WHERE EMPCODE = 'P007'; -- Director (L2)
-
 -- ============================================================
--- 4. CMS_OFFSERV: Official Service Master (Canteen Scoped)
+-- 2. CMS_OFFSERV: Official Service Master (Canteen Scoped)
 -- ============================================================
 CREATE TABLE CMS_OFFSERV (
     OFFSERVID INT AUTO_INCREMENT PRIMARY KEY,
