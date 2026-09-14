@@ -272,7 +272,7 @@ export const getEmployeeMonthlyPayrollBreakdown = async ({
 
   const detailedBookings = bookingRows.map((b) => ({
     ...b,
-    CANTEENNAME: canteenMap[b.BOOKID] || "Main Canteen",
+    CANTEENNAME: canteenMap[b.BOOKID] || "Canteen A",
     ITEMS: itemsMap[b.BOOKID] || [],
   }));
 

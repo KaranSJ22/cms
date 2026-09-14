@@ -67,8 +67,8 @@ DEALLOCATE PREPARE alterIfNotExists;
 -- ------------------------------------------------------------
 INSERT INTO CMS_KIOSK_DEVICE (KIOSKID, DEVICECODE, DEVICENAME, IPADDRESS, CANTEENID, KIOSKTYPE, STATUSID, ISACTIVE)
 VALUES 
-(1, 'KSK-COUNTER-01', 'Main Canteen Staff Counter 1', '127.0.0.1', 1, 'STAFF_COUNTER', 10, 1),
-(2, 'KSK-LOBBY-01', 'Main Canteen Lobby Self-Service', '192.168.1.102', 1, 'EMP_SELF_SERVICE', 10, 1),
+(1, 'KSK-COUNTER-01', 'Canteen A Staff Counter 1', '127.0.0.1', 1, 'STAFF_COUNTER', 10, 1),
+(2, 'KSK-LOBBY-01', 'Canteen A Lobby Self-Service', '192.168.1.102', 1, 'EMP_SELF_SERVICE', 10, 1),
 (3, 'KSK-DEV-LOCAL', 'Local Dev Kiosk (IPv6 Localhost)', '::1', 1, 'EMP_SELF_SERVICE', 10, 1)
 ON DUPLICATE KEY UPDATE 
     DEVICENAME = VALUES(DEVICENAME),

@@ -17,7 +17,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 CREATE TABLE CMS_KIOSK_DEVICE (
     KIOSKID INT AUTO_INCREMENT PRIMARY KEY,
     DEVICECODE VARCHAR(30) NOT NULL UNIQUE,                -- e.g. 'KSK-COUNTER-01', 'KSK-LOBBY-01'
-    DEVICENAME VARCHAR(100) NOT NULL,                      -- e.g. 'Main Canteen Serving Counter 1'
+    DEVICENAME VARCHAR(100) NOT NULL,                      -- e.g. 'Canteen A Serving Counter 1'
     IPADDRESS VARCHAR(45) NOT NULL UNIQUE,                 -- Raspberry Pi Static IPv4 / IPv6
     MACADDRESS VARCHAR(17) NULL,                           -- Hardware MAC address
     CANTEENID INT NOT NULL,                                -- Scoped Canteen Facility

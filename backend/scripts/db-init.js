@@ -130,82 +130,93 @@ async function run() {
     process.exit(1);
   }
 
+  const isSeedOnly = args.some((a) => a === "--seed-only" || a === "--seeds");
+  const isSkipSeed = args.some((a) => a === "--skip-seed");
+
   try {
-    // -------------------------------------------------------------
-    // PHASE 1: EXECUTE SCHEMAS IN ORDER
-    // -------------------------------------------------------------
-    console.log("--- PHASE 1: Creating Schema Tables ---");
-    let schemaFiles = [];
-    if (fs.existsSync(execOrderFile)) {
-      const lines = fs.readFileSync(execOrderFile, "utf-8").split(/\r?\n/);
-      for (const line of lines) {
-        const match = line.match(/^([A-Za-z0-9_]+\.sql)/);
-        if (match) schemaFiles.push(match[1]);
+    if (!isSeedOnly) {
+      // -------------------------------------------------------------
+      // PHASE 1: EXECUTE SCHEMAS IN ORDER
+      // -------------------------------------------------------------
+      console.log("--- PHASE 1: Creating Schema Tables ---");
+      let schemaFiles = [];
+      if (fs.existsSync(execOrderFile)) {
+        const lines = fs.readFileSync(execOrderFile, "utf-8").split(/\r?\n/);
+        for (const line of lines) {
+          const match = line.match(/^([A-Za-z0-9_]+\.sql)/);
+          if (match) schemaFiles.push(match[1]);
+        }
       }
-    }
 
-    if (schemaFiles.length === 0) {
-      schemaFiles = fs.readdirSync(schemaDir).filter((f) => f.endsWith(".sql"));
-    }
-
-    for (const file of schemaFiles) {
-      const filePath = path.join(schemaDir, file);
-      if (!fs.existsSync(filePath)) {
-        console.warn(`Skipping missing schema file: ${file}`);
-        continue;
+      if (schemaFiles.length === 0) {
+        schemaFiles = fs.readdirSync(schemaDir).filter((f) => f.endsWith(".sql"));
       }
-      process.stdout.write(`Executing schema ${file}... `);
-      const sql = sanitizeSql(fs.readFileSync(filePath, "utf-8"));
-      await connection.query(sql);
-      console.log("OK");
-    }
-    console.log(`Completed ${schemaFiles.length} schema files.\n`);
 
-    // -------------------------------------------------------------
-    // PHASE 2: SYNC STORED PROCEDURES
-    // -------------------------------------------------------------
-    console.log("--- PHASE 2: Syncing Stored Procedures ---");
-    const procFiles = fs.readdirSync(proceduresDir).filter((f) => f.endsWith(".sql"));
-    let procCount = 0;
-    for (const file of procFiles) {
-      process.stdout.write(`Syncing procedures in ${file}... `);
-      const content = fs.readFileSync(path.join(proceduresDir, file), "utf-8");
-      const stmts = parseSqlStatements(content);
-      for (const stmt of stmts) {
-        await connection.query(stmt);
-        procCount++;
+      for (const file of schemaFiles) {
+        const filePath = path.join(schemaDir, file);
+        if (!fs.existsSync(filePath)) {
+          console.warn(`Skipping missing schema file: ${file}`);
+          continue;
+        }
+        process.stdout.write(`Executing schema ${file}... `);
+        const sql = sanitizeSql(fs.readFileSync(filePath, "utf-8"));
+        await connection.query(sql);
+        console.log("OK");
       }
-      console.log("OK");
+      console.log(`Completed ${schemaFiles.length} schema files.\n`);
+
+      // -------------------------------------------------------------
+      // PHASE 2: SYNC STORED PROCEDURES
+      // -------------------------------------------------------------
+      console.log("--- PHASE 2: Syncing Stored Procedures ---");
+      const procFiles = fs.readdirSync(proceduresDir).filter((f) => f.endsWith(".sql"));
+      let procCount = 0;
+      for (const file of procFiles) {
+        process.stdout.write(`Syncing procedures in ${file}... `);
+        const content = fs.readFileSync(path.join(proceduresDir, file), "utf-8");
+        const stmts = parseSqlStatements(content);
+        for (const stmt of stmts) {
+          await connection.query(stmt);
+          procCount++;
+        }
+        console.log("OK");
+      }
+      console.log(`Synced ${procFiles.length} procedure files (${procCount} statements).\n`);
+    } else {
+      console.log("Skipping Schema Tables and Stored Procedures (--seed-only flag active).\n");
     }
-    console.log(`Synced ${procFiles.length} procedure files (${procCount} statements).\n`);
 
     // -------------------------------------------------------------
     // PHASE 3: EXECUTE SEED DATA
     // -------------------------------------------------------------
-    console.log("--- PHASE 3: Loading Seed Data ---");
-    const seedFiles = [
-      "SEED_STATUS.sql",
-      "SEED_AUTONO.sql",
-      "SEED_DATA.sql",
-      "SEED_HOLIDAYS.sql",
-    ];
+    if (!isSkipSeed) {
+      console.log("--- PHASE 3: Loading Seed Data ---");
+      const seedFiles = [
+        "SEED_STATUS.sql",
+        "SEED_AUTONO.sql",
+        "SEED_DATA.sql",
+        "SEED_HOLIDAYS.sql",
+      ];
 
-    for (const file of seedFiles) {
-      const filePath = path.join(seedDir, file);
-      if (!fs.existsSync(filePath)) {
-        console.warn(`Skipping missing seed file: ${file}`);
-        continue;
+      for (const file of seedFiles) {
+        const filePath = path.join(seedDir, file);
+        if (!fs.existsSync(filePath)) {
+          console.warn(`Skipping missing seed file: ${file}`);
+          continue;
+        }
+        process.stdout.write(`Loading seed ${file}... `);
+        const sql = sanitizeSql(fs.readFileSync(filePath, "utf-8"));
+        await connection.query(sql);
+        console.log("OK");
       }
-      process.stdout.write(`Loading seed ${file}... `);
-      const sql = sanitizeSql(fs.readFileSync(filePath, "utf-8"));
-      await connection.query(sql);
-      console.log("OK");
+      console.log(`Completed seed data insertion.\n`);
+    } else {
+      console.log("Skipping Seed Data (--skip-seed flag active).\n");
     }
-    console.log(`Completed seed data insertion.\n`);
 
     console.log("=========================================================");
     console.log(" Database initialization SUCCESSFUL!                     ");
-    console.log(" Tables, Stored Procedures, and Seed Data are all loaded.");
+    console.log(isSeedOnly ? " Seed Data reloaded successfully." : " Tables, Stored Procedures, and Seed Data are all loaded.");
     console.log("=========================================================");
   } catch (err) {
     console.error("\nDatabase initialization encountered an error:", err.message);

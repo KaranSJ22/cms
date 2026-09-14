@@ -52,9 +52,10 @@ INSERT INTO CMS_CENTER (CENTERID, CENTERCODE, CENTERNAME, LOCATION, STATUSID) VA
 (1, 'HQ', 'Headquarters', 'Main Campus', 10);
 
 INSERT INTO CMS_CANTEEN (CANTEENID, CENTERID, CANTEENCODE, CANTEENNAME, LOCATION, STATUSID, CREATEDBY) VALUES 
-(1, 1, 'CAN-01', 'Main Canteen', 'Building A', 10, 1),
-(2, 1, 'CAN-02', 'Mini Canteen', 'Building B', 10, 1),
-(3, 1, 'CAN-03', 'Guest Canteen', 'Building C', 10, 1);
+(1, 1, 'CAN-A', 'Canteen A', 'Building A', 10, 1),
+(2, 1, 'CAN-B', 'Canteen B', 'Building B', 10, 1),
+(3, 1, 'CAN-C', 'Canteen C', 'Building C', 10, 1)
+ON DUPLICATE KEY UPDATE CANTEENCODE = VALUES(CANTEENCODE), CANTEENNAME = VALUES(CANTEENNAME), LOCATION = VALUES(LOCATION);
 
 -- ============================================================
 -- 5. SEED USERS 
@@ -87,17 +88,17 @@ INSERT INTO CMS_USER (USERID, LOGINID, FULLNAME, EMAIL, MOBILENO, PWDHASH, ISACT
 
 -- ============================================================
 -- 6. CANTEEN ROLE MAPPING
--- Manager 1 has Canteen 1 & 2. Manager 2 has Canteen 3.
+-- Manager 1 has Canteen A & B. Manager 2 has Canteen C.
 -- ============================================================
 INSERT INTO CMS_CANTEENROLE (USERID, ROLEID, CANTEENID, ISDEFAULT, ISACTIVE) VALUES 
-(2, 2, 1, 1, 1), -- mgr1 -> Canteen 1 (default)
-(2, 2, 2, 0, 1), -- mgr1 -> Canteen 2
-(3, 2, 3, 1, 1), -- mgr2 -> Canteen 3
-(4, 3, 1, 1, 1), -- asst1 -> Canteen 1
-(5, 3, 2, 1, 1), -- asst2 -> Canteen 2
-(6, 4, 1, 1, 1), -- staff1 -> Canteen 1
-(7, 4, 2, 1, 1), -- staff2 -> Canteen 2
-(8, 4, 3, 1, 1); -- staff3 -> Canteen 3
+(2, 2, 1, 1, 1), -- mgr1 -> Canteen A (default)
+(2, 2, 2, 0, 1), -- mgr1 -> Canteen B
+(3, 2, 3, 1, 1), -- mgr2 -> Canteen C
+(4, 3, 1, 1, 1), -- asst1 -> Canteen A
+(5, 3, 2, 1, 1), -- asst2 -> Canteen B
+(6, 4, 1, 1, 1), -- staff1 -> Canteen A
+(7, 4, 2, 1, 1), -- staff2 -> Canteen B
+(8, 4, 3, 1, 1); -- staff3 -> Canteen C
 
 -- ============================================================
 -- 7. CUSTOMERS & EMPLOYEES

@@ -36,7 +36,7 @@ export default function StaffTerminalLayout() {
   const canteenLabel =
     activeCanteen?.CANTEENNAME ||
     user?.CANTEENROLES?.[0]?.CANTEENNAME ||
-    "Main Canteen";
+    "Canteen A";
 
   return (
     <div className="h-screen w-screen overflow-hidden flex flex-col bg-slate-950 text-slate-100 select-none font-inter">
