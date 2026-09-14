@@ -16,7 +16,7 @@ export const createItemPriceSchema = z.object({
         .array(
           z
             .object({
-              CTYPECODE: z.enum(["PRM", "CNT", "VIS", "OCE", "OFR"]),
+              CTYPECODE: z.enum(["PRM", "CNT", "VIS", "OCE", "OFF", "OFR"]),
               PRICE: z.coerce.number().nonnegative(),
             })
             
@@ -42,7 +42,7 @@ export const effectiveItemPricesSchema = z.object({
 export const effectiveItemPriceSchema = z.object({
   params: z.object({
     menuItemId: idSchema,
-    customerTypeCode: z.enum(["PRM", "CNT", "VIS", "OCE", "OFR"]),
+    customerTypeCode: z.enum(["PRM", "CNT", "VIS", "OCE", "OFF", "OFR"]),
   }),
   query: z.object({ serviceDate: dateSchema }),
 });

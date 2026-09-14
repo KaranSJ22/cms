@@ -52,6 +52,7 @@ export const createCustomerSchema = z.object({
         "CNT",
         "VIS",
         "OCE",
+        "OFF",
         "OFR",
       ]),
 

@@ -95,19 +95,21 @@ async function run() {
   let customSsl = null;
   let targetArg = null;
 
+  const cleanVal = (v) => (v ? v.replace(/^["']|["']$/g, "").trim() : v);
+
   for (const arg of args) {
     if (arg.startsWith("--user=") || arg.startsWith("-u=")) {
-      customUser = arg.split("=")[1];
+      customUser = cleanVal(arg.split("=").slice(1).join("="));
     } else if (arg.startsWith("--password=") || arg.startsWith("-p=")) {
-      customPassword = arg.split("=")[1];
+      customPassword = cleanVal(arg.split("=").slice(1).join("="));
     } else if (arg.startsWith("--host=") || arg.startsWith("-h=")) {
-      customHost = arg.split("=")[1];
+      customHost = cleanVal(arg.split("=").slice(1).join("="));
     } else if (arg.startsWith("--port=") || arg.startsWith("-P=")) {
-      customPort = arg.split("=")[1];
+      customPort = cleanVal(arg.split("=").slice(1).join("="));
     } else if (arg.startsWith("--database=") || arg.startsWith("-d=")) {
-      customDb = arg.split("=")[1];
+      customDb = cleanVal(arg.split("=").slice(1).join("="));
     } else if (arg.startsWith("--ssl=")) {
-      customSsl = arg.split("=")[1];
+      customSsl = cleanVal(arg.split("=").slice(1).join("="));
     } else if (!arg.startsWith("-")) {
       targetArg = arg;
     }

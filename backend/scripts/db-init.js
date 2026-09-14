@@ -98,13 +98,14 @@ async function run() {
   let customDb = null;
   let customSsl = null;
 
+  const cleanVal = (v) => (v ? v.replace(/^["']|["']$/g, "").trim() : v);
   for (const arg of args) {
-    if (arg.startsWith("--user=") || arg.startsWith("-u=")) customUser = arg.split("=")[1];
-    else if (arg.startsWith("--password=") || arg.startsWith("-p=")) customPassword = arg.split("=")[1];
-    else if (arg.startsWith("--host=") || arg.startsWith("-h=")) customHost = arg.split("=")[1];
-    else if (arg.startsWith("--port=") || arg.startsWith("-P=")) customPort = arg.split("=")[1];
-    else if (arg.startsWith("--database=") || arg.startsWith("-d=")) customDb = arg.split("=")[1];
-    else if (arg.startsWith("--ssl=")) customSsl = arg.split("=")[1];
+    if (arg.startsWith("--user=") || arg.startsWith("-u=")) customUser = cleanVal(arg.split("=").slice(1).join("="));
+    else if (arg.startsWith("--password=") || arg.startsWith("-p=")) customPassword = cleanVal(arg.split("=").slice(1).join("="));
+    else if (arg.startsWith("--host=") || arg.startsWith("-h=")) customHost = cleanVal(arg.split("=").slice(1).join("="));
+    else if (arg.startsWith("--port=") || arg.startsWith("-P=")) customPort = cleanVal(arg.split("=").slice(1).join("="));
+    else if (arg.startsWith("--database=") || arg.startsWith("-d=")) customDb = cleanVal(arg.split("=").slice(1).join("="));
+    else if (arg.startsWith("--ssl=")) customSsl = cleanVal(arg.split("=").slice(1).join("="));
   }
 
   const useSsl = customSsl !== null ? customSsl === "true" : process.env.DB_SSL === "true";
