@@ -5,6 +5,7 @@ import { getDaySlots } from "../dayslot/api/daySlotsApi";
 import { getKitchenPrep } from "../booking/api/bookingApi";
 import { getPendingDayMenus } from "../daymenu/api/daymenuApi";
 import { fetchWithdrawals } from "../wallet/api/walletApi";
+import { today } from "../../utils/date";
 import {
   ArrowPathIcon,
   PrinterIcon,
@@ -18,7 +19,7 @@ export default function CanteenDashboardPage() {
   const { activeCanteenId, activeCanteen } = useAuth();
   const navigate = useNavigate();
 
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState(() => today());
   const [todaySlots, setTodaySlots] = useState([]);
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [slotPrepMetrics, setSlotPrepMetrics] = useState([]);

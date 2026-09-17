@@ -22,7 +22,7 @@ export const CANTEEN_MANAGER_NAV = [
   // Menu & Planning
   { key: 'catalog', label: 'Menu Catalog', category: 'menu', icon: 'BookOpenIcon' },
   { key: 'official-services', label: 'Official Services', category: 'menu', icon: 'CubeIcon' },
-  { key: 'menu-templates', label: 'Menu Templates', category: 'menu', icon: 'RectangleStackIcon' },
+  // { key: 'menu-templates', label: 'Menu Templates', category: 'menu', icon: 'RectangleStackIcon' },
   { key: 'services', label: 'Service Slots', category: 'menu', icon: 'ClockIcon' },
   { key: 'dayslots', label: 'Day Slots', category: 'menu', icon: 'CalendarIcon' },
   { key: 'daymenu', label: 'Menu Planner', category: 'menu', icon: 'ClipboardDocumentCheckIcon', hasBadge: true, badgeKey: 'pendingMenus' },
@@ -46,7 +46,7 @@ export const CANTEEN_ASSISTANT_NAV = [
 
   // Menu & Planning
   { key: 'catalog', label: 'Menu Catalog', category: 'menu', icon: 'BookOpenIcon' },
-  { key: 'menu-templates', label: 'Menu Templates', category: 'menu', icon: 'RectangleStackIcon' },
+  // { key: 'menu-templates', label: 'Menu Templates', category: 'menu', icon: 'RectangleStackIcon' },
   { key: 'services', label: 'Service Slots', category: 'menu', icon: 'ClockIcon' },
   { key: 'dayslots', label: 'Day Calendar Slots', category: 'menu', icon: 'CalendarIcon' },
   { key: 'daymenu', label: 'Menu Planner', category: 'menu', icon: 'ClipboardDocumentCheckIcon', hasBadge: true, badgeKey: 'pendingMenus' },

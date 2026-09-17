@@ -1,5 +1,5 @@
-import dayjs from "dayjs";
 import { z } from "zod";
+import { getTodayIST } from "../../utils/dateTime.js";
 
 export const getKitchenPrepSchema = z.object({
   query: z.object({
@@ -34,7 +34,7 @@ export const createBookingSchema = z.object({
   }),
 }).superRefine((data, ctx) => {
   if (data.body.PBOOKTYPECODE === "KS") {
-    const today = dayjs().format("YYYY-MM-DD");
+    const today = getTodayIST();
     if (data.body.PSERVICEDATE <= today) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

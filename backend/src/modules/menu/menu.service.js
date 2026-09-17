@@ -7,6 +7,7 @@ import {
 } from "./menu.repository.js";
 import { addItemPrice as addItemPriceRepository } from "../pricing/pricing.repository.js";
 import { NotFoundError, DatabaseError } from "../../common/errors/appError.js";
+import { getTodayIST } from "../../utils/dateTime.js";
 
 export const fetchMenus = async (isSpecial = null, status = null) => {
   return await getMenus(isSpecial, status);
@@ -46,7 +47,7 @@ export const createMenu = async (menuData, createdByUserId) => {
     menuData.PRICING.PRICES.length > 0
   ) {
     const effFrom =
-      menuData.PRICING.EFFFROM || new Date().toISOString().split("T")[0];
+      menuData.PRICING.EFFFROM || getTodayIST();
     await addItemPriceRepository({
       MENUITEMID: created.MENUITEMID,
       EFFFROM: effFrom,

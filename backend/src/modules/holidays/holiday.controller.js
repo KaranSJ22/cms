@@ -1,5 +1,6 @@
 import { sendSuccess } from "../../utils/apiResponse.js";
 import * as HolidayService from "./holiday.service.js";
+import { getCurrentYearIST } from "../../utils/dateTime.js";
 
 export const addHoliday = async (req, res, next) => {
   try {
@@ -32,7 +33,7 @@ export const getHoliday = async (req, res, next) => {
 
 export const listHolidays = async (req, res, next) => {
   try {
-    const year = req.query.year ? parseInt(req.query.year, 10) : new Date().getFullYear();
+    const year = req.query.year ? parseInt(req.query.year, 10) : getCurrentYearIST();
     const result = await HolidayService.listHolidays(year);
     sendSuccess(res, result, "Holidays retrieved successfully", 200);
   } catch (error) {

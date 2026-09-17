@@ -1,5 +1,6 @@
 import * as MenuTemplateRepository from "./menutemplate.repository.js";
 import { BadRequestError, NotFoundError } from "../../common/errors/appError.js";
+import { toMySQLDate } from "../../utils/dateTime.js";
 
 export const addMenuTemplate = async (data) => {
   const result = await MenuTemplateRepository.addMenuTemplate(data);
@@ -54,12 +55,18 @@ export const listMenuTemplateDt = async (id) => {
 };
 
 export const bulkGenerateMenu = async (data) => {
-  // Add any custom business logic rules before calling the DB proc
-  if (new Date(data.PSTARTDATE) > new Date(data.PENDDATE)) {
+  const startDate = toMySQLDate(data.PSTARTDATE);
+  const endDate = toMySQLDate(data.PENDDATE);
+
+  if (startDate > endDate) {
     throw new BadRequestError("Start date cannot be after end date.");
   }
 
-  const result = await MenuTemplateRepository.bulkGenerateMenu(data);
+  const result = await MenuTemplateRepository.bulkGenerateMenu({
+    ...data,
+    PSTARTDATE: startDate,
+    PENDDATE: endDate,
+  });
   return result;
 };
 

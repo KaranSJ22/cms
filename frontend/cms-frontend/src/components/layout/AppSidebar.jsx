@@ -218,7 +218,7 @@ export default function AppSidebar({
               <span>ISRO-HSFC Intranet</span>
             </div>
             <div className="text-[0.58rem] text-slate-400">
-              CMS Portal · v2.4 (High Reliability)
+              CMS Portal
             </div>
           </div>
         ) : (

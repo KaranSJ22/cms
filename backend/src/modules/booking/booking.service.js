@@ -2,6 +2,7 @@ import * as bookingRepository from "./booking.repository.js";
 import * as daymenuRepository from "../daymenu/daymenu.repository.js";
 import { pool } from "../../db/connection.js";
 import { BadRequestError, NotFoundError, ForbiddenError } from "../../common/errors/appError.js";
+import { isPastCutoff } from "../../utils/dateTime.js";
 
 export const getBooking = async (bookingId, user = null) => {
   const booking = await bookingRepository.getBooking(bookingId);
@@ -45,14 +46,10 @@ export const createBooking = async (data, user) => {
 
   // Validate BOOKUNTIL
   if (data.PITEMSJSON && data.PITEMSJSON.length > 0) {
-    const now = new Date();
     for (const item of data.PITEMSJSON) {
       const menuDetail = await daymenuRepository.getDayMenuById(item.DAYMENUID);
-      if (menuDetail && menuDetail.BOOKUNTIL) {
-        const bookUntil = new Date(menuDetail.BOOKUNTIL);
-        if (now > bookUntil) {
-          throw new BadRequestError(`Booking window has closed for item: ${menuDetail.ITEMNAME}`);
-        }
+      if (menuDetail && isPastCutoff(menuDetail.BOOKUNTIL)) {
+        throw new BadRequestError(`Booking window has closed for item: ${menuDetail.ITEMNAME}`);
       }
     }
   }
@@ -109,18 +106,14 @@ export const cancelBooking = async (bookingId, data, user) => {
   }
 
   // Validate BOOKUNTIL for all active items in the booking
-  const now = new Date();
   const activeItems = (bookingInfo.ITEMS || []).filter(
     (item) => item.STATUSCODE === "CRT" || item.STATUSID === 30
   );
 
   for (const item of activeItems) {
     const menuDetail = await daymenuRepository.getDayMenuById(item.DAYMENUID);
-    if (menuDetail && menuDetail.BOOKUNTIL) {
-      const bookUntil = new Date(menuDetail.BOOKUNTIL);
-      if (now > bookUntil) {
-        throw new BadRequestError(`Cancellation window has closed for item: ${menuDetail.ITEMNAME}`);
-      }
+    if (menuDetail && isPastCutoff(menuDetail.BOOKUNTIL)) {
+      throw new BadRequestError(`Cancellation window has closed for item: ${menuDetail.ITEMNAME}`);
     }
   }
 

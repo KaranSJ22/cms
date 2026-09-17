@@ -97,6 +97,8 @@ const bulkMenuItemSchema = z.object({
 const bulkDaySchema = z.object({
   // dayIndex represents Day 0 to Day 4 (Monday to Friday, or up to 6)
   DAYINDEX: z.coerce.number().int().min(0).max(6),
+  STARTTIME: timeSchema.optional(),
+  ENDTIME: timeSchema.optional(),
   ITEMS: z.array(bulkMenuItemSchema).min(0), // allow empty = skip that day
 });
 

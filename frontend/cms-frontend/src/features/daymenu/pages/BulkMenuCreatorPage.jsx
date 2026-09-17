@@ -1,12 +1,24 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useAuth } from '../../../hooks/useAuth'
 import { useBulkMenu } from '../hooks/useBulkMenu'
-import { getActiveCanteens } from '../../dayslot/api/daySlotsApi'
+import { getActiveCanteens, getDaySlots } from '../../dayslot/api/daySlotsApi'
+import { getDayMenuWorkspace } from '../api/daymenuApi'
 import { getServices } from '../../services/api/servicesApi'
 import { getMenuItems } from '../../menu/api/menuApi'
 import { holidayApi } from '../../holidays/api/holidayApi'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Snap any input date string (YYYY-MM-DD) to the Monday of that week (UTC-safe) */
+function getMonday(dateStr) {
+  if (!dateStr) return ''
+  const [y, m, dayNum] = dateStr.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, dayNum))
+  const day = dt.getUTCDay() // 0 = Sun, 1 = Mon, ..., 6 = Sat
+  const diff = day === 0 ? -6 : 1 - day
+  dt.setUTCDate(dt.getUTCDate() + diff)
+  return dt.toISOString().slice(0, 10)
+}
 
 function addDays(dateStr, d) {
   const [y, m, dayNum] = dateStr.split('-').map(Number)
@@ -21,8 +33,8 @@ function formatLocalISO(servDate, startTime, offsetHours = 1) {
   const hours = (timeParts[0] || 0) - offsetHours
   const minutes = timeParts[1] || 0
   
-  // Date computed in UTC to ensure an accurate, timezone-safe ISO-8601 string
-  const dt = new Date(Date.UTC(y, m - 1, d, hours, minutes, 0))
+  // Date computed in local time, converted to ISO
+  const dt = new Date(y, m - 1, d, hours, minutes, 0)
   return dt.toISOString()
 }
 
@@ -72,7 +84,7 @@ function StatusBadge({ isNewSlot }) {
   )
 }
 
-function ItemConfigRow({ item, config, onUpdateFlag, onUpdateQty, onRemove }) {
+function ItemConfigRow({ item, config, onUpdateFlag, onUpdateQty, onRemove, isReadOnly = false }) {
   const flags = [
     { key: 'ISBASE',    label: 'Base'     },
     { key: 'ISSPECIAL', label: 'Special'  },
@@ -80,15 +92,20 @@ function ItemConfigRow({ item, config, onUpdateFlag, onUpdateQty, onRemove }) {
     { key: 'ISKIOSK',   label: 'Kiosk'   },
   ]
   return (
-    <div className="flex flex-col gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200 hover:border-blue-300 transition-colors group">
+    <div className={`flex flex-col gap-2 p-3 rounded-xl border transition-colors group ${
+      isReadOnly ? 'bg-slate-100/70 border-slate-200' : 'bg-slate-50 border-slate-200 hover:border-blue-300'
+    }`}>
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium text-slate-800 text-sm truncate">{item.ITEMNAME}</span>
-        <button
-          onClick={() => onRemove(item.MENUITEMID)}
-          className="shrink-0 p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-        </button>
+        {!isReadOnly && (
+          <button
+            onClick={() => onRemove(item.MENUITEMID)}
+            className="shrink-0 p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+            title="Remove item"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        )}
       </div>
       <div className="flex flex-wrap gap-1.5">
         {flags.map(({ key, label }) => {
@@ -96,9 +113,16 @@ function ItemConfigRow({ item, config, onUpdateFlag, onUpdateQty, onRemove }) {
           return (
             <button
               key={key}
+              disabled={isReadOnly}
               onClick={() => onUpdateFlag(item.MENUITEMID, key, active ? 0 : 1)}
               className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border transition-all ${
-                active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300'
+                isReadOnly
+                  ? active
+                    ? 'bg-slate-300 text-slate-800 border-slate-300 cursor-default'
+                    : 'bg-transparent text-slate-400 border-slate-200 cursor-default'
+                  : active
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300'
               }`}
             >
               {label}
@@ -109,15 +133,21 @@ function ItemConfigRow({ item, config, onUpdateFlag, onUpdateQty, onRemove }) {
           <label className="text-xs text-slate-400">Max</label>
           <input
             type="number" min={1} value={config.MAXQTY}
+            disabled={isReadOnly}
             onChange={e => onUpdateQty(item.MENUITEMID, 'MAXQTY', parseInt(e.target.value) || 1)}
-            className="w-14 px-2 py-0.5 text-xs border border-slate-200 rounded-lg outline-none focus:border-blue-500"
+            className={`w-14 px-2 py-0.5 text-xs border rounded-lg outline-none ${
+              isReadOnly ? 'bg-slate-200/60 border-slate-300 text-slate-600 cursor-not-allowed' : 'border-slate-200 focus:border-blue-500'
+            }`}
           />
           <label className="text-xs text-slate-400">Avail</label>
           <input
             type="number" min={0} placeholder="∞"
             value={config.AVAILQTY ?? ''}
+            disabled={isReadOnly}
             onChange={e => onUpdateQty(item.MENUITEMID, 'AVAILQTY', e.target.value === '' ? null : parseInt(e.target.value))}
-            className="w-14 px-2 py-0.5 text-xs border border-slate-200 rounded-lg outline-none focus:border-blue-500"
+            className={`w-14 px-2 py-0.5 text-xs border rounded-lg outline-none ${
+              isReadOnly ? 'bg-slate-200/60 border-slate-300 text-slate-600 cursor-not-allowed' : 'border-slate-200 focus:border-blue-500'
+            }`}
           />
         </div>
       </div>
@@ -127,9 +157,9 @@ function ItemConfigRow({ item, config, onUpdateFlag, onUpdateQty, onRemove }) {
 
 // ── Copy-from-day modal ───────────────────────────────────────────────────────
 
-function CopyFromModal({ activeDayIndex, weekDates, onCopy, onClose }) {
+function CopyFromModal({ activeDayIndex, weekDates, publishedDays = {}, onCopy, onClose }) {
   const options = weekDates
-    .map((date, i) => ({ i, date }))
+    .map((date, i) => ({ i, date, isPublished: !!publishedDays[i] }))
     .filter(({ i }) => i !== activeDayIndex)
 
   return (
@@ -138,18 +168,25 @@ function CopyFromModal({ activeDayIndex, weekDates, onCopy, onClose }) {
         <h3 className="font-semibold text-slate-800 mb-1">Copy items from…</h3>
         <p className="text-xs text-slate-400 mb-4">Replace {DAY_FULL[activeDayIndex]}'s items with a copy of another day's configuration.</p>
         <div className="space-y-1">
-          {options.map(({ i, date }) => (
+          {options.map(({ i, date, isPublished }) => (
             <button
               key={i}
               onClick={() => onCopy(i)}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-blue-50 transition-colors group"
             >
-              <span className="w-10 h-10 rounded-xl bg-slate-100 group-hover:bg-blue-100 flex flex-col items-center justify-center shrink-0 transition-colors">
-                <span className="text-[10px] font-bold text-slate-500 leading-none">{DAY_SHORT[i]}</span>
-                <span className="text-sm font-bold text-slate-700 leading-tight">{date.slice(8)}</span>
+              <span className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center shrink-0 transition-colors ${
+                isPublished ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 group-hover:bg-blue-100'
+              }`}>
+                <span className="text-[10px] font-bold leading-none">{DAY_SHORT[i]}</span>
+                <span className="text-sm font-bold leading-tight">{date.slice(8)}</span>
               </span>
-              <div>
-                <span className="text-sm font-medium text-slate-700">{DAY_FULL[i]}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-slate-700">{DAY_FULL[i]}</span>
+                  {isPublished && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">Published</span>
+                  )}
+                </div>
                 <span className="block text-xs text-slate-400">{date}</span>
               </div>
             </button>
@@ -166,7 +203,7 @@ function CopyFromModal({ activeDayIndex, weekDates, onCopy, onClose }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function BulkMenuCreatorPage() {
-  const { user } = useAuth()
+  const { user, activeCanteenId } = useAuth()
   const { loading, error, results, submitBulkMenu, reset } = useBulkMenu()
 
   // Reference data
@@ -183,8 +220,19 @@ export default function BulkMenuCreatorPage() {
   const [startTime, setStartTime] = useState('08:00')
   const [endTime, setEndTime]     = useState('10:00')
 
-  // Per-day item state: array of 7 objects { [MENUITEMID]: config }
+  // Auto-sync default canteen from activeCanteenId (selected in sidebar)
+  useEffect(() => {
+    if (activeCanteenId && !canteenId) {
+      setCanteenId(String(activeCanteenId))
+    }
+  }, [activeCanteenId, canteenId])
+
+  // Per-day item state: array of 5 objects { [MENUITEMID]: config }
   const [weekItems, setWeekItems] = useState(buildEmptyWeek)
+
+  // Published / locked state per day: { [dayIndex]: { daySlotId, slotNo, isPublished, itemCount } }
+  const [publishedDays, setPublishedDays] = useState({})
+  const [loadingExisting, setLoadingExisting] = useState(false)
 
   // UI state
   const [activeDayIndex, setActiveDayIndex] = useState(0)
@@ -238,7 +286,90 @@ export default function BulkMenuCreatorPage() {
     return map
   }, [holidays])
 
-  const activeDayMap = weekItems[activeDayIndex] // { [MENUITEMID]: config }
+  // ── Auto-load existing slots and menus when week is selected ──────────────
+  useEffect(() => {
+    if (!canteenId || !serviceId || !startDate || weekDates.length !== 5) {
+      setPublishedDays({})
+      return
+    }
+
+    let isCancelled = false
+    async function fetchWeekData() {
+      setLoadingExisting(true)
+      try {
+        const slots = await getDaySlots({
+          canteenId: Number(canteenId),
+          serviceId: Number(serviceId),
+          dateFrom: weekDates[0],
+          dateTo: weekDates[4],
+        })
+
+        if (isCancelled) return
+
+        const loadedWeekItems = buildEmptyWeek()
+        const loadedPublishedDays = {}
+
+        if (Array.isArray(slots) && slots.length > 0) {
+          await Promise.all(
+            slots.map(async (slot) => {
+              const slotDate = typeof slot.SERVDATE === 'string' ? slot.SERVDATE.slice(0, 10) : ''
+              const dayIdx = weekDates.indexOf(slotDate)
+              if (dayIdx === -1) return
+
+              // Sync serving time from existing slot
+              if (slot.STARTTIME) {
+                setStartTime(slot.STARTTIME.slice(0, 5))
+                if (slot.ENDTIME) setEndTime(slot.ENDTIME.slice(0, 5))
+              }
+
+              try {
+                const workspaceItems = await getDayMenuWorkspace(slot.DAYSLOTID)
+                if (Array.isArray(workspaceItems) && workspaceItems.length > 0) {
+                  const dayMap = {}
+                  workspaceItems.forEach(item => {
+                    dayMap[item.MENUITEMID] = {
+                      MENUITEMID:  item.MENUITEMID,
+                      ISBASE:      item.ISBASE ?? 1,
+                      ISSPECIAL:   item.ISSPECIAL ?? 0,
+                      ISPREBOOK:   item.ISPREBOOK ?? 1,
+                      ISKIOSK:     item.ISKIOSK ?? 1,
+                      MAXQTY:      item.MAXQTY ?? 1,
+                      AVAILQTY:    item.AVAILQTY ?? null,
+                      BOOKUNTIL:   item.BOOKUNTIL ?? '',
+                      CANCELUNTIL: item.CANCELUNTIL ?? '',
+                    }
+                  })
+                  loadedWeekItems[dayIdx] = dayMap
+                  loadedPublishedDays[dayIdx] = {
+                    daySlotId: slot.DAYSLOTID,
+                    slotNo: slot.SLOTNO,
+                    isPublished: true,
+                    itemCount: workspaceItems.length,
+                  }
+                }
+              } catch (err) {
+                console.error(`Failed to load workspace for slot ${slot.DAYSLOTID}`, err)
+              }
+            })
+          )
+        }
+
+        if (!isCancelled) {
+          setWeekItems(loadedWeekItems)
+          setPublishedDays(loadedPublishedDays)
+        }
+      } catch (err) {
+        console.error('Failed to load existing week data', err)
+      } finally {
+        if (!isCancelled) setLoadingExisting(false)
+      }
+    }
+
+    fetchWeekData()
+    return () => { isCancelled = true }
+  }, [canteenId, serviceId, startDate])
+
+  const activeDayMap = weekItems[activeDayIndex] || {} // { [MENUITEMID]: config }
 
   const selectedIds = Object.keys(activeDayMap).map(Number)
 
@@ -256,6 +387,7 @@ export default function BulkMenuCreatorPage() {
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const addItem = useCallback((menuItem) => {
+    if (publishedDays[activeDayIndex]) return
     const servDate = weekDates[activeDayIndex] || startDate
     setWeekItems(prev => {
       const copy = [...prev]
@@ -265,9 +397,10 @@ export default function BulkMenuCreatorPage() {
       }
       return copy
     })
-  }, [activeDayIndex, weekDates, startDate, startTime])
+  }, [activeDayIndex, weekDates, startDate, startTime, publishedDays])
 
   const removeItem = useCallback((menuItemId) => {
+    if (publishedDays[activeDayIndex]) return
     setWeekItems(prev => {
       const copy = [...prev]
       const dayMap = { ...copy[activeDayIndex] }
@@ -275,9 +408,10 @@ export default function BulkMenuCreatorPage() {
       copy[activeDayIndex] = dayMap
       return copy
     })
-  }, [activeDayIndex])
+  }, [activeDayIndex, publishedDays])
 
   const updateFlag = useCallback((menuItemId, field, value) => {
+    if (publishedDays[activeDayIndex]) return
     setWeekItems(prev => {
       const copy = [...prev]
       copy[activeDayIndex] = {
@@ -286,9 +420,10 @@ export default function BulkMenuCreatorPage() {
       }
       return copy
     })
-  }, [activeDayIndex])
+  }, [activeDayIndex, publishedDays])
 
   const updateQty = useCallback((menuItemId, field, value) => {
+    if (publishedDays[activeDayIndex]) return
     setWeekItems(prev => {
       const copy = [...prev]
       copy[activeDayIndex] = {
@@ -297,24 +432,25 @@ export default function BulkMenuCreatorPage() {
       }
       return copy
     })
-  }, [activeDayIndex])
+  }, [activeDayIndex, publishedDays])
 
-  // Apply all items to all 5 days (quick-fill, automatically skipping holidays and adjusting dates)
+  // Apply active day items to all unconfigured, non-published days (skipping holidays)
   const applyToAllDays = () => {
     const source = weekItems[activeDayIndex]
-    setWeekItems(prev => prev.map((_, i) => {
-      if (i === activeDayIndex) return prev[i]
+    setWeekItems(prev => prev.map((currDay, i) => {
+      if (i === activeDayIndex) return currDay
+      if (publishedDays[i]) return currDay // Do not overwrite published days
       const targetDate = weekDates[i]
       if (targetDate && holidayMap[targetDate]) {
-        // Automatically skip holidays during quick-fill
-        return {}
+        return currDay // Skip holidays
       }
+      const dayStart = dayTimings[i]?.startTime || startTime
       const cloned = {}
       Object.entries(source).forEach(([menuItemId, cfg]) => {
         cloned[menuItemId] = {
           ...cfg,
-          BOOKUNTIL: targetDate && startTime ? defaultBookUntil(targetDate, startTime) : '',
-          CANCELUNTIL: targetDate && startTime ? defaultCancelUntil(targetDate, startTime) : '',
+          BOOKUNTIL: targetDate && dayStart ? defaultBookUntil(targetDate, dayStart) : '',
+          CANCELUNTIL: targetDate && dayStart ? defaultCancelUntil(targetDate, dayStart) : '',
         }
       })
       return cloned
@@ -323,8 +459,10 @@ export default function BulkMenuCreatorPage() {
 
   // Copy from a specific day index into the active day
   const copyFromDay = (sourceIndex) => {
+    if (publishedDays[activeDayIndex]) return
     const source = weekItems[sourceIndex]
     const targetDate = weekDates[activeDayIndex]
+    const dayStart = dayTimings[activeDayIndex]?.startTime || startTime
     setWeekItems(prev => {
       const copy = [...prev]
       const cloned = {}
@@ -342,6 +480,7 @@ export default function BulkMenuCreatorPage() {
   }
 
   const clearDay = () => {
+    if (publishedDays[activeDayIndex]) return
     setWeekItems(prev => {
       const copy = [...prev]
       copy[activeDayIndex] = {}
@@ -355,12 +494,13 @@ export default function BulkMenuCreatorPage() {
       return
     }
 
-    // Build DAYS payload: 5 objects (Monday to Friday), each with DAYINDEX + ITEMS
-    // Recalculates BOOKUNTIL and CANCELUNTIL for each specific day's date
+    // Build DAYS payload: 5 objects (Monday to Friday), each with DAYINDEX, STARTTIME, ENDTIME + ITEMS
     const days = weekItems.map((dayMap, idx) => {
       const targetDate = weekDates[idx] || startDate
       return {
-        DAYINDEX: idx,
+        DAYINDEX:  idx,
+        STARTTIME: startTime,
+        ENDTIME:   endTime,
         ITEMS: Object.values(dayMap).map(cfg => ({
           ...cfg,
           BOOKUNTIL:   defaultBookUntil(targetDate, startTime),
@@ -384,11 +524,13 @@ export default function BulkMenuCreatorPage() {
     setCanteenId(''); setServiceId(''); setStartDate('')
     setStartTime('08:00'); setEndTime('10:00')
     setWeekItems(buildEmptyWeek())
+    setPublishedDays({})
     setActiveDayIndex(0); setItemSearch('')
   }
 
-  const totalItemDays = daySummary.filter(n => n > 0).length
-  const isReady = canteenId && serviceId && startDate && startTime && endTime && totalItemDays > 0
+  const totalConfiguredDays = daySummary.filter(n => n > 0).length
+  const totalPublishedDays = Object.keys(publishedDays).length
+  const isReady = canteenId && serviceId && startDate && startTime && endTime && (totalConfiguredDays > 0 || totalPublishedDays > 0)
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -399,6 +541,7 @@ export default function BulkMenuCreatorPage() {
         <CopyFromModal
           activeDayIndex={activeDayIndex}
           weekDates={weekDates}
+          publishedDays={publishedDays}
           onCopy={copyFromDay}
           onClose={() => setShowCopyModal(false)}
         />
@@ -418,7 +561,7 @@ export default function BulkMenuCreatorPage() {
               <h1 className="text-2xl font-bold text-white tracking-tight">Bulk Menu Creator (Mon – Fri)</h1>
             </div>
             <p className="text-blue-100/60 text-sm max-w-xl">
-              Configure items for Monday through Friday (5 days). Any holidays in between are automatically skipped.
+              Configure items for Monday through Friday (5 days). Any holidays in between are automatically skipped. Set serving hours and menu items for the week.
             </p>
           </div>
           {results && (
@@ -448,9 +591,9 @@ export default function BulkMenuCreatorPage() {
               <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
             </span>
             <div>
-              <h2 className="font-semibold text-emerald-800">Bulk Creation Successful</h2>
+              <h2 className="font-semibold text-emerald-800">Bulk Menu Operation Complete</h2>
               <p className="text-emerald-700 text-sm">
-                {results.filter(r => !r.skipped && r.isNewSlot).length} new slots · {results.filter(r => !r.skipped && !r.isNewSlot).length} updated · {results.filter(r => r.skipped).length} skipped
+                {results.filter(r => !r.skipped && r.isNewSlot).length} new slots · {results.filter(r => r.timingUpdated).length} timings updated · {results.filter(r => r.skipped && !r.timingUpdated).length} preserved/skipped
               </p>
             </div>
           </div>
@@ -467,23 +610,26 @@ export default function BulkMenuCreatorPage() {
               </thead>
               <tbody>
                 {results.map((row, i) => (
-                  <tr key={row.date} className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${row.skipped ? 'opacity-40' : ''}`}>
-                    <td className="px-5 py-3 font-medium text-slate-700">{DAY_FULL[i]}</td>
+                  <tr key={row.date} className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${row.skipped && !row.timingUpdated ? 'opacity-50' : ''}`}>
+                    <td className="px-5 py-3 font-medium text-slate-700">{DAY_FULL[i] || `Day ${i + 1}`}</td>
                     <td className="px-5 py-3 text-slate-600">{row.date}</td>
                     <td className="px-5 py-3 font-mono text-xs text-slate-500">{row.slotNo ?? '—'}</td>
                     <td className="px-5 py-3">
-                      {row.skipped
-                        ? (
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                            row.reason?.startsWith('Holiday')
-                              ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'
-                              : 'bg-slate-100 text-slate-500'
-                          }`}>
-                            {row.reason || 'Skipped'}
-                          </span>
-                        )
-                        : <StatusBadge isNewSlot={row.isNewSlot} />
-                      }
+                      {row.timingUpdated ? (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+                          Timing Updated
+                        </span>
+                      ) : row.skipped ? (
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                          row.reason?.startsWith('Holiday')
+                            ? 'bg-rose-100 text-rose-700'
+                            : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {row.reason || 'Skipped'}
+                        </span>
+                      ) : (
+                        <StatusBadge isNewSlot={row.isNewSlot} />
+                      )}
                     </td>
                     <td className="px-5 py-3 text-right">
                       {!row.skipped && (
@@ -502,9 +648,17 @@ export default function BulkMenuCreatorPage() {
         <>
           {/* ── Step 1: Context ── */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center shrink-0">1</span>
-              <h2 className="font-semibold text-slate-800">Canteen, Service &amp; Week</h2>
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center shrink-0">1</span>
+                <h2 className="font-semibold text-slate-800">Canteen, Service &amp; Week</h2>
+              </div>
+              {loadingExisting && (
+                <div className="flex items-center gap-2 text-xs text-blue-600 font-medium">
+                  <div className="w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                  Checking existing week menus…
+                </div>
+              )}
             </div>
             <div className="p-6">
               {dataLoading ? (
@@ -529,17 +683,46 @@ export default function BulkMenuCreatorPage() {
                     </select>
                   </div>
                   <div className="lg:col-span-1">
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Start Date (Day 1)</label>
-                    <input id="bulk-startdate" type="date" value={startDate} onChange={e => { setStartDate(e.target.value); setWeekItems(buildEmptyWeek()) }} className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Week of (Mon – Fri)</label>
+                    <input
+                      id="bulk-startdate"
+                      type="date"
+                      value={startDate}
+                      style={{ colorScheme: 'light' }}
+                      onChange={e => {
+                        const monday = getMonday(e.target.value)
+                        setStartDate(monday)
+                      }}
+                      className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 [color-scheme:light]"
+                    />
+                    {startDate && weekDates.length === 5 && (
+                      <span className="block text-[11px] text-blue-600 font-medium mt-1 truncate">
+                        {weekDates[0]} (Mon) → {weekDates[4]} (Fri)
+                      </span>
+                    )}
                   </div>
                   <div className="lg:col-span-1 flex gap-2">
                     <div className="flex-1">
-                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Start</label>
-                      <input id="bulk-starttime" type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Start Time</label>
+                      <input
+                        id="bulk-starttime"
+                        type="time"
+                        value={startTime}
+                        style={{ colorScheme: 'light' }}
+                        onChange={e => setStartTime(e.target.value)}
+                        className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 [color-scheme:light]"
+                      />
                     </div>
                     <div className="flex-1">
-                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">End</label>
-                      <input id="bulk-endtime" type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">End Time</label>
+                      <input
+                        id="bulk-endtime"
+                        type="time"
+                        value={endTime}
+                        style={{ colorScheme: 'light' }}
+                        onChange={e => setEndTime(e.target.value)}
+                        className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 [color-scheme:light]"
+                      />
                     </div>
                   </div>
                 </div>
@@ -552,8 +735,8 @@ export default function BulkMenuCreatorPage() {
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center shrink-0">2</span>
               <h2 className="font-semibold text-slate-800">Configure Menu Per Day (Mon – Fri)</h2>
-              <span className="ml-auto text-xs text-slate-400">
-                {totalItemDays} of 5 days configured
+              <span className="ml-auto text-xs text-slate-500 font-medium">
+                {totalConfiguredDays} of 5 days configured {totalPublishedDays > 0 ? `(${totalPublishedDays} published)` : ''}
               </span>
             </div>
 
@@ -563,17 +746,20 @@ export default function BulkMenuCreatorPage() {
                 {Array.from({ length: 5 }, (_, i) => {
                   const date = weekDates[i] || `Day ${i + 1}`
                   const isHoliday = date && holidayMap[date]
+                  const isPublished = !!publishedDays[i]
                   const count = daySummary[i]
                   const isActive = activeDayIndex === i
                   return (
                     <button
                       key={i}
                       onClick={() => { setActiveDayIndex(i); setItemSearch('') }}
-                      className={`relative flex flex-col items-center px-4 py-2.5 rounded-t-xl border-b-2 transition-all text-center min-w-[76px] ${
+                      className={`relative flex flex-col items-center px-4 py-2.5 rounded-t-xl border-b-2 transition-all text-center min-w-[84px] ${
                         isActive
                           ? 'border-blue-600 text-blue-700 bg-blue-50/70'
                           : isHoliday
                           ? 'border-transparent text-rose-600 hover:text-rose-800 hover:bg-rose-50/50'
+                          : isPublished
+                          ? 'border-transparent text-emerald-700 hover:bg-emerald-50/50'
                           : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'
                       }`}
                     >
@@ -582,6 +768,11 @@ export default function BulkMenuCreatorPage() {
                       {isHoliday ? (
                         <span className="mt-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-700 tracking-tight" title={holidayMap[date]}>
                           Holiday
+                        </span>
+                      ) : isPublished ? (
+                        <span className="mt-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-700 tracking-tight flex items-center gap-0.5">
+                          <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                          Published
                         </span>
                       ) : count > 0 ? (
                         <span className={`mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${
@@ -597,12 +788,12 @@ export default function BulkMenuCreatorPage() {
             </div>
 
             {/* Day action bar */}
-            <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-2 bg-slate-50/50 flex-wrap">
-              <div className="flex items-center gap-2 mr-auto">
-                <span className="text-xs font-semibold text-slate-600">
+            <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-3 bg-slate-50/50 flex-wrap justify-between">
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-xs font-bold text-slate-700">
                   {weekDates[activeDayIndex]
-                    ? `${DAY_FULL[activeDayIndex]} — ${weekDates[activeDayIndex]}`
-                    : `${DAY_FULL[activeDayIndex]} (set start date first)`}
+                    ? `${DAY_FULL[activeDayIndex]} (${weekDates[activeDayIndex]})`
+                    : `${DAY_FULL[activeDayIndex]} (set date first)`}
                 </span>
                 {holidayMap[weekDates[activeDayIndex]] && (
                   <span className="px-2 py-0.5 text-xs font-semibold bg-rose-100 text-rose-700 rounded-md border border-rose-200">
@@ -610,33 +801,56 @@ export default function BulkMenuCreatorPage() {
                   </span>
                 )}
               </div>
-              {daySummary[activeDayIndex] > 0 && (
-                <>
+
+              <div className="flex items-center gap-2">
+                {daySummary[activeDayIndex] > 0 && !publishedDays[activeDayIndex] && (
+                  <>
+                    <button
+                      onClick={applyToAllDays}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors"
+                      title="Copy this day's items to remaining non-published days"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                      Apply to other days
+                    </button>
+                    <button
+                      onClick={clearDay}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-slate-200 hover:border-rose-200 transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      Clear day
+                    </button>
+                  </>
+                )}
+                {!publishedDays[activeDayIndex] && (
                   <button
-                    onClick={applyToAllDays}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors"
-                    title="Copy this day's items to all other days"
+                    onClick={() => setShowCopyModal(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors"
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                    Apply to all days
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    Copy from…
                   </button>
-                  <button
-                    onClick={clearDay}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-slate-200 hover:border-rose-200 transition-colors"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    Clear day
-                  </button>
-                </>
-              )}
-              <button
-                onClick={() => setShowCopyModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                Copy from…
-              </button>
+                )}
+                {publishedDays[activeDayIndex] && (
+                  <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center gap-1">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                    Menu Published (Timings editable)
+                  </span>
+                )}
+              </div>
             </div>
+
+            {/* Published / Locked Notice */}
+            {publishedDays[activeDayIndex] && (
+              <div className="px-4 py-3 bg-emerald-50 border-b border-emerald-100 flex items-center gap-3">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-200 text-emerald-800 shrink-0">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                </span>
+                <p className="text-xs text-emerald-800 leading-snug">
+                  <strong className="font-semibold">Day menu is published and locked:</strong> Menu items cannot be edited or removed to preserve customer orders. Serving hours (start/end) can still be adjusted above.
+                </p>
+              </div>
+            )}
 
             {/* Two-column: catalog + configured */}
             <div className="grid grid-cols-1 xl:grid-cols-2 divide-y xl:divide-y-0 xl:divide-x divide-slate-100">
@@ -649,15 +863,22 @@ export default function BulkMenuCreatorPage() {
                     <input
                       id="bulk-item-search"
                       type="text"
-                      placeholder="Search catalog…"
+                      placeholder={publishedDays[activeDayIndex] ? "Catalog locked for published day" : "Search catalog…"}
                       value={itemSearch}
+                      disabled={!!publishedDays[activeDayIndex]}
                       onChange={e => setItemSearch(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      className="w-full pl-9 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-100 disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
                 <div className="overflow-y-auto max-h-72 divide-y divide-slate-50">
-                  {filteredCatalog.length === 0 ? (
+                  {publishedDays[activeDayIndex] ? (
+                    <div className="p-8 text-center text-slate-400 text-sm flex flex-col items-center justify-center">
+                      <svg className="w-8 h-8 text-slate-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                      <p className="font-medium text-slate-600">Menu is published</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Items cannot be added to this day.</p>
+                    </div>
+                  ) : filteredCatalog.length === 0 ? (
                     <div className="p-8 text-center text-slate-400 text-sm">
                       {itemSearch ? 'No matches.' : selectedIds.length === menuItems.length ? 'All items selected.' : 'No active items.'}
                     </div>
@@ -682,10 +903,15 @@ export default function BulkMenuCreatorPage() {
 
               {/* Configured items for active day */}
               <div className="flex flex-col">
-                <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center">
+                <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     {DAY_SHORT[activeDayIndex]} — {selectedIds.length} item{selectedIds.length !== 1 ? 's' : ''} configured
                   </span>
+                  {publishedDays[activeDayIndex] && (
+                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
+                      Locked
+                    </span>
+                  )}
                 </div>
                 <div className="overflow-y-auto max-h-72 p-3 space-y-2">
                   {selectedItemsList.length === 0 ? (
@@ -701,6 +927,7 @@ export default function BulkMenuCreatorPage() {
                       onUpdateFlag={updateFlag}
                       onUpdateQty={updateQty}
                       onRemove={removeItem}
+                      isReadOnly={!!publishedDays[activeDayIndex]}
                     />
                   ))}
                 </div>
@@ -709,13 +936,14 @@ export default function BulkMenuCreatorPage() {
             </div>
           </div>
 
-          {/* ── Week Overview strip ── */}
-          {weekDates.length === 7 && (
+          {/* ── 5-Day Week Overview strip ── */}
+          {weekDates.length === 5 && (
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 px-6 py-4">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Week Overview</p>
-              <div className="grid grid-cols-7 gap-2">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">5-Day Week Overview (Mon – Fri)</p>
+              <div className="grid grid-cols-5 gap-2">
                 {weekDates.map((date, i) => {
                   const count = daySummary[i]
+                  const isPublished = !!publishedDays[i]
                   const isActive = activeDayIndex === i
                   return (
                     <button
@@ -724,15 +952,19 @@ export default function BulkMenuCreatorPage() {
                       className={`flex flex-col items-center py-3 rounded-xl border text-center transition-all ${
                         isActive
                           ? 'bg-blue-600 border-blue-600 text-white shadow-sm shadow-blue-200'
+                          : isPublished
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:border-emerald-300'
                           : count > 0
-                          ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:border-emerald-400'
+                          ? 'bg-blue-50/50 border-blue-200 text-blue-800 hover:border-blue-300'
                           : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'
                       }`}
                     >
                       <span className="text-xs font-semibold opacity-75">{DAY_SHORT[i]}</span>
                       <span className="text-sm font-bold mt-0.5">{date.slice(8)}</span>
-                      <span className={`mt-1 text-[10px] font-semibold ${isActive ? 'text-white/70' : count > 0 ? 'text-emerald-600' : 'text-slate-300'}`}>
-                        {count > 0 ? `${count} item${count !== 1 ? 's' : ''}` : 'empty'}
+                      <span className={`mt-1 text-[10px] font-semibold ${
+                        isActive ? 'text-white/80' : isPublished ? 'text-emerald-600' : count > 0 ? 'text-blue-600' : 'text-slate-300'
+                      }`}>
+                        {isPublished ? '✓ published' : count > 0 ? `${count} item${count !== 1 ? 's' : ''}` : 'empty'}
                       </span>
                     </button>
                   )
@@ -745,10 +977,10 @@ export default function BulkMenuCreatorPage() {
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 px-6 py-4 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 text-sm">
               <div className={`w-2 h-2 rounded-full ${isReady ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-              <span className="text-slate-600">
+              <span className="text-slate-600 text-xs sm:text-sm">
                 {isReady
-                  ? `Ready — ${totalItemDays} day${totalItemDays !== 1 ? 's' : ''} configured, ${7 - totalItemDays} will be skipped`
-                  : 'Fill context and configure items for at least one day'}
+                  ? `${totalPublishedDays} published / locked · ${Math.max(0, totalConfiguredDays - totalPublishedDays)} new day(s) configured`
+                  : 'Select canteen, service, and week to configure items'}
               </span>
             </div>
             <button
@@ -758,9 +990,11 @@ export default function BulkMenuCreatorPage() {
               className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors shadow-sm shadow-blue-200"
             >
               {loading ? (
-                <><span className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />Creating…</>
+                <><span className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />Processing…</>
+              ) : totalPublishedDays === 5 ? (
+                <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Update Slot Timings</>
               ) : (
-                <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>Create Bulk Menu</>
+                <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>Save &amp; Create Bulk Menu</>
               )}
             </button>
           </div>

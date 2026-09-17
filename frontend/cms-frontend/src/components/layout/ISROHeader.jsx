@@ -6,11 +6,10 @@ import {
   ArrowRightStartOnRectangleIcon,
   Bars3Icon,
   XMarkIcon,
-  BuildingOffice2Icon,
 } from '@heroicons/react/24/outline'
 
 export default function ISROHeader({ onToggleMobileSidebar, isMobileSidebarOpen }) {
-  const { user, customer, logout, activeCanteenId, setActiveCanteenId } = useAuth()
+  const { user, customer, logout } = useAuth()
   const perms = usePermissions()
 
   // Real-time IST Clock
@@ -46,7 +45,6 @@ export default function ISROHeader({ onToggleMobileSidebar, isMobileSidebarOpen 
 
   const roleLabel = ROLE_META[perms.primaryRole]?.label ?? perms.primaryRole ?? 'Authorized User'
   const displayId = customer?.CUSTOMERID || user?.LOGINID || ''
-  const canteenRoles = user?.CANTEENROLES || []
 
   return (
     <header className="relative bg-slate-900 border-b border-slate-800 text-white z-40 select-none shadow-sm">
@@ -90,34 +88,6 @@ export default function ISROHeader({ onToggleMobileSidebar, isMobileSidebarOpen 
               </span>
             </div>
           </div>
-
-          {/* Canteen Context Badge / Switcher (if multi-canteen) */}
-          {canteenRoles.length > 1 && (
-            <div className="hidden xl:flex items-center gap-1.5 ml-3 bg-slate-800/90 border border-slate-700/80 rounded px-2.5 py-1 text-[0.7rem] text-white">
-              <BuildingOffice2Icon className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" />
-              <span className="text-slate-400 font-medium">Facility:</span>
-              <select
-                value={activeCanteenId || ''}
-                onChange={(e) => setActiveCanteenId(Number(e.target.value))}
-                className="bg-transparent text-white font-semibold focus:outline-none cursor-pointer text-[0.72rem]"
-              >
-                {canteenRoles.map((cr) => (
-                  <option key={cr.CANTEENID} value={cr.CANTEENID} className="bg-slate-900 text-white">
-                    {cr.CANTEENNAME ? `${cr.CANTEENNAME} (${cr.CANTEENCODE || `CAN-0${cr.CANTEENID}`})` : `Canteen #${cr.CANTEENID}`}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {canteenRoles.length === 1 && (
-            <div className="hidden xl:flex items-center gap-1.5 ml-3 bg-slate-800/60 border border-slate-700/50 rounded px-2 py-0.5 text-[0.68rem] text-slate-300">
-              <BuildingOffice2Icon className="w-3 h-3 text-orange-400 flex-shrink-0" />
-              <span className="text-slate-300 font-medium">
-                {canteenRoles[0].CANTEENNAME ? `${canteenRoles[0].CANTEENNAME} (${canteenRoles[0].CANTEENCODE || `CAN-0${canteenRoles[0].CANTEENID}`})` : `Canteen #${canteenRoles[0].CANTEENID}`}
-              </span>
-            </div>
-          )}
         </div>
 
         {/* ── Center Prominent ISRO HSFC Identity ── */}

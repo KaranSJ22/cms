@@ -443,7 +443,6 @@ BEGIN
         MI.MENUCODE,
         MI.SHORTNAME,
         MI.ITEMNAME,
-        MI.ISVEG,
         BI.QTY,
         BI.RATE,
         BI.AMOUNT,

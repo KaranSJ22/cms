@@ -582,10 +582,7 @@ export default function SelfServiceKioskPage() {
                           >
                             <div>
                               <div className="flex justify-between items-start gap-1">
-                                <span className="text-[0.65rem] font-bold uppercase text-orange-400 font-mono">
-                                  {item.isVeg ? "🟢 Veg" : "🔴 Non-Veg"}
-                                </span>
-                                <span className="text-base font-black text-white font-mono">
+                                <span className="text-base font-black text-white font-mono ml-auto">
                                   {formatINR(item.rate)}
                                 </span>
                               </div>

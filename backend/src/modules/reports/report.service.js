@@ -1,6 +1,7 @@
 import * as ReportRepository from "./report.repository.js";
 import { pool } from "../../db/connection.js";
 import { NotFoundError } from "../../common/errors/appError.js";
+import { getMonthDateRange } from "../../utils/dateTime.js";
 
 export const getKitchenSummary = async (daySlotId) => {
   const result = await ReportRepository.getKitchenSummary(daySlotId);
@@ -18,14 +19,7 @@ export const getMonthlyPayrollReport = async ({
   customerType = "ALL",
   loginId = "",
 }) => {
-  const now = new Date();
-  const targetYear = year ? parseInt(year, 10) : now.getFullYear();
-  const targetMonth = month ? parseInt(month, 10) : now.getMonth() + 1;
-
-  // Format date range YYYY-MM-01 to YYYY-MM-LastDay
-  const startDate = `${targetYear}-${String(targetMonth).padStart(2, "0")}-01`;
-  const lastDay = new Date(targetYear, targetMonth, 0).getDate();
-  const endDate = `${targetYear}-${String(targetMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  const { startDate, endDate, targetYear, targetMonth } = getMonthDateRange(year, month);
 
   // Customer Type filter
   let allowedTypes = ["PRM", "PERMEMP", "OCE", "OCEEMP"];
@@ -163,13 +157,7 @@ export const getEmployeeMonthlyPayrollBreakdown = async ({
   month,
   year,
 }) => {
-  const now = new Date();
-  const targetYear = year ? parseInt(year, 10) : now.getFullYear();
-  const targetMonth = month ? parseInt(month, 10) : now.getMonth() + 1;
-
-  const startDate = `${targetYear}-${String(targetMonth).padStart(2, "0")}-01`;
-  const lastDay = new Date(targetYear, targetMonth, 0).getDate();
-  const endDate = `${targetYear}-${String(targetMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  const { startDate, endDate, targetYear, targetMonth } = getMonthDateRange(year, month);
 
   // 1. Fetch employee basic info
   const [empRows] = await pool.query(

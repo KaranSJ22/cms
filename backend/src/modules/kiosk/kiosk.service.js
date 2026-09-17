@@ -1,7 +1,7 @@
 import * as KioskRepository from "./kiosk.repository.js";
 import * as bookingService from "../booking/booking.service.js";
 import { NotFoundError, BadRequestError, ForbiddenError } from "../../common/errors/appError.js";
-import dayjs from "dayjs";
+import { getTodayIST, getTomorrowIST, toMySQLDate } from "../../utils/dateTime.js";
 
 /**
  * Boot handshake: Resolves kiosk identity from client IP
@@ -57,7 +57,7 @@ export const scanSelfService = async (data) => {
   const user = loginInfo.USER;
 
   // Active bookings: Today and future
-  const today = dayjs().format("YYYY-MM-DD");
+  const today = getTodayIST();
   const rawBookings = await KioskRepository.listBookings(customerId, data.PSERVICEID, today, null);
   
   // Filter for active/pending bookings (CRT = 30)
@@ -95,7 +95,7 @@ export const scanSelfService = async (data) => {
  * Gets tomorrow's kiosk-enabled menu for self-service pre-booking
  */
 export const getNextDayMenu = async (canteenId) => {
-  const tomorrow = dayjs().add(1, "day").format("YYYY-MM-DD");
+  const tomorrow = getTomorrowIST();
   const items = await KioskRepository.getNextDayKioskMenu(canteenId, tomorrow);
 
   // Group items by meal service
@@ -119,7 +119,6 @@ export const getNextDayMenu = async (canteenId) => {
       shortName: item.SHORTNAME,
       itemName: item.ITEMNAME,
       itemDesc: item.ITEMDESC,
-      isVeg: item.ISVEG,
       rate: Number(item.RATE || 0),
       bookUntil: item.BOOKUNTIL,
       cancelUntil: item.CANCELUNTIL,
@@ -138,8 +137,8 @@ export const getNextDayMenu = async (canteenId) => {
  * Next-day self-service pre-booking
  */
 export const bookNextDay = async (data, kiosk = null) => {
-  const today = dayjs().format("YYYY-MM-DD");
-  const serviceDate = dayjs(data.SERVICEDATE).format("YYYY-MM-DD");
+  const today = getTodayIST();
+  const serviceDate = toMySQLDate(data.SERVICEDATE);
 
   // Strict Constraint: Kiosk pre-booking is allowed ONLY for tomorrow or later
   if (serviceDate <= today) {

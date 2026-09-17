@@ -4,11 +4,13 @@ SET FOREIGN_KEY_CHECKS = 0;
 SET SQL_SAFE_UPDATES = 0;
 
 -- Clean up existing data to avoid duplicate key errors on rerun
+DELETE FROM CMS_WALLET;
 DELETE FROM CMS_HOLIDAY;
 DELETE FROM CMS_LVLMAP;
 DELETE FROM CMS_VISITOR;
 DELETE FROM CMS_OCEEMP;
 DELETE FROM CMS_CONTEMP;
+DELETE FROM CMS_PERMEMP;
 DELETE FROM CMS_CUSTOMER;
 DELETE FROM CMS_CONSUMERROLE;
 DELETE FROM CMS_CANTEENROLE;
@@ -26,7 +28,8 @@ INSERT INTO CMS_ROLE (ROLEID, ROLECODE, ROLENAME, DESCR) VALUES
 (1, 'SYSADM', 'System Administrator', 'Full system access'),
 (2, 'CNTMGR', 'Canteen Manager', 'Manages canteen operations, menus, and approvals'),
 (3, 'CNTAST', 'Canteen Assistant', 'Assists manager with templates and reporting'),
-(4, 'CNTSTF', 'Canteen Staff', 'Serving counter kiosk operator');
+(4, 'CNTSTF', 'Canteen Staff', 'Serving counter kiosk operator')
+ON DUPLICATE KEY UPDATE ROLECODE = VALUES(ROLECODE), ROLENAME = VALUES(ROLENAME), DESCR = VALUES(DESCR);
 
 -- ============================================================
 -- 2. SEED CUSTOMER TYPES
@@ -36,20 +39,23 @@ INSERT INTO CMS_CUSTTYPE (CTYPEID, CTYPECODE, CTYPENAME, DESCR) VALUES
 (2, 'CNT', 'Contract Employee', 'Contract Staff'),
 (3, 'OCE', 'Other Center Employee', 'Other Center Staff'),
 (4, 'VIS', 'Visitor', 'Guest Visitor'),
-(5, 'OFF', 'Official Request', 'Official meeting and event catering');
+(5, 'OFF', 'Official Request', 'Official meeting and event catering')
+ON DUPLICATE KEY UPDATE CTYPECODE = VALUES(CTYPECODE), CTYPENAME = VALUES(CTYPENAME), DESCR = VALUES(DESCR);
 
 -- ============================================================
 -- 3. SEED BOOKING TYPES
 -- ============================================================
 INSERT INTO CMS_BOOKTYPE (BOOKTYPEID, BOOKTYPECODE, BOOKTYPENAME, STATUSID) VALUES 
 (1, 'PB', 'Pre-Booking', 10),
-(2, 'KS', 'Kiosk Booking', 10);
+(2, 'KS', 'Kiosk Booking', 10)
+ON DUPLICATE KEY UPDATE BOOKTYPECODE = VALUES(BOOKTYPECODE), BOOKTYPENAME = VALUES(BOOKTYPENAME), STATUSID = VALUES(STATUSID);
 
 -- ============================================================
 -- 4. SEED CENTERS & CANTEENS
 -- ============================================================
 INSERT INTO CMS_CENTER (CENTERID, CENTERCODE, CENTERNAME, LOCATION, STATUSID) VALUES 
-(1, 'HQ', 'Headquarters', 'Main Campus', 10);
+(1, 'HQ', 'Headquarters', 'Main Campus', 10)
+ON DUPLICATE KEY UPDATE CENTERCODE = VALUES(CENTERCODE), CENTERNAME = VALUES(CENTERNAME), LOCATION = VALUES(LOCATION), STATUSID = VALUES(STATUSID);
 
 INSERT INTO CMS_CANTEEN (CANTEENID, CENTERID, CANTEENCODE, CANTEENNAME, LOCATION, STATUSID, CREATEDBY) VALUES 
 (1, 1, 'CAN-A', 'Canteen A', 'Building A', 10, 1),
@@ -84,7 +90,13 @@ INSERT INTO CMS_USER (USERID, LOGINID, FULLNAME, EMAIL, MOBILENO, PWDHASH, ISACT
 (20, 'cont5', 'Cont Emp 5', 'cont5@isro.gov.in', '9999999205', '$2b$10$Aiy6UGHkmFyVghhQpZM3JO.8g3GCeFXwk8B21ZGnlNOGJACP66zRG', 1),
 (21, 'oce1', 'OCE Emp 1', 'oce1@external.com', '9999999301', '$2b$10$Aiy6UGHkmFyVghhQpZM3JO.8g3GCeFXwk8B21ZGnlNOGJACP66zRG', 1),
 (22, 'oce2', 'OCE Emp 2', 'oce2@external.com', '9999999302', '$2b$10$Aiy6UGHkmFyVghhQpZM3JO.8g3GCeFXwk8B21ZGnlNOGJACP66zRG', 1),
-(23, 'vis1', 'Visitor 1', 'vis1@guest.com', '9999999401', '$2b$10$Aiy6UGHkmFyVghhQpZM3JO.8g3GCeFXwk8B21ZGnlNOGJACP66zRG', 1);
+(23, 'vis1', 'Visitor 1', 'vis1@guest.com', '9999999401', '$2b$10$Aiy6UGHkmFyVghhQpZM3JO.8g3GCeFXwk8B21ZGnlNOGJACP66zRG', 1)
+ON DUPLICATE KEY UPDATE 
+    FULLNAME = VALUES(FULLNAME),
+    EMAIL = VALUES(EMAIL),
+    MOBILENO = VALUES(MOBILENO),
+    PWDHASH = VALUES(PWDHASH),
+    ISACTIVE = VALUES(ISACTIVE);
 
 -- ============================================================
 -- 6. CANTEEN ROLE MAPPING
@@ -98,7 +110,10 @@ INSERT INTO CMS_CANTEENROLE (USERID, ROLEID, CANTEENID, ISDEFAULT, ISACTIVE) VAL
 (5, 3, 2, 1, 1), -- asst2 -> Canteen B
 (6, 4, 1, 1, 1), -- staff1 -> Canteen A
 (7, 4, 2, 1, 1), -- staff2 -> Canteen B
-(8, 4, 3, 1, 1); -- staff3 -> Canteen C
+(8, 4, 3, 1, 1) -- staff3 -> Canteen C
+ON DUPLICATE KEY UPDATE 
+    ISDEFAULT = VALUES(ISDEFAULT),
+    ISACTIVE = VALUES(ISACTIVE);
 
 -- ============================================================
 -- 7. CUSTOMERS & EMPLOYEES
@@ -119,7 +134,8 @@ INSERT INTO CMS_CUSTOMER (CUSTOMERID, USERID, CTYPECODE, DISPNAME, STATUSID) VAL
 (12, 20, 'CNT', 'Cont Emp 5', 10),
 (13, 21, 'OCE', 'OCE Emp 1', 10),
 (14, 22, 'OCE', 'OCE Emp 2', 10),
-(15, 23, 'VIS', 'Visitor 1', 10);
+(15, 23, 'VIS', 'Visitor 1', 10)
+ON DUPLICATE KEY UPDATE USERID = VALUES(USERID), CTYPECODE = VALUES(CTYPECODE), DISPNAME = VALUES(DISPNAME), STATUSID = VALUES(STATUSID);
 
 -- Permanent Employees (with Employee Levels for Official Request approval workflow)
 INSERT INTO CMS_PERMEMP (CUSTOMERID, EMPCODE, DEPT, DESIG, LEVEL) VALUES 
@@ -129,7 +145,8 @@ INSERT INTO CMS_PERMEMP (CUSTOMERID, EMPCODE, DEPT, DESIG, LEVEL) VALUES
 (4, 'P004', 'Avionics', 'Technician B', 11),
 (5, 'P005', 'Admin', 'Admin Officer', 14),
 (6, 'P006', 'Accounts', 'Accounts Officer', 14),
-(7, 'P007', 'Directorate', 'Director', 18);
+(7, 'P007', 'Directorate', 'Director', 18)
+ON DUPLICATE KEY UPDATE EMPCODE = VALUES(EMPCODE), DEPT = VALUES(DEPT), DESIG = VALUES(DESIG), LEVEL = VALUES(LEVEL);
 
 -- Level Approver Tier Mapping (Levels 13, 14 -> L1; 15, 16, 17, 18 -> L2)
 INSERT INTO CMS_LVLMAP (EMPLEVEL, APPRLVL, ISACTIVE) VALUES 
@@ -147,16 +164,19 @@ INSERT INTO CMS_CONTEMP (CUSTOMERID, CONTCODE, VENDORNAME, CONTSTART, CONTEND) V
 (9, 'C002', 'Vendor A', '2026-01-01', '2026-12-31'),
 (10, 'C003', 'Vendor B', '2026-06-01', '2026-12-31'),
 (11, 'C004', 'Vendor B', '2026-06-01', '2026-12-31'),
-(12, 'C005', 'Vendor C', '2026-01-01', '2027-01-01');
+(12, 'C005', 'Vendor C', '2026-01-01', '2027-01-01')
+ON DUPLICATE KEY UPDATE CONTCODE = VALUES(CONTCODE), VENDORNAME = VALUES(VENDORNAME), CONTSTART = VALUES(CONTSTART), CONTEND = VALUES(CONTEND);
 
 -- Other Center Employees
 INSERT INTO CMS_OCEEMP (CUSTOMERID, EMPCODE, CENTERNAME, DEPT, DESIG) VALUES 
 (13, 'O001', 'SAC', 'Payload', 'Engineer SD'),
-(14, 'O002', 'URSC', 'Satellite', 'Scientist SC');
+(14, 'O002', 'URSC', 'Satellite', 'Scientist SC')
+ON DUPLICATE KEY UPDATE EMPCODE = VALUES(EMPCODE), CENTERNAME = VALUES(CENTERNAME), DEPT = VALUES(DEPT), DESIG = VALUES(DESIG);
 
 -- Visitors
 INSERT INTO CMS_VISITOR (CUSTOMERID, VISNAME, VISORG, VISPURPOSE, VISDATE, VALIDUNTIL, CREATEDBY, STATUSID) VALUES 
-(15, 'Visitor One', 'Tech Corp', 'Meeting', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 1 DAY), 1, 10);
+(15, 'Visitor One', 'Tech Corp', 'Meeting', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 1 DAY), 1, 10)
+ON DUPLICATE KEY UPDATE VISNAME = VALUES(VISNAME), VISORG = VALUES(VISORG), VISPURPOSE = VALUES(VISPURPOSE), VISDATE = VALUES(VISDATE), VALIDUNTIL = VALUES(VALIDUNTIL), CREATEDBY = VALUES(CREATEDBY), STATUSID = VALUES(STATUSID);
 
 -- ============================================================
 -- 8. SEED WALLETS (0-Balance for Contract Employees & Visitors)

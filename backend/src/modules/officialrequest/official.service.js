@@ -1,3 +1,4 @@
+import dayjs from "dayjs";
 import { pool, withTransaction } from "../../db/connection.js";
 import {
   BadRequestError,
@@ -6,6 +7,12 @@ import {
   ConflictError,
 } from "../../common/errors/appError.js";
 import { logger } from "../../utils/logger.js";
+import {
+  TIMEZONE_IST,
+  getNowIST,
+  getCurrentYearIST,
+  toMySQLDateTime,
+} from "../../utils/dateTime.js";
 
 // Status IDs corresponding to CMS_STATUS seed
 const STATUS = {
@@ -455,7 +462,7 @@ const generateOfficialBookingNumber = async (canteenId, serviceId, conn) => {
     [nextSeq, canteenId, serviceId]
   );
 
-  const year = new Date().getFullYear();
+  const year = getCurrentYearIST();
   const padded = String(nextSeq).padStart(4, "0");
   return `OBK-${canteenCode}-${year}-${padded}`;
 };
@@ -494,9 +501,9 @@ export const createOfficialBooking = async (bookingData, user) => {
     throw new BadRequestError("The requested Official Service is not active or does not exist");
   }
 
-  const eventTime = new Date(EVENTDATETIME).getTime();
-  const now = Date.now();
-  const leadTimeHours = (eventTime - now) / (1000 * 60 * 60);
+  const eventDateTimeIST = toMySQLDateTime(EVENTDATETIME);
+  const eventTime = dayjs.tz(eventDateTimeIST, TIMEZONE_IST).valueOf();
+  const leadTimeHours = (eventTime - getNowIST().valueOf()) / (1000 * 60 * 60);
 
   if (leadTimeHours < service.CUTOFFHOURS) {
     throw new BadRequestError(
@@ -539,7 +546,7 @@ export const createOfficialBooking = async (bookingData, user) => {
         user.USERID,
         PURPOSE,
         VENUE,
-        new Date(EVENTDATETIME),
+        eventDateTimeIST,
         QUANTITY,
         NOOFPEOPLE,
         unitPrice,
@@ -939,8 +946,9 @@ export const resubmitOfficialBooking = async (bookingId, updatedData, user) => {
     }
 
     // Cutoff validation
-    const eventTime = new Date(newEventTimeStr).getTime();
-    const leadTimeHours = (eventTime - Date.now()) / (1000 * 60 * 60);
+    const eventDateTimeIST = toMySQLDateTime(newEventTimeStr);
+    const eventTime = dayjs.tz(eventDateTimeIST, TIMEZONE_IST).valueOf();
+    const leadTimeHours = (eventTime - getNowIST().valueOf()) / (1000 * 60 * 60);
     if (leadTimeHours < booking.CUTOFFHOURS) {
       throw new BadRequestError(
         `Booking cutoff violation: ${booking.SERVNAME} requires at least ${booking.CUTOFFHOURS} hours notice prior to event.`
@@ -975,7 +983,7 @@ export const resubmitOfficialBooking = async (bookingId, updatedData, user) => {
     }
     if (updatedData.EVENTDATETIME) {
       fields.push("EVENTDATETIME = ?");
-      params.push(new Date(updatedData.EVENTDATETIME));
+      params.push(toMySQLDateTime(updatedData.EVENTDATETIME));
     }
     if (updatedData.QUANTITY) {
       fields.push("QUANTITY = ?");

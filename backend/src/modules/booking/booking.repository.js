@@ -1,5 +1,6 @@
 import { pool } from "../../db/connection.js";
 import { BadRequestError, NotFoundError, ForbiddenError } from "../../common/errors/appError.js";
+import { isPastCutoff, toMySQLDate } from "../../utils/dateTime.js";
 
 export const getBooking = async (bookingId) => {
   const [resultSets] = await pool.query("CALL CMSGETBOOK(?)", [bookingId]);
@@ -434,15 +435,14 @@ export const addBookingItemIncremental = async ({
       throw new BadRequestError("This item is not available for pre-booking");
     }
 
-    const dmDateStr = typeof dayMenu.SERVDATE === "string" ? dayMenu.SERVDATE.slice(0, 10) : dayMenu.SERVDATE.toISOString().split("T")[0];
-    const bkDateStr = typeof booking.SERVICEDATE === "string" ? booking.SERVICEDATE.slice(0, 10) : booking.SERVICEDATE.toISOString().split("T")[0];
+    const dmDateStr = toMySQLDate(dayMenu.SERVDATE);
+    const bkDateStr = toMySQLDate(booking.SERVICEDATE);
     if (dayMenu.SERVICEID !== booking.SERVICEID || dmDateStr !== bkDateStr) {
       throw new BadRequestError("Item does not match the service and date of this booking");
     }
 
     // Check BOOKUNTIL cutoff
-    const now = new Date();
-    if (now > new Date(dayMenu.BOOKUNTIL)) {
+    if (isPastCutoff(dayMenu.BOOKUNTIL)) {
       throw new BadRequestError(`Booking window has closed for item: ${dayMenu.ITEMNAME}`);
     }
 
@@ -648,8 +648,7 @@ export const updateBookingItemQtyIncremental = async ({
     }
 
     // Check BOOKUNTIL cutoff
-    const now = new Date();
-    if (now > new Date(item.BOOKUNTIL)) {
+    if (isPastCutoff(item.BOOKUNTIL)) {
       throw new BadRequestError(`Booking window has closed for item: ${item.ITEMNAME}`);
     }
 
@@ -825,8 +824,7 @@ export const cancelBookingItemIncremental = async ({
     }
 
     // Check BOOKUNTIL cutoff
-    const now = new Date();
-    if (now > new Date(item.BOOKUNTIL)) {
+    if (isPastCutoff(item.BOOKUNTIL)) {
       throw new BadRequestError(`Cancellation window has closed for item: ${item.ITEMNAME}`);
     }
 
@@ -935,7 +933,11 @@ export const resolveBookingByIdentifier = async (identifier, canteenId = null, s
       ]
     );
   } catch (err) {
-    if (err.code === "ER_SP_DOES_NOT_EXIST") {
+    if (
+      err.code === "ER_SP_DOES_NOT_EXIST" ||
+      err.code === "ER_BAD_FIELD_ERROR" ||
+      err.errno === 1054
+    ) {
       try {
         [results] = await pool.query(
           "CALL CMSGETBOOKFORSERVING(?, ?, ?, ?)",
