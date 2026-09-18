@@ -129,3 +129,25 @@ export const processManagerActionController = asyncHandler(async (req, res) => {
   });
   return sendSuccess(res, result, `Booking ${ACTION.toLowerCase()}ed successfully`);
 });
+
+// ============================================================
+// Kitchen Preparation & Fulfillment Workflow (Staff & Manager)
+// ============================================================
+
+export const listConfirmedOfficialBookingsController = asyncHandler(async (req, res) => {
+  const canteenId = Number(req.validated.query.canteenId);
+  const { date, fromDate, toDate } = req.validated.query;
+  const bookings = await officialService.listConfirmedOfficialBookings(canteenId, {
+    date,
+    fromDate,
+    toDate,
+  });
+  return sendSuccess(res, bookings, "Confirmed official bookings retrieved");
+});
+
+export const getOfficialKitchenPrepSummaryController = asyncHandler(async (req, res) => {
+  const canteenId = Number(req.validated.query.canteenId);
+  const { date } = req.validated.query;
+  const summary = await officialService.getOfficialKitchenPrepSummary(canteenId, date);
+  return sendSuccess(res, summary, "Official kitchen prep summary retrieved");
+});

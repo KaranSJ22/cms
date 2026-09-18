@@ -23,7 +23,7 @@ body {
 ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
 
-/* Standard Date & Time inputs: ensure calendar/clock icon is always visible and black */
+/* Standard Date & Time inputs: ensure calendar/clock icon is always visible */
 input[type="date"],
 input[type="time"],
 input[type="datetime-local"] {
@@ -34,8 +34,7 @@ input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="time"]::-webkit-calendar-picker-indicator,
 input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
-  filter: brightness(0);
-  opacity: 0.75;
+  opacity: 0.8;
   transition: opacity 0.15s ease-in-out;
 }
 
@@ -45,9 +44,9 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
 }
 
-/* Date/time input color scheme override for dark panels */
+/* Date/time input indicator override for dark panels */
 .dark-input::-webkit-calendar-picker-indicator {
-  filter: invert(0.6) sepia(1) saturate(3) hue-rotate(10deg);
+  filter: invert(0.85);
   cursor: pointer;
 }
 

@@ -105,7 +105,7 @@ export default function CanteenDashboardPage() {
   }, [selectedSlot?.DAYSLOTID]);
 
   return (
-    <div className="flex-1 bg-slate-100 p-4 md:p-6 space-y-4 font-inter">
+    <div className="flex-1 space-y-4 font-inter">
       
       {/* ── Space Blue Operations Banner ── */}
       <div className="bg-slate-900 border border-slate-800 rounded-md p-4 md:p-5 shadow-sm text-white">

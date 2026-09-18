@@ -14,6 +14,8 @@ import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
   CurrencyRupeeIcon,
+  InformationCircleIcon,
+  LockClosedIcon,
 } from "@heroicons/react/24/outline";
 
 export default function OfficialBookingForm({ onSuccess, initialData = null }) {
@@ -86,6 +88,18 @@ export default function OfficialBookingForm({ onSuccess, initialData = null }) {
     }
   }, [selectedServiceId]);
 
+  // Sync approval level according to service requirement:
+  // If service strictly requires L2, force apprLvl to 'L2'
+  useEffect(() => {
+    if (activeService) {
+      if (activeService.REQAPPRLVL === "L2") {
+        setApprLvl("L2");
+      } else if (!initialData?.APPRLVL && apprLvl !== "L2") {
+        setApprLvl("L1");
+      }
+    }
+  }, [activeService]);
+
   // 4. Fetch Eligible Approvers when apprLvl changes
   useEffect(() => {
     setApprovers([]);
@@ -99,9 +113,14 @@ export default function OfficialBookingForm({ onSuccess, initialData = null }) {
       .catch((err) => console.error("Failed to load approvers", err));
   }, [apprLvl]);
 
-  // Pricing calculation
-  const unitPrice = Number(activeCombo?.COMBOPRICE || 0);
-  const totalAmount = unitPrice * Number(quantity || 0);
+  // Pricing calculation: Total = (Quantity * Gross Price) + Handling Charges
+  const grossUnitPrice = Number(
+    activeCombo?.GROSSPRICE !== undefined && activeCombo?.GROSSPRICE !== null
+      ? activeCombo.GROSSPRICE
+      : activeCombo?.COMBOPRICE || 0
+  );
+  const flatHandlingCharge = Number(activeCombo?.HANDLINGCHARGE || 0);
+  const totalAmount = Number(((Number(quantity || 0) * grossUnitPrice) + flatHandlingCharge).toFixed(2));
 
   // Cutoff calculation
   let cutoffWarning = null;
@@ -250,44 +269,119 @@ export default function OfficialBookingForm({ onSuccess, initialData = null }) {
               No active combo packages configured under this service yet.
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-              {activeCombos.map((combo) => {
-                const isSelected = Number(selectedComboId) === combo.OFFCOMBOID;
-                return (
-                  <div
-                    key={combo.OFFCOMBOID}
-                    onClick={() => setSelectedComboId(combo.OFFCOMBOID)}
-                    className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex flex-col justify-between ${
-                      isSelected
-                        ? "border-orange-500 bg-orange-50/40 dark:bg-orange-950/20 shadow-sm"
-                        : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-800/50"
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between gap-2 mb-1.5">
-                        <h4 className="font-bold text-slate-900 dark:text-white text-sm">{combo.COMBONAME}</h4>
-                        <span className="font-black text-orange-600 dark:text-orange-400 text-sm">
-                          ₹{Number(combo.COMBOPRICE).toFixed(2)}
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {activeCombos.map((combo) => {
+                  const isSelected = Number(selectedComboId) === combo.OFFCOMBOID;
+                  const grossVal = Number(combo.GROSSPRICE !== undefined && combo.GROSSPRICE !== null ? combo.GROSSPRICE : combo.COMBOPRICE);
+                  const handlingVal = Number(combo.HANDLINGCHARGE || 0);
+
+                  return (
+                    <div
+                      key={combo.OFFCOMBOID}
+                      onClick={() => setSelectedComboId(combo.OFFCOMBOID)}
+                      className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex flex-col justify-between ${
+                        isSelected
+                          ? "border-orange-500 bg-orange-50/40 dark:bg-orange-950/20 shadow-sm"
+                          : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-800/50"
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <h4 className="font-bold text-slate-900 dark:text-white text-sm">{combo.COMBONAME}</h4>
+                          <span className="font-black text-orange-600 dark:text-orange-400 text-sm">
+                            ₹{grossVal.toFixed(2)}
+                            <span className="text-[10px] font-normal text-slate-400 ml-0.5">/portion</span>
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-2.5">{combo.DESCR || "Official packaged catering"}</p>
+
+                        {/* Bundled Dish Chips Preview */}
+                        {combo.ITEMS && combo.ITEMS.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-3">
+                            {combo.ITEMS.map((dish) => (
+                              <span
+                                key={dish.COMBOITEMID || dish.MENUITEMID}
+                                className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700/80 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600"
+                              >
+                                <span>{dish.MENUNAME || dish.ITEMNAME}</span>
+                                <span className="text-orange-600 dark:text-orange-400 font-bold">×{dish.QTY}</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="pt-2.5 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between text-xs">
+                        <span className="text-slate-400 text-[11px]">
+                          {handlingVal > 0 ? `+ ₹${handlingVal.toFixed(2)} flat handling` : "No handling fee"}
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded font-medium text-[11px] ${
+                            isSelected
+                              ? "bg-orange-600 text-white"
+                              : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                          }`}
+                        >
+                          {isSelected ? "Selected" : "Choose"}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{combo.DESCR || "Includes catering delivery & handling"}</p>
                     </div>
+                  );
+                })}
+              </div>
 
-                    <div className="pt-2.5 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between text-xs">
-                      <span className="text-slate-400">Unit Price per serving</span>
-                      <span
-                        className={`px-2 py-0.5 rounded font-medium text-[11px] ${
-                          isSelected
-                            ? "bg-orange-600 text-white"
-                            : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-                        }`}
-                      >
-                        {isSelected ? "Selected" : "Choose"}
+              {/* Prominent Included Dishes in Selected Combo Panel */}
+              {activeCombo && (
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2.5">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white font-grotesk">
+                        Included Dishes in {activeCombo.COMBONAME}
+                      </h4>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800">
+                        {activeCombo.ITEMS?.length || 0} dishes
                       </span>
                     </div>
+
+                    <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">
+                      Gross Rate: <strong className="text-slate-900 dark:text-white">₹{grossUnitPrice.toFixed(2)}</strong> / person
+                      {flatHandlingCharge > 0 && (
+                        <span> • Flat Handling: <strong className="text-slate-900 dark:text-white">₹{flatHandlingCharge.toFixed(2)}</strong></span>
+                      )}
+                    </div>
                   </div>
-                );
-              })}
+
+                  {!activeCombo.ITEMS || activeCombo.ITEMS.length === 0 ? (
+                    <div className="p-3 text-xs text-slate-400 italic text-center bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
+                      No dishes bundled in this combo package yet.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                      {activeCombo.ITEMS.map((dish) => (
+                        <div
+                          key={dish.COMBOITEMID || dish.MENUITEMID}
+                          className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between"
+                        >
+                          <div className="min-w-0 pr-2">
+                            <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                              {dish.MENUNAME || dish.ITEMNAME}
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              {dish.CATCODE} • Qty: {dish.QTY}
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="text-[11px] font-mono font-semibold text-slate-700 dark:text-slate-300">
+                              ₹{(Number(dish.OFFPRICE || 0) * Number(dish.QTY || 1)).toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -393,6 +487,26 @@ export default function OfficialBookingForm({ onSuccess, initialData = null }) {
           3. Approver Selection (Two-Step Routing)
         </h3>
 
+        {/* Required Approval Policy Badge */}
+        {activeService?.REQAPPRLVL === "L2" ? (
+          <div className="mb-4 p-3 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-300 text-xs flex items-center gap-2">
+            <InformationCircleIcon className="w-4 h-4 shrink-0 text-purple-600 dark:text-purple-400" />
+            <div>
+              <span className="font-bold">Required Approval Policy:</span> This service (
+              <strong>{activeService?.SERVNAME}</strong>) strictly requires <strong>Level 2 approval</strong>.
+              Routing is restricted only to senior Level 2 Officers.
+            </div>
+          </div>
+        ) : (
+          <div className="mb-4 p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 text-xs flex items-center gap-2">
+            <InformationCircleIcon className="w-4 h-4 shrink-0 text-blue-600 dark:text-blue-400" />
+            <div>
+              <span className="font-bold">Required Approval Policy:</span> This service requires{" "}
+              <strong>Level 1 approval</strong>. You may choose either a Level 1 or Level 2 officer.
+            </div>
+          </div>
+        )}
+
         {/* Step 1: Approver Tier */}
         <div className="mb-4">
           <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
@@ -400,21 +514,29 @@ export default function OfficialBookingForm({ onSuccess, initialData = null }) {
           </label>
           <div className="flex gap-4">
             <label
-              className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border-2 cursor-pointer transition ${
-                apprLvl === "L1"
-                  ? "border-orange-500 bg-orange-50/40 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400 font-bold"
-                  : "border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
+              className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border-2 transition ${
+                activeService?.REQAPPRLVL === "L2"
+                  ? "border-slate-200 dark:border-slate-800 bg-slate-100/60 dark:bg-slate-800/40 text-slate-400 cursor-not-allowed opacity-60"
+                  : apprLvl === "L1"
+                  ? "border-orange-500 bg-orange-50/40 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400 font-bold cursor-pointer"
+                  : "border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 cursor-pointer"
               }`}
             >
               <input
                 type="radio"
                 name="apprLvl"
                 value="L1"
+                disabled={activeService?.REQAPPRLVL === "L2"}
                 checked={apprLvl === "L1"}
-                onChange={() => setApprLvl("L1")}
+                onChange={() => activeService?.REQAPPRLVL !== "L2" && setApprLvl("L1")}
                 className="hidden"
               />
-              <span>Level 1 (L1 & L2 Approvers Eligible)</span>
+              {activeService?.REQAPPRLVL === "L2" && (
+                <LockClosedIcon className="w-4 h-4 text-slate-400 shrink-0" />
+              )}
+              <span>
+                Level 1 {activeService?.REQAPPRLVL === "L2" ? "(Locked for this service)" : "(L1 & L2 Approvers Eligible)"}
+              </span>
             </label>
 
             <label
@@ -473,15 +595,16 @@ export default function OfficialBookingForm({ onSuccess, initialData = null }) {
             Official Amount Calculation
           </span>
           <div className="flex items-baseline gap-3">
-            <span className="text-2xl font-black text-white">
+            <span className="text-2xl font-black text-white font-mono">
               ₹{totalAmount.toFixed(2)}
             </span>
-            <span className="text-xs text-slate-400">
-              ({quantity} servings × ₹{unitPrice.toFixed(2)})
+            <span className="text-xs text-slate-300">
+              ({quantity} servings × ₹{grossUnitPrice.toFixed(2)} Food Rate)
+              {flatHandlingCharge > 0 && ` + ₹${flatHandlingCharge.toFixed(2)} Flat Handling`}
             </span>
           </div>
           <span className="text-[11px] text-slate-400 block mt-1">
-            * Amount calculated for official audit records. Final settlement is handled externally by Accounts.
+            * Formula: (Quantity × Gross Food Rate) + Flat Handling Fee. Official audit records are billed accordingly.
           </span>
         </div>
 

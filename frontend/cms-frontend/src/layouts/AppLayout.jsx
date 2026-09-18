@@ -104,7 +104,7 @@ export default function AppLayout() {
         />
 
         {/* ── Main Viewport Content ── */}
-        <main className="flex-1 flex flex-col min-h-0 min-w-0 bg-slate-50 overflow-y-auto">
+        <main className="flex-1 flex flex-col min-h-0 min-w-0 bg-slate-50 overflow-y-auto p-4 md:p-6 lg:p-8">
           <Outlet
             context={{
               activeTab,

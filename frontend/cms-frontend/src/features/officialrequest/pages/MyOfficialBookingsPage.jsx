@@ -361,8 +361,14 @@ export default function MyOfficialBookingsPage() {
 
             {/* Amount Summary */}
             <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center">
-              <span className="text-xs text-slate-500">Calculated Official Total</span>
-              <span className="text-xl font-black text-slate-900 dark:text-white">
+              <div>
+                <span className="text-xs text-slate-500 block">Calculated Official Total</span>
+                <span className="text-[11px] text-slate-400">
+                  ({selectedBooking.QUANTITY} servings × ₹{Number(selectedBooking.UNITPRICE || 0).toFixed(2)} Food Rate)
+                  {Number(selectedBooking.HANDLINGCHARGE || 0) > 0 && ` + ₹${Number(selectedBooking.HANDLINGCHARGE).toFixed(2)} Flat Handling`}
+                </span>
+              </div>
+              <span className="text-xl font-black text-slate-900 dark:text-white font-mono">
                 ₹{Number(selectedBooking.TOTALAMOUNT).toFixed(2)}
               </span>
             </div>

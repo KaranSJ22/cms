@@ -16,6 +16,8 @@ import {
   CurrencyRupeeIcon,
   CubeIcon,
   ArrowLeftIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
 } from "@heroicons/react/24/outline";
 import ComboItemPicker from "../components/ComboItemPicker";
 import ComboCostCalculator from "../components/ComboCostCalculator";
@@ -29,13 +31,24 @@ export default function OfficialServicesManagerPage() {
 
   // Modals & In-Page Studio
   const [showServiceModal, setShowServiceModal] = useState(false);
-  const [serviceForm, setServiceForm] = useState({ SERVNAME: "", DESCR: "", CUTOFFHOURS: 24 });
+  const [serviceForm, setServiceForm] = useState({ SERVNAME: "", DESCR: "", CUTOFFHOURS: 24, REQAPPRLVL: "L1" });
   const [showComboModal, setShowComboModal] = useState(null); // target serviceId (active in-page studio)
   const [comboForm, setComboForm] = useState({ COMBONAME: "", DESCR: "", COMBOPRICE: 0, ITEMS: [] });
   const [handlingCharge, setHandlingCharge] = useState(0);
   const [availableItems, setAvailableItems] = useState([]);
   const [loadingItems, setLoadingItems] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [expandedCombos, setExpandedCombos] = useState({});
+
+  const toggleExpandCombo = (serviceId, comboId) => {
+    setExpandedCombos((prev) => {
+      const current = prev[serviceId];
+      return {
+        ...prev,
+        [serviceId]: current === comboId ? null : comboId,
+      };
+    });
+  };
 
   // 1. Fetch Canteens and filter strictly by manager's assigned canteens
   useEffect(() => {
@@ -128,9 +141,10 @@ export default function OfficialServicesManagerPage() {
         SERVNAME: serviceForm.SERVNAME.trim(),
         DESCR: serviceForm.DESCR.trim(),
         CUTOFFHOURS: Number(serviceForm.CUTOFFHOURS),
+        REQAPPRLVL: serviceForm.REQAPPRLVL || "L1",
       });
       setShowServiceModal(false);
-      setServiceForm({ SERVNAME: "", DESCR: "", CUTOFFHOURS: 24 });
+      setServiceForm({ SERVNAME: "", DESCR: "", CUTOFFHOURS: 24, REQAPPRLVL: "L1" });
       loadServices();
     } catch (err) {
       alert(err.response?.data?.MESSAGE || err.message || "Failed to create service");
@@ -166,6 +180,8 @@ export default function OfficialServicesManagerPage() {
         OFFSERVID: Number(showComboModal),
         COMBONAME: comboForm.COMBONAME.trim(),
         DESCR: comboForm.DESCR.trim(),
+        GROSSPRICE: Number(grossTotal.toFixed(2)),
+        HANDLINGCHARGE: Number(handlingCharge.toFixed(2)),
         COMBOPRICE: Number(comboForm.COMBOPRICE),
         ITEMS: comboForm.ITEMS.map((it) => ({
           MENUITEMID: it.MENUITEMID,
@@ -209,7 +225,7 @@ export default function OfficialServicesManagerPage() {
       return {
         ...prev,
         ITEMS: newItems,
-        COMBOPRICE: prev.COMBOPRICE === 0 ? newGross + handlingCharge : prev.COMBOPRICE,
+        COMBOPRICE: prev.COMBOPRICE === 0 ? newGross : prev.COMBOPRICE,
       };
     });
   };
@@ -224,7 +240,7 @@ export default function OfficialServicesManagerPage() {
       return {
         ...prev,
         ITEMS: newItems,
-        COMBOPRICE: prev.COMBOPRICE === 0 ? newGross + handlingCharge : prev.COMBOPRICE,
+        COMBOPRICE: prev.COMBOPRICE === 0 ? newGross : prev.COMBOPRICE,
       };
     });
   };
@@ -249,7 +265,7 @@ export default function OfficialServicesManagerPage() {
   const handleSyncSuggestedPrice = () => {
     setComboForm((prev) => ({
       ...prev,
-      COMBOPRICE: grossTotal + handlingCharge,
+      COMBOPRICE: grossTotal,
     }));
   };
 
@@ -475,10 +491,10 @@ export default function OfficialServicesManagerPage() {
           {/* Top Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
-              <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight font-grotesk">
+              <h1 className="text-2xl font-black text-slate-900 tracking-tight font-grotesk">
                 Official Services & Combos
               </h1>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              <p className="text-sm text-slate-500 mt-1">
                 Configure official catering categories, predefined combo bundles, and lead-time cutoffs.
               </p>
             </div>
@@ -491,7 +507,7 @@ export default function OfficialServicesManagerPage() {
                   setSelectedCanteenId(val);
                   setActiveCanteenId(val);
                 }}
-                className="px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none cursor-pointer"
+                className="px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 outline-none cursor-pointer"
               >
                 {canteens.map((c) => (
                   <option key={c.CANTEENID} value={c.CANTEENID} className="bg-slate-900 text-white">
@@ -516,9 +532,9 @@ export default function OfficialServicesManagerPage() {
               <div className="w-8 h-8 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />
             </div>
           ) : services.length === 0 ? (
-            <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
-              <SparklesIcon className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-              <h3 className="text-base font-semibold text-slate-700 dark:text-slate-300">
+            <div className="text-center py-20 bg-white rounded-3xl border border-slate-200">
+              <SparklesIcon className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <h3 className="text-base font-semibold text-slate-700">
                 No Official Services configured
               </h3>
               <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto">
@@ -530,19 +546,28 @@ export default function OfficialServicesManagerPage() {
               {services.map((svc) => (
                 <div
                   key={svc.OFFSERVID}
-                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm"
+                  className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm"
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
                     <div>
-                      <div className="flex items-center gap-3">
-                        <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <h3 className="text-lg font-bold text-slate-900">
                           {svc.SERVNAME}
                         </h3>
-                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                           Active
                         </span>
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                            svc.REQAPPRLVL === "L2"
+                              ? "bg-purple-50 text-purple-700 border-purple-200"
+                              : "bg-blue-50 text-blue-700 border-blue-200"
+                          }`}
+                        >
+                          {svc.REQAPPRLVL === "L2" ? "Level 2 Approval Required" : "Level 1 Approval Required"}
+                        </span>
                       </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      <p className="text-xs text-slate-500 mt-1">
                         {svc.DESCR || "Departmental and conference catering service."}
                       </p>
                     </div>
@@ -552,7 +577,7 @@ export default function OfficialServicesManagerPage() {
                         <span className="text-[10px] text-slate-400 uppercase tracking-wider block">
                           Cutoff Notice
                         </span>
-                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                        <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
                           <ClockIcon className="w-3.5 h-3.5 text-orange-500" />
                           {svc.CUTOFFHOURS} hours prior
                         </span>
@@ -570,43 +595,156 @@ export default function OfficialServicesManagerPage() {
 
                   {/* Combos Grid */}
                   <div className="mt-5">
-                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
-                      Predefined Combos under this service ({svc.COMBOS?.length || 0})
-                    </h4>
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                        Predefined Combos under this service ({svc.COMBOS?.length || 0})
+                      </h4>
+                      <span className="text-[11px] text-slate-400 hidden sm:inline">
+                        Click any combo card to view included dishes
+                      </span>
+                    </div>
 
                     {!svc.COMBOS || svc.COMBOS.length === 0 ? (
                       <div className="p-6 bg-slate-50 dark:bg-slate-800/40 rounded-xl text-xs text-slate-400 text-center border border-dashed border-slate-200 dark:border-slate-700">
                         No combos added yet. Click 'Add Combo' to configure packaged options with live dish costing.
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {svc.COMBOS.map((combo) => (
-                          <div
-                            key={combo.OFFCOMBOID}
-                            className="bg-slate-50 dark:bg-slate-800/60 rounded-xl p-4 border border-slate-200/80 dark:border-slate-700/60 flex flex-col justify-between"
-                          >
-                            <div>
-                              <div className="flex justify-between items-start gap-2 mb-1.5">
-                                <h5 className="font-bold text-slate-900 dark:text-white text-sm">
-                                  {combo.COMBONAME}
-                                </h5>
-                                <span className="font-black text-orange-600 dark:text-orange-400 text-sm">
-                                  ₹{Number(combo.COMBOPRICE).toFixed(2)}
-                                </span>
-                              </div>
-                              <p className="text-xs text-slate-500 mb-3">
-                                {combo.DESCR || "Standard official catering combo"}
-                              </p>
-                            </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
+                        {svc.COMBOS.map((combo) => {
+                          const isExpanded = expandedCombos[svc.OFFSERVID] === combo.OFFCOMBOID;
+                          const itemCount = combo.ITEMS?.length || 0;
+                          const grossPrice = Number(combo.GROSSPRICE !== undefined && combo.GROSSPRICE !== null ? combo.GROSSPRICE : combo.COMBOPRICE);
+                          const handlingFee = Number(combo.HANDLINGCHARGE || 0);
 
-                            <div className="pt-2.5 border-t border-slate-200/60 dark:border-slate-700/60 text-xs text-slate-500">
-                              <span className="font-semibold text-slate-700 dark:text-slate-300">
-                                Portion Unit Price:
-                              </span>{" "}
-                              ₹{Number(combo.COMBOPRICE).toFixed(2)}
+                          return (
+                            <div
+                              key={combo.OFFCOMBOID}
+                              className={`bg-slate-50/90 rounded-xl p-4 border transition-all flex flex-col ${
+                                isExpanded
+                                  ? "border-orange-500 bg-orange-50/20 shadow-md ring-1 ring-orange-500/20"
+                                  : "border-slate-200 hover:border-slate-300 hover:shadow-xs"
+                              }`}
+                            >
+                              <div>
+                                <div
+                                  onClick={() => toggleExpandCombo(svc.OFFSERVID, combo.OFFCOMBOID)}
+                                  className="cursor-pointer"
+                                >
+                                  <div className="flex justify-between items-start gap-2 mb-1.5">
+                                    <h5 className="font-bold text-slate-900 text-sm hover:text-orange-600 transition-colors">
+                                      {combo.COMBONAME}
+                                    </h5>
+                                    <div className="text-right shrink-0">
+                                      <div className="font-black text-orange-600 text-sm">
+                                        ₹{grossPrice.toFixed(2)}
+                                        <span className="text-[10px] font-semibold text-slate-500 ml-0.5">/pkg</span>
+                                      </div>
+                                      {handlingFee > 0 && (
+                                        <div className="text-[10px] font-medium text-slate-500">
+                                          +₹{handlingFee.toFixed(2)} on total order
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <p className="text-xs text-slate-500 mb-2.5">
+                                    {combo.DESCR || "Standard official catering combo"}
+                                  </p>
+
+                                  {/* Dish tags preview */}
+                                  <div className="flex flex-wrap gap-1 mb-3">
+                                    {itemCount === 0 ? (
+                                      <span className="text-[11px] text-slate-400 italic">No dishes attached</span>
+                                    ) : (
+                                      combo.ITEMS.map((dish) => (
+                                        <span
+                                          key={dish.COMBOITEMID || dish.MENUITEMID}
+                                          className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-700"
+                                        >
+                                          <span>{dish.MENUNAME || dish.ITEMNAME}</span>
+                                          <span className="text-orange-600 font-bold">×{dish.QTY}</span>
+                                        </span>
+                                      ))
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Expanded dishes drawer */}
+                                {isExpanded && combo.ITEMS && combo.ITEMS.length > 0 && (
+                                  <div className="mt-2.5 pt-3 border-t border-slate-200 space-y-2 text-xs">
+                                    <div className="font-bold text-[11px] uppercase tracking-wider text-slate-700">
+                                      Bundled Dishes ({combo.ITEMS.length})
+                                    </div>
+                                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                                      {combo.ITEMS.map((dish) => (
+                                        <div
+                                          key={dish.COMBOITEMID || dish.MENUITEMID}
+                                          className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-100"
+                                        >
+                                          <div className="min-w-0 flex-1">
+                                            <div className="font-semibold text-slate-800 truncate">
+                                              {dish.MENUNAME || dish.ITEMNAME}
+                                            </div>
+                                            <div className="text-[10px] text-slate-400">
+                                              {dish.CATCODE} • Qty: {dish.QTY}
+                                            </div>
+                                          </div>
+                                          <div className="text-right font-mono text-[11px] text-slate-700">
+                                            ₹{(Number(dish.OFFPRICE || 0) * Number(dish.QTY || 1)).toFixed(2)}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+
+                                    {/* Pricing Breakdown Summary */}
+                                    <div className="p-2.5 rounded-lg bg-orange-50/60 border border-orange-200/60 text-[11px] space-y-1.5">
+                                      <div className="flex justify-between items-center text-slate-700">
+                                        <span className="font-medium">Package Food Rate:</span>
+                                        <span className="font-bold font-mono text-slate-900">
+                                          ₹{grossPrice.toFixed(2)}{" "}
+                                          <span className="text-[10px] font-normal text-slate-500">/ package</span>
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between items-center text-slate-700">
+                                        <span className="font-medium">Handling Fee:</span>
+                                        <span className="font-bold font-mono text-slate-900">
+                                          {handlingFee > 0 ? (
+                                            <>
+                                              + ₹{handlingFee.toFixed(2)}{" "}
+                                              <span className="text-[10px] font-normal text-slate-500">flat on total order</span>
+                                            </>
+                                          ) : (
+                                            <span className="text-slate-400 font-normal">₹0.00</span>
+                                          )}
+                                        </span>
+                                      </div>
+                                      <div className="pt-1.5 border-t border-orange-200/80 flex items-center justify-between text-[10.5px] text-slate-600 bg-white/60 -mx-2.5 -mb-2.5 p-2 rounded-b-lg">
+                                        <span>Billing Formula:</span>
+                                        <span className="font-mono font-semibold text-orange-700">
+                                          (Qty × ₹{grossPrice.toFixed(2)}) {handlingFee > 0 ? `+ ₹${handlingFee.toFixed(2)}` : ""}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="pt-2.5 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 mt-2">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpandCombo(svc.OFFSERVID, combo.OFFCOMBOID)}
+                                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-orange-600 hover:text-orange-700 cursor-pointer transition-colors"
+                                >
+                                  <span>{isExpanded ? "Hide Dishes" : `View Dishes (${itemCount})`}</span>
+                                  {isExpanded ? (
+                                    <ChevronUpIcon className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <ChevronDownIcon className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -627,7 +765,7 @@ export default function OfficialServicesManagerPage() {
               </h3>
               <button
                 onClick={() => setShowServiceModal(false)}
-                className="p-1 rounded-full text-slate-400 hover:text-slate-600"
+                className="p-1 rounded-full text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <XMarkIcon className="w-5 h-5" />
               </button>
@@ -684,6 +822,56 @@ export default function OfficialServicesManagerPage() {
                 <span className="text-[11px] text-slate-400">
                   Minimum advance notice needed before the event date/time.
                 </span>
+              </div>
+
+              {/* Required Approval Level */}
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Required Approval Level *
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label
+                    className={`flex flex-col p-2.5 rounded-xl border-2 cursor-pointer transition ${
+                      serviceForm.REQAPPRLVL === "L1"
+                        ? "border-orange-500 bg-orange-50/50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400 font-bold"
+                        : "border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="reqApprLvl"
+                      value="L1"
+                      checked={serviceForm.REQAPPRLVL === "L1"}
+                      onChange={() => setServiceForm({ ...serviceForm, REQAPPRLVL: "L1" })}
+                      className="hidden"
+                    />
+                    <span className="text-xs font-bold">Level 1 Approval</span>
+                    <span className="text-[10px] font-normal text-slate-500 mt-0.5">
+                      Employee can select either Level 1 or Level 2 officer
+                    </span>
+                  </label>
+
+                  <label
+                    className={`flex flex-col p-2.5 rounded-xl border-2 cursor-pointer transition ${
+                      serviceForm.REQAPPRLVL === "L2"
+                        ? "border-orange-500 bg-orange-50/50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400 font-bold"
+                        : "border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="reqApprLvl"
+                      value="L2"
+                      checked={serviceForm.REQAPPRLVL === "L2"}
+                      onChange={() => setServiceForm({ ...serviceForm, REQAPPRLVL: "L2" })}
+                      className="hidden"
+                    />
+                    <span className="text-xs font-bold">Level 2 Approval</span>
+                    <span className="text-[10px] font-normal text-slate-500 mt-0.5">
+                      Employee can strictly select only a Level 2 officer
+                    </span>
+                  </label>
+                </div>
               </div>
 
               <div className="pt-2 flex justify-end gap-2">

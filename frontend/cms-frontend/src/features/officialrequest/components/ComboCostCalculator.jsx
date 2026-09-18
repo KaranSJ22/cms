@@ -16,7 +16,7 @@ export function ComboCostCalculator({
 }) {
   const safeGross = Number(grossTotal) || 0;
   const safeHandling = Number(handlingCharge) || 0;
-  const suggestedNet = safeGross + safeHandling;
+  const suggestedNet = safeGross;
   const safeComboPrice = Number(comboPrice) || 0;
   const markupDiff = safeComboPrice - safeGross;
   const markupPercent = safeGross > 0 ? ((markupDiff / safeGross) * 100).toFixed(1) : 0;
@@ -42,7 +42,7 @@ export function ComboCostCalculator({
           type="button"
           onClick={onSyncSuggested}
           className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40 hover:bg-orange-100 dark:hover:bg-orange-900/50 border border-orange-200 dark:border-orange-800/50 transition-colors cursor-pointer"
-          title="Auto-fill Final Combo Price with Suggested Net Total"
+          title="Auto-fill Package Unit Rate with Food Portion Total"
         >
           <ArrowPathIcon className="w-3 h-3" />
           Sync Price
@@ -51,23 +51,23 @@ export function ComboCostCalculator({
 
       {/* Breakdown Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-        {/* 1. Gross Food Total */}
+        {/* 1. Gross Food Rate */}
         <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-xl">
           <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-0.5">
-            Gross Food Price (Items Total)
+            Gross Food Rate (Items Total)
           </span>
           <div className="text-base font-bold text-slate-900 dark:text-white font-mono">
             ₹{safeGross.toFixed(2)}
           </div>
           <span className="text-[10px] text-slate-400">
-            Sum of individual item catalog rates
+            Unit food rate (multiplied by quantity on booking)
           </span>
         </div>
 
-        {/* 2. Handling / Delivery Overhead */}
+        {/* 2. Flat Handling / Service Overhead */}
         <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-xl">
           <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-0.5">
-            Handling & Delivery Charge (₹)
+            Flat Handling & Service Fee (₹)
           </label>
           <div className="relative">
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">
@@ -84,8 +84,18 @@ export function ComboCostCalculator({
             />
           </div>
           <span className="text-[10px] text-slate-400">
-            Packaging, logistics, service fees
+            One-time flat delivery & setup fee per booking
           </span>
+        </div>
+      </div>
+
+      {/* Pricing Formula Explanation Banner */}
+      <div className="p-2.5 bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/40 rounded-xl text-[11px] text-blue-800 dark:text-blue-300 flex items-start gap-2">
+        <InformationCircleIcon className="w-4 h-4 shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />
+        <div>
+          <span className="font-bold">Official Booking Calculation Rule:</span> Total Amount ={" "}
+          <span className="font-mono font-semibold">(Quantity × Gross Food Rate) + Flat Handling Fee</span>.
+          The handling charge is added once per booking, not multiplied per person.
         </div>
       </div>
 
@@ -93,20 +103,20 @@ export function ComboCostCalculator({
       <div className="p-3.5 bg-linear-to-r from-orange-500/10 via-amber-500/10 to-orange-500/5 border border-orange-200/80 dark:border-orange-900/40 rounded-xl space-y-3">
         <div className="flex items-center justify-between text-xs">
           <span className="font-semibold text-slate-700 dark:text-slate-300">
-            Suggested Net Price (Gross + Handling):
+            Suggested Package Unit Rate (Food Portion):
           </span>
           <span className="text-sm font-black text-slate-900 dark:text-white font-mono">
-            ₹{suggestedNet.toFixed(2)}
+            ₹{safeGross.toFixed(2)} <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400">/ package</span>
           </span>
         </div>
 
         <div className="pt-2 border-t border-orange-200/60 dark:border-orange-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <label className="block text-xs font-bold text-slate-900 dark:text-white">
-              Final Combo Portion Price (₹) <span className="text-rose-500">*</span>
+              Package Unit Price (₹ / pkg) <span className="text-rose-500">*</span>
             </label>
             <p className="text-[10px] text-slate-500 dark:text-slate-400">
-              Official unit rate billed per portion upon booking
+              Per-package food price billed when booked (e.g. ₹{safeGross.toFixed(2)})
             </p>
           </div>
 
@@ -132,17 +142,17 @@ export function ComboCostCalculator({
           <span>
             {safeGross > 0 ? (
               <>
-                Food: <strong className="text-slate-700 dark:text-slate-300">₹{safeGross.toFixed(2)}</strong> + Overhead:{" "}
-                <strong className="text-slate-700 dark:text-slate-300">
-                  {markupDiff >= 0 ? `+₹${markupDiff.toFixed(2)}` : `-₹${Math.abs(markupDiff).toFixed(2)}`}
-                </strong>
+                Package Rate: <strong className="text-slate-700 dark:text-slate-300">₹{safeComboPrice.toFixed(2)}/pkg</strong>
+                {safeHandling > 0 && (
+                  <> + Flat Handling: <strong className="text-slate-700 dark:text-slate-300">₹{safeHandling.toFixed(2)} on total order</strong></>
+                )}
               </>
             ) : (
               "Add items to calculate food portion costs"
             )}
           </span>
 
-          {safeGross > 0 && (
+          {safeGross > 0 && safeComboPrice !== safeGross && (
             <span
               className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
                 markupDiff >= 0

@@ -10,6 +10,7 @@ import { logger } from "../../utils/logger.js";
 import {
   TIMEZONE_IST,
   getNowIST,
+  getTodayIST,
   getCurrentYearIST,
   toMySQLDateTime,
 } from "../../utils/dateTime.js";
@@ -37,6 +38,7 @@ export const listServicesByCanteen = async (canteenId, statusId = null) => {
       os.SERVNAME,
       os.DESCR,
       os.CUTOFFHOURS,
+      os.REQAPPRLVL,
       os.STATUSID,
       st.STATUSNAME,
       os.CREATEDAT
@@ -69,6 +71,8 @@ export const listServicesByCanteen = async (canteenId, statusId = null) => {
       oc.OFFSERVID,
       oc.COMBONAME,
       oc.DESCR,
+      oc.GROSSPRICE,
+      oc.HANDLINGCHARGE,
       oc.COMBOPRICE,
       oc.STATUSID,
       st.STATUSNAME
@@ -79,6 +83,52 @@ export const listServicesByCanteen = async (canteenId, statusId = null) => {
     `,
     [serviceIds]
   );
+
+  // Fetch items for all combos so UI can display dishes
+  if (combos.length > 0) {
+    const comboIds = combos.map((c) => c.OFFCOMBOID);
+    const [comboItems] = await pool.query(
+      `
+      SELECT 
+        oci.OFFCOMBOID,
+        oci.COMBOITEMID,
+        oci.MENUITEMID,
+        mi.ITEMNAME AS MENUNAME,
+        mi.ITEMNAME,
+        mi.SHORTNAME,
+        COALESCE(s.SERVNAME, mi.SHORTNAME, 'Item') AS CATCODE,
+        oci.QTY,
+        COALESCE(
+          (SELECT d.PRICE 
+           FROM CMS_ITEMPRICE p
+           JOIN CMS_ITEMPRICEDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+           WHERE p.MENUITEMID = mi.MENUITEMID 
+             AND d.CTYPECODE = 'OFF'
+             AND p.STATUSID = 10
+           ORDER BY p.EFFFROM DESC LIMIT 1), 
+          0.00
+        ) AS OFFPRICE
+      FROM CMS_OFFCOMBO_ITEM oci
+      JOIN CMS_MENUITEM mi ON mi.MENUITEMID = oci.MENUITEMID
+      LEFT JOIN CMS_SERVICE s ON s.SERVICEID = mi.SERVICEID
+      WHERE oci.OFFCOMBOID IN (?)
+      ORDER BY mi.ITEMNAME ASC
+      `,
+      [comboIds]
+    );
+
+    const itemsByCombo = {};
+    for (const item of comboItems) {
+      if (!itemsByCombo[item.OFFCOMBOID]) {
+        itemsByCombo[item.OFFCOMBOID] = [];
+      }
+      itemsByCombo[item.OFFCOMBOID].push(item);
+    }
+
+    for (const combo of combos) {
+      combo.ITEMS = itemsByCombo[combo.OFFCOMBOID] || [];
+    }
+  }
 
   // Group combos by service
   const combosByService = {};
@@ -105,6 +155,7 @@ export const getServiceDetails = async (serviceId) => {
       os.SERVNAME,
       os.DESCR,
       os.CUTOFFHOURS,
+      os.REQAPPRLVL,
       os.STATUSID,
       st.STATUSNAME,
       os.CREATEDAT
@@ -129,6 +180,8 @@ export const getServiceDetails = async (serviceId) => {
       oc.OFFSERVID,
       oc.COMBONAME,
       oc.DESCR,
+      oc.GROSSPRICE,
+      oc.HANDLINGCHARGE,
       oc.COMBOPRICE,
       oc.STATUSID,
       st.STATUSNAME
@@ -149,12 +202,24 @@ export const getServiceDetails = async (serviceId) => {
         oci.MENUITEMID,
         mi.ITEMNAME AS MENUNAME,
         mi.ITEMNAME,
+        mi.SHORTNAME,
         COALESCE(s.SERVNAME, mi.SHORTNAME, 'Item') AS CATCODE,
-        oci.QTY
+        oci.QTY,
+        COALESCE(
+          (SELECT d.PRICE 
+           FROM CMS_ITEMPRICE p
+           JOIN CMS_ITEMPRICEDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+           WHERE p.MENUITEMID = mi.MENUITEMID 
+             AND d.CTYPECODE = 'OFF'
+             AND p.STATUSID = 10
+           ORDER BY p.EFFFROM DESC LIMIT 1), 
+          0.00
+        ) AS OFFPRICE
       FROM CMS_OFFCOMBO_ITEM oci
       JOIN CMS_MENUITEM mi ON mi.MENUITEMID = oci.MENUITEMID
       LEFT JOIN CMS_SERVICE s ON s.SERVICEID = mi.SERVICEID
       WHERE oci.OFFCOMBOID IN (?)
+      ORDER BY mi.ITEMNAME ASC
       `,
       [comboIds]
     );
@@ -179,14 +244,14 @@ export const getServiceDetails = async (serviceId) => {
 };
 
 export const createService = async (serviceData, userId) => {
-  const { CANTEENID, SERVNAME, DESCR, CUTOFFHOURS } = serviceData;
+  const { CANTEENID, SERVNAME, DESCR, CUTOFFHOURS, REQAPPRLVL } = serviceData;
 
   const [result] = await pool.query(
     `
-    INSERT INTO CMS_OFFSERV (CANTEENID, SERVNAME, DESCR, CUTOFFHOURS, STATUSID, CREATEDBY)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO CMS_OFFSERV (CANTEENID, SERVNAME, DESCR, CUTOFFHOURS, REQAPPRLVL, STATUSID, CREATEDBY)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     `,
-    [CANTEENID, SERVNAME, DESCR || null, CUTOFFHOURS || 24, STATUS.ACTIVE, userId]
+    [CANTEENID, SERVNAME, DESCR || null, CUTOFFHOURS || 24, REQAPPRLVL || "L1", STATUS.ACTIVE, userId]
   );
 
   return getServiceDetails(result.insertId);
@@ -207,6 +272,10 @@ export const updateService = async (serviceId, updateData, userId) => {
   if (updateData.CUTOFFHOURS !== undefined) {
     fields.push("CUTOFFHOURS = ?");
     params.push(updateData.CUTOFFHOURS);
+  }
+  if (updateData.REQAPPRLVL !== undefined) {
+    fields.push("REQAPPRLVL = ?");
+    params.push(updateData.REQAPPRLVL);
   }
   if (updateData.STATUSID !== undefined) {
     fields.push("STATUSID = ?");
@@ -230,16 +299,20 @@ export const updateService = async (serviceId, updateData, userId) => {
 };
 
 export const createCombo = async (comboData, userId) => {
-  const { OFFSERVID, COMBONAME, DESCR, COMBOPRICE, ITEMS } = comboData;
+  const { OFFSERVID, COMBONAME, DESCR, GROSSPRICE, HANDLINGCHARGE, COMBOPRICE, ITEMS } = comboData;
 
   return await withTransaction(async (conn) => {
     // 1. Insert combo header
+    const grossVal = GROSSPRICE !== undefined ? GROSSPRICE : COMBOPRICE;
+    const handlingVal = HANDLINGCHARGE !== undefined ? HANDLINGCHARGE : 0.0;
+    const comboPriceVal = COMBOPRICE !== undefined ? COMBOPRICE : grossVal;
+
     const [comboRes] = await conn.query(
       `
-      INSERT INTO CMS_OFFCOMBO (OFFSERVID, COMBONAME, DESCR, COMBOPRICE, STATUSID, CREATEDBY)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO CMS_OFFCOMBO (OFFSERVID, COMBONAME, DESCR, GROSSPRICE, HANDLINGCHARGE, COMBOPRICE, STATUSID, CREATEDBY)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `,
-      [OFFSERVID, COMBONAME, DESCR || null, COMBOPRICE, STATUS.ACTIVE, userId]
+      [OFFSERVID, COMBONAME, DESCR || null, grossVal, handlingVal, comboPriceVal, STATUS.ACTIVE, userId]
     );
 
     const comboId = comboRes.insertId;
@@ -269,6 +342,14 @@ export const updateCombo = async (comboId, updateData, userId) => {
     if (updateData.DESCR !== undefined) {
       fields.push("DESCR = ?");
       params.push(updateData.DESCR);
+    }
+    if (updateData.GROSSPRICE !== undefined) {
+      fields.push("GROSSPRICE = ?");
+      params.push(updateData.GROSSPRICE);
+    }
+    if (updateData.HANDLINGCHARGE !== undefined) {
+      fields.push("HANDLINGCHARGE = ?");
+      params.push(updateData.HANDLINGCHARGE);
     }
     if (updateData.COMBOPRICE !== undefined) {
       fields.push("COMBOPRICE = ?");
@@ -327,31 +408,19 @@ export const listAvailableMenuItems = async (canteenId) => {
            AND d.CTYPECODE = 'OFF'
            AND p.STATUSID = 10
          ORDER BY p.EFFFROM DESC LIMIT 1), 
-        (SELECT d.PRICE 
-         FROM CMS_ITEMPRICE p
-         JOIN CMS_ITEMPRICEDT d ON d.ITEMPRICEID = p.ITEMPRICEID
-         WHERE p.MENUITEMID = mi.MENUITEMID 
-           AND p.STATUSID = 10
-         ORDER BY (d.CTYPECODE = 'PRM') DESC, p.EFFFROM DESC LIMIT 1),
-        0.00
-      ) AS UNITPRICE,
-      COALESCE(
-        (SELECT d.PRICE 
-         FROM CMS_ITEMPRICE p
-         JOIN CMS_ITEMPRICEDT d ON d.ITEMPRICEID = p.ITEMPRICEID
-         WHERE p.MENUITEMID = mi.MENUITEMID 
-           AND d.CTYPECODE = 'OFF'
-           AND p.STATUSID = 10
-         ORDER BY p.EFFFROM DESC LIMIT 1), 
         0.00
       ) AS OFFPRICE
     FROM CMS_MENUITEM mi
     LEFT JOIN CMS_SERVICE s ON s.SERVICEID = mi.SERVICEID
-    WHERE mi.STATUSID = 10
-    ORDER BY mi.OFFSER DESC, mi.ITEMNAME ASC
+    WHERE mi.STATUSID = 10 AND mi.OFFSER = 1
+    HAVING OFFPRICE > 0
+    ORDER BY mi.ITEMNAME ASC
     `
   );
-  return rows;
+  return rows.map((r) => ({
+    ...r,
+    UNITPRICE: Number(r.OFFPRICE),
+  }));
 };
 
 // ============================================================
@@ -427,7 +496,7 @@ export const getEligibleApprovers = async (apprLvl, requesterUserId) => {
 // 3. BOOKING CREATION & NUMBER GENERATION (EMPLOYEE)
 // ============================================================
 
-const generateOfficialBookingNumber = async (canteenId, serviceId, conn) => {
+const generateOfficialBookingNumber = async (canteenId, conn) => {
   // Get canteen code
   const [cantRows] = await conn.query(
     `SELECT CANTEENCODE FROM CMS_CANTEEN WHERE CANTEENID = ?`,
@@ -435,36 +504,56 @@ const generateOfficialBookingNumber = async (canteenId, serviceId, conn) => {
   );
   const canteenCode = cantRows[0]?.CANTEENCODE || "CAN";
 
-  // Lock counter record
+  // Daily partition based on Indian Standard Time (IST)
+  const todayDate = getTodayIST(); // "YYYY-MM-DD"
+  const dateFormatted = todayDate.replace(/-/g, ""); // "YYYYMMDD"
+
+  // 1. Ensure counter record exists for (canteenId, todayDate)
   await conn.query(
     `
-    INSERT INTO CMS_OFFBOOKCTR (CANTEENID, OFFSERVID, LASTNO)
+    INSERT INTO CMS_OFFBOOKCTR (CANTEENID, BOOKDATE, LASTNO)
     VALUES (?, ?, 0)
     ON DUPLICATE KEY UPDATE LASTNO = LASTNO
     `,
-    [canteenId, serviceId]
+    [canteenId, todayDate]
   );
 
+  // 2. Lock counter record
   const [ctrRows] = await conn.query(
     `
     SELECT LASTNO 
     FROM CMS_OFFBOOKCTR 
-    WHERE CANTEENID = ? AND OFFSERVID = ?
+    WHERE CANTEENID = ? AND BOOKDATE = ?
     FOR UPDATE
     `,
-    [canteenId, serviceId]
+    [canteenId, todayDate]
   );
 
-  const nextSeq = (ctrRows[0]?.LASTNO || 0) + 1;
+  const counterVal = Number(ctrRows[0]?.LASTNO || 0);
 
+  // 3. Self-healing / fail-safe sync:
+  // Query CMS_OFFBOOK for existing maximum sequence for today's prefix to guarantee zero duplicate collisions
+  const prefix = `OBK-${canteenCode}-${dateFormatted}-`;
+  const [maxRows] = await conn.query(
+    `
+    SELECT MAX(CAST(SUBSTRING(BOOKNO, ?) AS UNSIGNED)) AS maxSeq
+    FROM CMS_OFFBOOK
+    WHERE BOOKNO LIKE ?
+    `,
+    [prefix.length + 1, `${prefix}%`]
+  );
+  const maxExistingSeq = Number(maxRows[0]?.maxSeq || 0);
+
+  const nextSeq = Math.max(counterVal, maxExistingSeq) + 1;
+
+  // 4. Update counter to nextSeq
   await conn.query(
-    `UPDATE CMS_OFFBOOKCTR SET LASTNO = ? WHERE CANTEENID = ? AND OFFSERVID = ?`,
-    [nextSeq, canteenId, serviceId]
+    `UPDATE CMS_OFFBOOKCTR SET LASTNO = ? WHERE CANTEENID = ? AND BOOKDATE = ?`,
+    [nextSeq, canteenId, todayDate]
   );
 
-  const year = getCurrentYearIST();
   const padded = String(nextSeq).padStart(4, "0");
-  return `OBK-${canteenCode}-${year}-${padded}`;
+  return `${prefix}${padded}`;
 };
 
 export const createOfficialBooking = async (bookingData, user) => {
@@ -491,14 +580,34 @@ export const createOfficialBooking = async (bookingData, user) => {
     throw new BadRequestError("Self-approval is not allowed. Please select another eligible approver.");
   }
 
-  // 3. Check service and cutoff
+  // 3. Check service, approval level and cutoff
   const [svcRows] = await pool.query(
-    `SELECT OFFSERVID, SERVNAME, CUTOFFHOURS, STATUSID FROM CMS_OFFSERV WHERE OFFSERVID = ?`,
+    `SELECT OFFSERVID, SERVNAME, CUTOFFHOURS, REQAPPRLVL, STATUSID FROM CMS_OFFSERV WHERE OFFSERVID = ?`,
     [OFFSERVID]
   );
   const service = svcRows[0];
   if (!service || service.STATUSID !== STATUS.ACTIVE) {
     throw new BadRequestError("The requested Official Service is not active or does not exist");
+  }
+
+  // Verify approver eligibility against service required level
+  const [apprRows] = await pool.query(
+    `
+    SELECT lm.APPRLVL
+    FROM CMS_USER u
+    JOIN CMS_CUSTOMER c ON c.USERID = u.USERID
+    JOIN CMS_PERMEMP pe ON pe.CUSTOMERID = c.CUSTOMERID
+    JOIN CMS_LVLMAP lm ON lm.EMPLEVEL = pe.LEVEL AND lm.ISACTIVE = 1
+    WHERE u.USERID = ? AND u.ISACTIVE = 1 AND c.STATUSID = 10
+    `,
+    [APPROVERID]
+  );
+  const approverTier = apprRows[0]?.APPRLVL;
+  if (!approverTier) {
+    throw new BadRequestError("Selected approver is not mapped to an active approval level");
+  }
+  if (service.REQAPPRLVL === "L2" && approverTier !== "L2") {
+    throw new BadRequestError("This service requires Level 2 approval. You must select a Level 2 approver.");
   }
 
   const eventDateTimeIST = toMySQLDateTime(EVENTDATETIME);
@@ -511,9 +620,10 @@ export const createOfficialBooking = async (bookingData, user) => {
     );
   }
 
-  // 4. Validate combo and price
+  // 4. Validate combo and price calculation
+  // Formula: Total = (Quantity * Gross Price) + Handling Charges
   const [comboRows] = await pool.query(
-    `SELECT OFFCOMBOID, COMBONAME, COMBOPRICE, STATUSID FROM CMS_OFFCOMBO WHERE OFFCOMBOID = ? AND OFFSERVID = ?`,
+    `SELECT OFFCOMBOID, COMBONAME, GROSSPRICE, HANDLINGCHARGE, COMBOPRICE, STATUSID FROM CMS_OFFCOMBO WHERE OFFCOMBOID = ? AND OFFSERVID = ?`,
     [OFFCOMBOID, OFFSERVID]
   );
   const combo = comboRows[0];
@@ -521,21 +631,22 @@ export const createOfficialBooking = async (bookingData, user) => {
     throw new BadRequestError("The selected combo is not active or does not belong to this service");
   }
 
-  const unitPrice = Number(combo.COMBOPRICE);
-  const totalAmount = unitPrice * Number(QUANTITY);
+  const grossUnitPrice = Number(combo.GROSSPRICE !== undefined && combo.GROSSPRICE !== null ? combo.GROSSPRICE : combo.COMBOPRICE);
+  const handlingCharge = Number(combo.HANDLINGCHARGE || 0);
+  const totalAmount = Number(((Number(QUANTITY) * grossUnitPrice) + handlingCharge).toFixed(2));
 
   // 5. Execute transactional insert
   return await withTransaction(async (conn) => {
-    const bookNo = await generateOfficialBookingNumber(CANTEENID, OFFSERVID, conn);
+    const bookNo = await generateOfficialBookingNumber(CANTEENID, conn);
 
     const [insRes] = await conn.query(
       `
       INSERT INTO CMS_OFFBOOK (
         BOOKNO, CANTEENID, OFFSERVID, OFFCOMBOID, CUSTOMERID, BOOKEDBY,
         PURPOSE, VENUE, EVENTDATETIME, QUANTITY, NOOFPEOPLE,
-        UNITPRICE, TOTALAMOUNT, APPRLVL, APPROVERID, STATUSID
+        UNITPRICE, HANDLINGCHARGE, TOTALAMOUNT, APPRLVL, APPROVERID, STATUSID
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         bookNo,
@@ -549,9 +660,10 @@ export const createOfficialBooking = async (bookingData, user) => {
         eventDateTimeIST,
         QUANTITY,
         NOOFPEOPLE,
-        unitPrice,
+        grossUnitPrice,
+        handlingCharge,
         totalAmount,
-        APPRLVL,
+        APPRLVL || approverTier,
         APPROVERID,
         STATUS.SUBMITTED,
       ]
@@ -574,6 +686,8 @@ export const createOfficialBooking = async (bookingData, user) => {
       OFFBOOKID: bookingId,
       BOOKNO: bookNo,
       STATUS: "Submitted",
+      UNITPRICE: grossUnitPrice,
+      HANDLINGCHARGE: handlingCharge,
       TOTALAMOUNT: totalAmount,
     };
   });
@@ -589,8 +703,11 @@ export const getOfficialBookingById = async (bookingId) => {
       c.CANTEENNAME,
       ob.OFFSERVID,
       os.SERVNAME,
+      os.REQAPPRLVL,
       ob.OFFCOMBOID,
       oc.COMBONAME,
+      oc.GROSSPRICE,
+      oc.HANDLINGCHARGE AS COMBO_HANDLINGCHARGE,
       ob.CUSTOMERID,
       u_emp.FULLNAME AS REQUESTER_NAME,
       pe.EMPCODE AS REQUESTER_EMPCODE,
@@ -603,6 +720,7 @@ export const getOfficialBookingById = async (bookingId) => {
       ob.QUANTITY,
       ob.NOOFPEOPLE,
       ob.UNITPRICE,
+      ob.HANDLINGCHARGE,
       ob.TOTALAMOUNT,
       ob.APPRLVL,
       ob.APPROVERID,
@@ -642,12 +760,24 @@ export const getOfficialBookingById = async (bookingId) => {
       oci.MENUITEMID,
       mi.ITEMNAME AS MENUNAME,
       mi.ITEMNAME,
+      mi.SHORTNAME,
       COALESCE(s.SERVNAME, mi.SHORTNAME, 'Item') AS CATCODE,
-      oci.QTY
+      oci.QTY,
+      COALESCE(
+        (SELECT d.PRICE 
+         FROM CMS_ITEMPRICE p
+         JOIN CMS_ITEMPRICEDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+         WHERE p.MENUITEMID = mi.MENUITEMID 
+           AND d.CTYPECODE = 'OFF'
+           AND p.STATUSID = 10
+         ORDER BY p.EFFFROM DESC LIMIT 1), 
+        0.00
+      ) AS OFFPRICE
     FROM CMS_OFFCOMBO_ITEM oci
     JOIN CMS_MENUITEM mi ON mi.MENUITEMID = oci.MENUITEMID
     LEFT JOIN CMS_SERVICE s ON s.SERVICEID = mi.SERVICEID
     WHERE oci.OFFCOMBOID = ?
+    ORDER BY mi.ITEMNAME ASC
     `,
     [booking.OFFCOMBOID]
   );
@@ -685,6 +815,7 @@ export const listMyOfficialBookings = async (customerId) => {
       ob.BOOKNO,
       c.CANTEENNAME,
       os.SERVNAME,
+      os.REQAPPRLVL,
       oc.COMBONAME,
       ob.PURPOSE,
       ob.VENUE,
@@ -692,6 +823,7 @@ export const listMyOfficialBookings = async (customerId) => {
       ob.QUANTITY,
       ob.NOOFPEOPLE,
       ob.UNITPRICE,
+      ob.HANDLINGCHARGE,
       ob.TOTALAMOUNT,
       u_appr.FULLNAME AS APPROVER_NAME,
       ob.STATUSID,
@@ -724,6 +856,7 @@ export const listAssignedApprovals = async (approverUserId) => {
       ob.BOOKNO,
       c.CANTEENNAME,
       os.SERVNAME,
+      os.REQAPPRLVL,
       oc.COMBONAME,
       ob.PURPOSE,
       ob.VENUE,
@@ -731,6 +864,7 @@ export const listAssignedApprovals = async (approverUserId) => {
       ob.QUANTITY,
       ob.NOOFPEOPLE,
       ob.UNITPRICE,
+      ob.HANDLINGCHARGE,
       ob.TOTALAMOUNT,
       u_emp.FULLNAME AS REQUESTER_NAME,
       pe.DEPT AS REQUESTER_DEPT,
@@ -817,6 +951,7 @@ export const listManagerPendingBookings = async (canteenId) => {
       ob.BOOKNO,
       c.CANTEENNAME,
       os.SERVNAME,
+      os.REQAPPRLVL,
       oc.COMBONAME,
       ob.PURPOSE,
       ob.VENUE,
@@ -824,6 +959,7 @@ export const listManagerPendingBookings = async (canteenId) => {
       ob.QUANTITY,
       ob.NOOFPEOPLE,
       ob.UNITPRICE,
+      ob.HANDLINGCHARGE,
       ob.TOTALAMOUNT,
       u_emp.FULLNAME AS REQUESTER_NAME,
       pe.DEPT AS REQUESTER_DEPT,
@@ -912,8 +1048,8 @@ export const resubmitOfficialBooking = async (bookingId, updatedData, user) => {
     const [rows] = await conn.query(
       `
       SELECT 
-        ob.OFFBOOKID, ob.BOOKEDBY, ob.OFFSERVID, ob.OFFCOMBOID, ob.STATUSID,
-        os.CUTOFFHOURS, os.SERVNAME
+        ob.OFFBOOKID, ob.BOOKEDBY, ob.OFFSERVID, ob.OFFCOMBOID, ob.QUANTITY, ob.STATUSID,
+        os.CUTOFFHOURS, os.SERVNAME, os.REQAPPRLVL
       FROM CMS_OFFBOOK ob
       JOIN CMS_OFFSERV os ON os.OFFSERVID = ob.OFFSERVID
       WHERE ob.OFFBOOKID = ?
@@ -939,10 +1075,31 @@ export const resubmitOfficialBooking = async (bookingId, updatedData, user) => {
     const newEventTimeStr = updatedData.EVENTDATETIME || booking.EVENTDATETIME;
     const newApproverId = updatedData.APPROVERID || booking.APPROVERID;
     const newComboId = updatedData.OFFCOMBOID || booking.OFFCOMBOID;
+    const newQty = updatedData.QUANTITY !== undefined ? Number(updatedData.QUANTITY) : Number(booking.QUANTITY);
 
     // Self-approval prevention
     if (Number(newApproverId) === Number(user.USERID)) {
       throw new BadRequestError("Self-approval is not allowed. Please select another eligible approver.");
+    }
+
+    // Verify approver tier
+    const [apprRows] = await conn.query(
+      `
+      SELECT lm.APPRLVL
+      FROM CMS_USER u
+      JOIN CMS_CUSTOMER c ON c.USERID = u.USERID
+      JOIN CMS_PERMEMP pe ON pe.CUSTOMERID = c.CUSTOMERID
+      JOIN CMS_LVLMAP lm ON lm.EMPLEVEL = pe.LEVEL AND lm.ISACTIVE = 1
+      WHERE u.USERID = ? AND u.ISACTIVE = 1 AND c.STATUSID = 10
+      `,
+      [newApproverId]
+    );
+    const approverTier = apprRows[0]?.APPRLVL;
+    if (!approverTier) {
+      throw new BadRequestError("Selected approver is not mapped to an active approval level");
+    }
+    if (booking.REQAPPRLVL === "L2" && approverTier !== "L2") {
+      throw new BadRequestError("This service requires Level 2 approval. You must select a Level 2 approver.");
     }
 
     // Cutoff validation
@@ -955,19 +1112,24 @@ export const resubmitOfficialBooking = async (bookingId, updatedData, user) => {
       );
     }
 
-    // Price recalculation
+    // Price recalculation: Total = (Quantity * Gross Price) + Handling Charges
     const [comboRows] = await conn.query(
-      `SELECT COMBOPRICE FROM CMS_OFFCOMBO WHERE OFFCOMBOID = ?`,
+      `SELECT GROSSPRICE, HANDLINGCHARGE, COMBOPRICE FROM CMS_OFFCOMBO WHERE OFFCOMBOID = ?`,
       [newComboId]
     );
-    const unitPrice = Number(comboRows[0]?.COMBOPRICE || 0);
+    const combo = comboRows[0];
+    const grossUnitPrice = Number(combo?.GROSSPRICE !== undefined && combo?.GROSSPRICE !== null ? combo.GROSSPRICE : combo?.COMBOPRICE || 0);
+    const handlingCharge = Number(combo?.HANDLINGCHARGE || 0);
+    const totalAmount = Number(((newQty * grossUnitPrice) + handlingCharge).toFixed(2));
 
     const fields = [
       "STATUSID = ?",
       "UNITPRICE = ?",
+      "HANDLINGCHARGE = ?",
+      "TOTALAMOUNT = ?",
       "UPDATEDBY = ?",
     ];
-    const params = [STATUS.SUBMITTED, unitPrice, user.USERID];
+    const params = [STATUS.SUBMITTED, grossUnitPrice, handlingCharge, totalAmount, user.USERID];
 
     if (updatedData.OFFCOMBOID) {
       fields.push("OFFCOMBOID = ?");
@@ -988,16 +1150,14 @@ export const resubmitOfficialBooking = async (bookingId, updatedData, user) => {
     if (updatedData.QUANTITY) {
       fields.push("QUANTITY = ?");
       params.push(updatedData.QUANTITY);
-      fields.push("TOTALAMOUNT = ?");
-      params.push(unitPrice * Number(updatedData.QUANTITY));
     }
     if (updatedData.NOOFPEOPLE) {
       fields.push("NOOFPEOPLE = ?");
       params.push(updatedData.NOOFPEOPLE);
     }
-    if (updatedData.APPRLVL) {
+    if (updatedData.APPRLVL || approverTier) {
       fields.push("APPRLVL = ?");
-      params.push(updatedData.APPRLVL);
+      params.push(updatedData.APPRLVL || approverTier);
     }
     if (updatedData.APPROVERID) {
       fields.push("APPROVERID = ?");
@@ -1021,4 +1181,246 @@ export const resubmitOfficialBooking = async (bookingId, updatedData, user) => {
 
     return getOfficialBookingById(bookingId);
   });
+};
+
+// ============================================================
+// 7. KITCHEN PREPARATION & CONFIRMED ORDERS FULFILLMENT
+// ============================================================
+
+export const listConfirmedOfficialBookings = async (canteenId, { date, fromDate, toDate } = {}) => {
+  let dateFilter = "";
+  const params = [canteenId, STATUS.CONFIRMED];
+
+  if (date) {
+    dateFilter = "AND DATE(ob.EVENTDATETIME) = ?";
+    params.push(date);
+  } else if (fromDate && toDate) {
+    dateFilter = "AND DATE(ob.EVENTDATETIME) BETWEEN ? AND ?";
+    params.push(fromDate, toDate);
+  }
+
+  const [bookings] = await pool.query(
+    `
+    SELECT 
+      ob.OFFBOOKID,
+      ob.BOOKNO,
+      ob.CANTEENID,
+      c.CANTEENNAME,
+      ob.OFFSERVID,
+      os.SERVNAME,
+      os.REQAPPRLVL,
+      ob.OFFCOMBOID,
+      oc.COMBONAME,
+      oc.GROSSPRICE,
+      oc.HANDLINGCHARGE AS COMBO_HANDLINGCHARGE,
+      ob.CUSTOMERID,
+      u_emp.FULLNAME AS REQUESTER_NAME,
+      u_emp.FULLNAME AS REQ_NAME,
+      u_emp.MOBILENO AS REQUESTER_PHONE,
+      u_emp.MOBILENO AS REQ_PHONE,
+      pe.EMPCODE AS REQUESTER_EMPCODE,
+      pe.DEPT AS REQUESTER_DEPT,
+      pe.DEPT AS DEPTNAME,
+      pe.DESIG AS REQUESTER_DESIG,
+      ob.BOOKEDBY,
+      ob.PURPOSE,
+      ob.VENUE,
+      ob.EVENTDATETIME,
+      ob.QUANTITY,
+      ob.NOOFPEOPLE,
+      ob.UNITPRICE,
+      ob.HANDLINGCHARGE,
+      ob.TOTALAMOUNT,
+      ob.APPRLVL,
+      ob.APPROVERID,
+      u_appr.FULLNAME AS APPROVER_NAME,
+      pe_appr.DESIG AS APPROVER_DESIG,
+      ob.STATUSID,
+      st.STATUSNAME,
+      st.STATUSCODE,
+      ob.BOOKEDAT
+    FROM CMS_OFFBOOK ob
+    JOIN CMS_CANTEEN c ON c.CANTEENID = ob.CANTEENID
+    JOIN CMS_OFFSERV os ON os.OFFSERVID = ob.OFFSERVID
+    JOIN CMS_OFFCOMBO oc ON oc.OFFCOMBOID = ob.OFFCOMBOID
+    JOIN CMS_USER u_emp ON u_emp.USERID = ob.BOOKEDBY
+    JOIN CMS_CUSTOMER cust ON cust.CUSTOMERID = ob.CUSTOMERID
+    LEFT JOIN CMS_PERMEMP pe ON pe.CUSTOMERID = cust.CUSTOMERID
+    JOIN CMS_USER u_appr ON u_appr.USERID = ob.APPROVERID
+    LEFT JOIN CMS_CUSTOMER cust_appr ON cust_appr.USERID = u_appr.USERID
+    LEFT JOIN CMS_PERMEMP pe_appr ON pe_appr.CUSTOMERID = cust_appr.CUSTOMERID
+    JOIN CMS_STATUS st ON st.STATUSID = ob.STATUSID
+    WHERE ob.CANTEENID = ?
+      AND ob.STATUSID = ?
+      ${dateFilter}
+    ORDER BY ob.EVENTDATETIME ASC
+    `,
+    params
+  );
+
+  if (!bookings || bookings.length === 0) {
+    return [];
+  }
+
+  // Fetch combo items for each booking to know exact packing contents
+  const comboIds = [...new Set(bookings.map((b) => b.OFFCOMBOID))];
+  const [items] = await pool.query(
+    `
+    SELECT 
+      oci.OFFCOMBOID,
+      oci.COMBOITEMID,
+      oci.MENUITEMID,
+      mi.ITEMNAME AS MENUNAME,
+      mi.ITEMNAME,
+      mi.SHORTNAME,
+      COALESCE(s.SERVNAME, mi.SHORTNAME, 'Item') AS CATCODE,
+      oci.QTY,
+      COALESCE(
+        (SELECT d.PRICE 
+         FROM CMS_ITEMPRICE p
+         JOIN CMS_ITEMPRICEDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+         WHERE p.MENUITEMID = mi.MENUITEMID 
+           AND d.CTYPECODE = 'OFF'
+           AND p.STATUSID = 10
+         ORDER BY p.EFFFROM DESC LIMIT 1), 
+        0.00
+      ) AS OFFPRICE
+    FROM CMS_OFFCOMBO_ITEM oci
+    JOIN CMS_MENUITEM mi ON mi.MENUITEMID = oci.MENUITEMID
+    LEFT JOIN CMS_SERVICE s ON s.SERVICEID = mi.SERVICEID
+    WHERE oci.OFFCOMBOID IN (?)
+    ORDER BY mi.ITEMNAME ASC
+    `,
+    [comboIds]
+  );
+
+  const itemsByCombo = {};
+  for (const it of items) {
+    if (!itemsByCombo[it.OFFCOMBOID]) {
+      itemsByCombo[it.OFFCOMBOID] = [];
+    }
+    itemsByCombo[it.OFFCOMBOID].push(it);
+  }
+
+  return bookings.map((b) => {
+    const comboItems = itemsByCombo[b.OFFCOMBOID] || [];
+    return {
+      ...b,
+      ITEMS: comboItems.map((ci) => ({
+        ...ci,
+        TOTAL_PREP_QTY: Number(ci.QTY || 1) * Number(b.QUANTITY || 1),
+      })),
+    };
+  });
+};
+
+export const getOfficialKitchenPrepSummary = async (canteenId, targetDate) => {
+  // 1. Aggregated dish quantities needed
+  const [dishRows] = await pool.query(
+    `
+    SELECT 
+      mi.MENUITEMID,
+      mi.MENUITEMID AS ITEMID,
+      mi.ITEMNAME AS MENUNAME,
+      mi.ITEMNAME,
+      mi.SHORTNAME,
+      COALESCE(s.SERVNAME, mi.SHORTNAME, 'General') AS CATCODE,
+      COALESCE(s.SERVNAME, 'General') AS CATNAME,
+      SUM(oci.QTY * ob.QUANTITY) AS TOTAL_PREP_QTY,
+      COUNT(DISTINCT ob.OFFBOOKID) AS ORDER_COUNT,
+      COUNT(DISTINCT ob.OFFBOOKID) AS TOTAL_ORDERS_COUNT
+    FROM CMS_OFFBOOK ob
+    JOIN CMS_OFFCOMBO_ITEM oci ON oci.OFFCOMBOID = ob.OFFCOMBOID
+    JOIN CMS_MENUITEM mi ON mi.MENUITEMID = oci.MENUITEMID
+    LEFT JOIN CMS_SERVICE s ON s.SERVICEID = mi.SERVICEID
+    WHERE ob.CANTEENID = ?
+      AND ob.STATUSID = ?
+      AND DATE(ob.EVENTDATETIME) = ?
+    GROUP BY mi.MENUITEMID, mi.ITEMNAME, mi.SHORTNAME, s.SERVNAME
+    ORDER BY CATCODE ASC, mi.ITEMNAME ASC
+    `,
+    [canteenId, STATUS.CONFIRMED, targetDate]
+  );
+
+  // 2. Order breakdown for each dish (which booking needs how much)
+  const [breakdownRows] = await pool.query(
+    `
+    SELECT 
+      oci.MENUITEMID,
+      ob.OFFBOOKID,
+      ob.BOOKNO,
+      ob.PURPOSE,
+      ob.VENUE,
+      ob.EVENTDATETIME,
+      ob.QUANTITY AS BOOKING_SERVINGS,
+      oci.QTY AS COMBO_ITEM_QTY,
+      (oci.QTY * ob.QUANTITY) AS PREP_QTY,
+      u_emp.FULLNAME AS REQUESTER_NAME,
+      u_emp.MOBILENO AS REQUESTER_PHONE,
+      pe.EMPCODE AS REQUESTER_EMPCODE,
+      pe.DEPT AS REQUESTER_DEPT,
+      pe.DESIG AS REQUESTER_DESIG
+    FROM CMS_OFFBOOK ob
+    JOIN CMS_OFFCOMBO_ITEM oci ON oci.OFFCOMBOID = ob.OFFCOMBOID
+    JOIN CMS_USER u_emp ON u_emp.USERID = ob.BOOKEDBY
+    JOIN CMS_CUSTOMER cust ON cust.CUSTOMERID = ob.CUSTOMERID
+    LEFT JOIN CMS_PERMEMP pe ON pe.CUSTOMERID = cust.CUSTOMERID
+    WHERE ob.CANTEENID = ?
+      AND ob.STATUSID = ?
+      AND DATE(ob.EVENTDATETIME) = ?
+    ORDER BY ob.EVENTDATETIME ASC
+    `,
+    [canteenId, STATUS.CONFIRMED, targetDate]
+  );
+
+  const breakdownByDish = {};
+  for (const row of breakdownRows) {
+    if (!breakdownByDish[row.MENUITEMID]) {
+      breakdownByDish[row.MENUITEMID] = [];
+    }
+    breakdownByDish[row.MENUITEMID].push(row);
+  }
+
+  // 3. Overall day stats
+  const [statsRows] = await pool.query(
+    `
+    SELECT 
+      COUNT(DISTINCT ob.OFFBOOKID) AS TOTAL_EVENTS,
+      COALESCE(SUM(ob.QUANTITY), 0) AS TOTAL_SERVINGS,
+      COALESCE(SUM(ob.NOOFPEOPLE), 0) AS TOTAL_ATTENDEES,
+      MIN(ob.EVENTDATETIME) AS EARLIEST_EVENT
+    FROM CMS_OFFBOOK ob
+    WHERE ob.CANTEENID = ?
+      AND ob.STATUSID = ?
+      AND DATE(ob.EVENTDATETIME) = ?
+    `,
+    [canteenId, STATUS.CONFIRMED, targetDate]
+  );
+
+  const dishesWithOrders = dishRows.map((d) => ({
+    ...d,
+    ITEMID: d.MENUITEMID,
+    TOTAL_PREP_QTY: Number(d.TOTAL_PREP_QTY || 0),
+    ORDER_COUNT: Number(d.ORDER_COUNT || 0),
+    TOTAL_ORDERS_COUNT: Number(d.ORDER_COUNT || 0),
+    ORDERS: breakdownByDish[d.MENUITEMID] || [],
+  }));
+
+  const totalEvents = Number(statsRows[0]?.TOTAL_EVENTS || 0);
+  const totalServings = Number(statsRows[0]?.TOTAL_SERVINGS || 0);
+
+  return {
+    DATE: targetDate,
+    TARGETDATE: targetDate,
+    CANTEENID: Number(canteenId),
+    TOTAL_BOOKINGS: totalEvents,
+    TOTAL_PAX: totalServings,
+    SUMMARY: statsRows[0] || {
+      TOTAL_EVENTS: 0,
+      TOTAL_SERVINGS: 0,
+      TOTAL_ATTENDEES: 0,
+      EARLIEST_EVENT: null,
+    },
+    DISHES: dishesWithOrders,
+  };
 };

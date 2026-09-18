@@ -120,3 +120,23 @@ export async function processManagerAction(bookingId, action, rejReason = null) 
   });
   return res.data.DATA;
 }
+
+// ============================================================
+// Kitchen Preparation & Fulfillment Workflow
+// ============================================================
+
+export async function getConfirmedOfficialBookings(canteenId, { date, fromDate, toDate } = {}) {
+  const params = { canteenId };
+  if (date) params.date = date;
+  if (fromDate) params.fromDate = fromDate;
+  if (toDate) params.toDate = toDate;
+  const res = await api.get("/official-requests/kitchen-prep/confirmed", { params });
+  return res.data.DATA;
+}
+
+export async function getOfficialKitchenPrepSummary(canteenId, date) {
+  const res = await api.get("/official-requests/kitchen-prep/summary", {
+    params: { canteenId, date },
+  });
+  return res.data.DATA;
+}

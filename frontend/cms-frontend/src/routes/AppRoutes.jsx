@@ -23,7 +23,7 @@ const BulkMenuCreatorPage = lazy(() => import('../features/daymenu/pages/BulkMen
 const BookingsMonitorPage = lazy(() => import('../features/booking/pages/BookingsMonitorPage'))
 const PricingPage       = lazy(() => import('../features/pricing/pages/PricingPage'))
 const WalletPage        = lazy(() => import('../features/wallet/pages/WalletPage'))
-const MenuTemplatesPage = lazy(() => import('../features/menutemplates/pages/MenuTemplatesPage'))
+// const MenuTemplatesPage = lazy(() => import('../features/menutemplates/pages/MenuTemplatesPage'))
 const MonthlyPayrollReportPage = lazy(() => import('../features/reports/pages/MonthlyPayrollReportPage'))
 
 // SYSADM pages
@@ -37,6 +37,7 @@ const MyOfficialBookingsPage      = lazy(() => import('../features/officialreque
 const AssignedApprovalsPage       = lazy(() => import('../features/officialrequest/pages/AssignedApprovalsPage'))
 const OfficialServicesManagerPage = lazy(() => import('../features/officialrequest/pages/OfficialServicesManagerPage'))
 const OfficialBookingsMonitorPage = lazy(() => import('../features/officialrequest/pages/OfficialBookingsMonitorPage'))
+const OfficialKitchenPrepPage     = lazy(() => import('../features/officialrequest/pages/OfficialKitchenPrepPage'))
 
 // Kiosk / Terminal pages
 const KioskBootResolver    = lazy(() => import('../features/kiosk/pages/KioskBootResolver'))
@@ -96,6 +97,11 @@ export default function AppRoutes() {
             <PageSuspense><OfficialBookingsMonitorPage /></PageSuspense>
           </ProtectedRoute>
         } />
+        <Route path="/official-kitchen-prep" element={
+          <ProtectedRoute allowedRoles={['CNTMGR', 'CNTAST', 'CNTSTF']}>
+            <PageSuspense><OfficialKitchenPrepPage /></PageSuspense>
+          </ProtectedRoute>
+        } />
         <Route path="/official-services" element={
           <ProtectedRoute allowedRoles={['CNTMGR']}>
             <PageSuspense><OfficialServicesManagerPage /></PageSuspense>
@@ -111,11 +117,11 @@ export default function AppRoutes() {
             <PageSuspense><WalletPage /></PageSuspense>
           </ProtectedRoute>
         } />
-        <Route path="/menu-templates" element={
+        {/* <Route path="/menu-templates" element={
           <ProtectedRoute allowedRoles={['CNTMGR', 'CNTAST']}>
             <PageSuspense><MenuTemplatesPage /></PageSuspense>
           </ProtectedRoute>
-        } />
+        } /> */}
         <Route path="/reports/kitchen-summary" element={<Navigate to="/dashboard" replace />} />
         <Route path="/reports/payroll" element={
           <ProtectedRoute allowedRoles={['SYSADM', 'CNTMGR', 'CNTAST']}>

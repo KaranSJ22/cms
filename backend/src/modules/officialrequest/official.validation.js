@@ -19,6 +19,9 @@ export const createServiceSchema = z.object({
     SERVNAME: z.string().trim().min(2, "Service name must be at least 2 characters").max(100),
     DESCR: z.string().trim().max(500).optional().nullable(),
     CUTOFFHOURS: z.coerce.number().int().min(1, "Cutoff must be at least 1 hour").default(24),
+    REQAPPRLVL: z.enum(["L1", "L2"], {
+      errorMap: () => ({ message: "Required approval level must be L1 or L2" }),
+    }).default("L1"),
   }),
 });
 
@@ -30,6 +33,7 @@ export const updateServiceSchema = z.object({
     SERVNAME: z.string().trim().min(2).max(100).optional(),
     DESCR: z.string().trim().max(500).optional().nullable(),
     CUTOFFHOURS: z.coerce.number().int().min(1).optional(),
+    REQAPPRLVL: z.enum(["L1", "L2"]).optional(),
     STATUSID: z.coerce.number().int().optional(),
   }),
 });
@@ -39,6 +43,8 @@ export const createComboSchema = z.object({
     OFFSERVID: z.coerce.number().int().positive("Official Service ID is required"),
     COMBONAME: z.string().trim().min(2, "Combo name must be at least 2 characters").max(100),
     DESCR: z.string().trim().max(255).optional().nullable(),
+    GROSSPRICE: z.coerce.number().min(0, "Gross price cannot be negative").optional(),
+    HANDLINGCHARGE: z.coerce.number().min(0, "Handling charge cannot be negative").default(0),
     COMBOPRICE: z.coerce.number().min(0, "Combo price cannot be negative"),
     ITEMS: z
       .array(
@@ -58,6 +64,8 @@ export const updateComboSchema = z.object({
   body: z.object({
     COMBONAME: z.string().trim().min(2).max(100).optional(),
     DESCR: z.string().trim().max(255).optional().nullable(),
+    GROSSPRICE: z.coerce.number().min(0).optional(),
+    HANDLINGCHARGE: z.coerce.number().min(0).optional(),
     COMBOPRICE: z.coerce.number().min(0).optional(),
     STATUSID: z.coerce.number().int().optional(),
     ITEMS: z
@@ -162,5 +170,21 @@ export const levelMappingSchema = z.object({
       errorMap: () => ({ message: "Classification must be L1 or L2" }),
     }),
     ISACTIVE: z.coerce.number().int().min(0).max(1).default(1),
+  }),
+});
+
+export const kitchenConfirmedQuerySchema = z.object({
+  query: z.object({
+    canteenId: z.coerce.number().int().positive("Canteen ID is required"),
+    date: z.string().optional(),
+    fromDate: z.string().optional(),
+    toDate: z.string().optional(),
+  }),
+});
+
+export const kitchenPrepSummaryQuerySchema = z.object({
+  query: z.object({
+    canteenId: z.coerce.number().int().positive("Canteen ID is required"),
+    date: z.string().min(10, "Date (YYYY-MM-DD) is required"),
   }),
 });

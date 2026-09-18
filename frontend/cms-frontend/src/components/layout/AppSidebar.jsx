@@ -28,6 +28,7 @@ import {
   SparklesIcon,
   CubeIcon,
   CheckBadgeIcon,
+  FireIcon,
 } from '@heroicons/react/24/outline'
 
 // Icon mapping dictionary
@@ -55,6 +56,7 @@ const ICON_MAP = {
   SparklesIcon,
   CubeIcon,
   CheckBadgeIcon,
+  FireIcon,
 }
 
 export default function AppSidebar({

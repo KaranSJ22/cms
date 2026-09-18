@@ -169,8 +169,12 @@ export default function AssignedApprovalsPage() {
                   <span className="text-[10px] text-slate-400 uppercase tracking-widest block">
                     Calculated Total
                   </span>
-                  <span className="text-xl font-black text-slate-900 dark:text-white">
+                  <span className="text-xl font-black text-slate-900 dark:text-white font-mono">
                     ₹{Number(r.TOTALAMOUNT).toFixed(2)}
+                  </span>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">
+                    ({r.QUANTITY} × ₹{Number(r.UNITPRICE || 0).toFixed(2)})
+                    {Number(r.HANDLINGCHARGE || 0) > 0 && ` + ₹${Number(r.HANDLINGCHARGE).toFixed(2)} fee`}
                   </span>
                 </div>
 

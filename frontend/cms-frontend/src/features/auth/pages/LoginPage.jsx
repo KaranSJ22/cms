@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Spinner } from '../../../components/icons/Icons'
 import { FormField } from '../../../components/ui/FormComponents'
 import { PrimaryBtn } from '../../../components/ui/Buttons'
 import { useAuth } from '../../../hooks/useAuth'
@@ -138,14 +137,7 @@ export default function LoginPage() {
 
             <div className="pt-2">
               <PrimaryBtn type="submit" loading={loading}>
-                {loading ? (
-                  <>
-                    <Spinner />
-                    <span>Authenticating…</span>
-                  </>
-                ) : (
-                  <span>Sign In to Portal</span>
-                )}
+                {loading ? 'Authenticating…' : 'Sign In to Portal'}
               </PrimaryBtn>
             </div>
           </form>

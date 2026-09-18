@@ -19,6 +19,8 @@ import {
   approverActionSchema,
   managerActionSchema,
   levelMappingSchema,
+  kitchenConfirmedQuerySchema,
+  kitchenPrepSummaryQuerySchema,
 } from "./official.validation.js";
 
 import {
@@ -40,6 +42,8 @@ import {
   processApproverActionController,
   listManagerPendingBookingsController,
   processManagerActionController,
+  listConfirmedOfficialBookingsController,
+  getOfficialKitchenPrepSummaryController,
 } from "./official.controller.js";
 
 const router = express.Router();
@@ -225,6 +229,25 @@ router.post(
   validate(managerActionSchema),
   authorizeCanteenRoles(["CNTMGR"], getCanteenFromBooking),
   processManagerActionController
+);
+
+// ============================================================
+// 6. Kitchen Preparation & Fulfillment Workflow (Staff, Assistants & Managers)
+// ============================================================
+router.get(
+  "/kitchen-prep/confirmed",
+  authenticate,
+  authorizeCanteenRoles(["CNTMGR", "CNTAST", "CNTSTF"]),
+  validate(kitchenConfirmedQuerySchema),
+  listConfirmedOfficialBookingsController
+);
+
+router.get(
+  "/kitchen-prep/summary",
+  authenticate,
+  authorizeCanteenRoles(["CNTMGR", "CNTAST", "CNTSTF"]),
+  validate(kitchenPrepSummaryQuerySchema),
+  getOfficialKitchenPrepSummaryController
 );
 
 export default router;

@@ -18,6 +18,7 @@ export const CANTEEN_MANAGER_NAV = [
   { key: 'dashboard', label: 'Operations Dashboard', category: 'operations', icon: 'Squares2X2Icon' },
   { key: 'bookings', label: 'Bookings Monitor', category: 'operations', icon: 'TicketIcon' },
   { key: 'official-bookings', label: 'Official Bookings Monitor', category: 'operations', icon: 'CheckBadgeIcon' },
+  { key: 'official-kitchen-prep', label: 'Official Kitchen Prep', category: 'operations', icon: 'FireIcon' },
 
   // Menu & Planning
   { key: 'catalog', label: 'Menu Catalog', category: 'menu', icon: 'BookOpenIcon' },
@@ -43,6 +44,7 @@ export const CANTEEN_ASSISTANT_NAV = [
   // Operations
   { key: 'dashboard', label: 'Operations Dashboard', category: 'operations', icon: 'Squares2X2Icon' },
   { key: 'bookings', label: 'Bookings Monitor', category: 'operations', icon: 'TicketIcon' },
+  { key: 'official-kitchen-prep', label: 'Official Kitchen Prep', category: 'operations', icon: 'FireIcon' },
 
   // Menu & Planning
   { key: 'catalog', label: 'Menu Catalog', category: 'menu', icon: 'BookOpenIcon' },
@@ -61,6 +63,7 @@ export const CANTEEN_ASSISTANT_NAV = [
 
 export const CANTEEN_STAFF_NAV = [
   { key: 'dashboard', label: 'Operations Dashboard', category: 'operations', icon: 'Squares2X2Icon' },
+  { key: 'official-kitchen-prep', label: 'Official Kitchen Prep', category: 'operations', icon: 'FireIcon' },
   { key: 'kiosk/serving-terminal', label: 'Serving Terminal', category: 'terminals', icon: 'ComputerDesktopIcon' },
   { key: 'bookings', label: 'Bookings Monitor', category: 'operations', icon: 'TicketIcon' },
 ]
