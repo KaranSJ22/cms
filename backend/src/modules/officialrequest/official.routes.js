@@ -1,5 +1,4 @@
 import express from "express";
-import { pool } from "../../db/connection.js";
 import { authenticate } from "../../middlewares/auth.middleware.js";
 import {
   authorizeSystemRoles,
@@ -24,12 +23,19 @@ import {
 } from "./official.validation.js";
 
 import {
+  getCanteenIdByServiceId,
+  getCanteenIdByComboId,
+  getCanteenIdByBookingId,
+} from "./official.service.js";
+
+import {
   listServicesController,
   getServiceDetailsController,
   createServiceController,
   updateServiceController,
   createComboController,
   updateComboController,
+  deleteComboController,
   listAvailableMenuItemsController,
   listLevelMappingsController,
   upsertLevelMappingController,
@@ -49,45 +55,18 @@ import {
 const router = express.Router();
 
 // Canteen resolution helpers for routes keyed by child entity ID
-const getCanteenFromService = async (req) => {
-  const serviceId = Number(req.params.id);
-  if (!serviceId) return null;
-  const [rows] = await pool.query(
-    "SELECT CANTEENID FROM CMS_OFFSERV WHERE OFFSERVID = ?",
-    [serviceId]
-  );
-  return rows[0]?.CANTEENID;
-};
+const getCanteenFromService = (req) =>
+  getCanteenIdByServiceId(req.params.id);
 
-const getCanteenFromServiceBody = async (req) => {
-  const serviceId = Number(req.body?.OFFSERVID || req.validated?.body?.OFFSERVID);
-  if (!serviceId) return null;
-  const [rows] = await pool.query(
-    "SELECT CANTEENID FROM CMS_OFFSERV WHERE OFFSERVID = ?",
-    [serviceId]
-  );
-  return rows[0]?.CANTEENID;
-};
+const getCanteenFromServiceBody = (req) =>
+  getCanteenIdByServiceId(req.body?.OFFSERVID || req.validated?.body?.OFFSERVID);
 
-const getCanteenFromCombo = async (req) => {
-  const comboId = Number(req.params.id);
-  if (!comboId) return null;
-  const [rows] = await pool.query(
-    "SELECT os.CANTEENID FROM CMS_OFFCOMBO oc JOIN CMS_OFFSERV os ON os.OFFSERVID = oc.OFFSERVID WHERE oc.OFFCOMBOID = ?",
-    [comboId]
-  );
-  return rows[0]?.CANTEENID;
-};
+const getCanteenFromCombo = (req) =>
+  getCanteenIdByComboId(req.params.id);
 
-const getCanteenFromBooking = async (req) => {
-  const bookingId = Number(req.params.id);
-  if (!bookingId) return null;
-  const [rows] = await pool.query(
-    "SELECT CANTEENID FROM CMS_OFFBOOK WHERE OFFBOOKID = ?",
-    [bookingId]
-  );
-  return rows[0]?.CANTEENID;
-};
+const getCanteenFromBooking = (req) =>
+  getCanteenIdByBookingId(req.params.id);
+
 
 // ============================================================
 // 1. Services & Combos (Canteen Manager)
@@ -142,6 +121,13 @@ router.put(
   validate(updateComboSchema),
   authorizeCanteenRoles(["CNTMGR"], getCanteenFromCombo),
   updateComboController
+);
+
+router.delete(
+  "/combos/:id",
+  authenticate,
+  authorizeCanteenRoles(["CNTMGR"], getCanteenFromCombo),
+  deleteComboController
 );
 
 // ============================================================

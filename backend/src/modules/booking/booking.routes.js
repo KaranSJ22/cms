@@ -8,6 +8,7 @@ import {
   getBookingsController,
   getKitchenPrepController,
   createBookingController,
+  updateBookingItemsBatchController,
   addBookingItemController,
   updateBookingItemController,
   cancelBookingItemController,
@@ -24,6 +25,7 @@ import {
 import {
   getActiveBookingSchema,
   createBookingSchema,
+  updateBookingItemsBatchSchema,
   addBookingItemSchema,
   updateBookingItemSchema,
   cancelBookingItemSchema,
@@ -91,6 +93,14 @@ router.post(
   authenticate,
   validate(createBookingSchema),
   createBookingController
+);
+
+// Batch update/replace all items in an existing booking (atomic replace & wallet adjust)
+router.put(
+  "/:id/items",
+  authenticate,
+  validate(updateBookingItemsBatchSchema),
+  updateBookingItemsBatchController
 );
 
 // Add an item to an existing booking (incremental)

@@ -5,6 +5,7 @@ import {
   fetchWalletTransactions,
   requestWithdrawal,
   fetchWithdrawals,
+  cancelWithdrawal,
 } from "../api/walletApi";
 import { formatINR } from "../../../utils/formatters";
 
@@ -15,6 +16,14 @@ export default function EmployeeWalletPage() {
   const [transactions, setTransactions] = useState([]);
   const [myWithdrawals, setMyWithdrawals] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+  const [serverPagination, setServerPagination] = useState({
+    totalRows: 0,
+    totalPages: 1,
+    currentPage: 1,
+    pageSize: 10,
+  });
 
   // Withdrawal modal state
   const [isWdModalOpen, setIsWdModalOpen] = useState(false);
@@ -22,10 +31,12 @@ export default function EmployeeWalletPage() {
   const [wdRemarks, setWdRemarks] = useState("");
   const [submittingWd, setSubmittingWd] = useState(false);
   const [wdFeedback, setWdFeedback] = useState(null);
+  const [cancellingWdId, setCancellingWdId] = useState(null);
 
   const isEligibleCustomer =
     customer?.CTYPECODE === "CNT" ||
     customer?.CTYPECODE === "CONTEMP" ||
+    customer?.CTYPECODE === "CONT" ||
     customer?.CTYPECODE === "VIS" ||
     customer?.CTYPECODE === "VISITOR";
 
@@ -39,19 +50,22 @@ export default function EmployeeWalletPage() {
     try {
       const [walletRes, txnsRes, wdRes] = await Promise.all([
         fetchWallet(customer.CUSTOMERID).catch(() => null),
-        fetchWalletTransactions(customer.CUSTOMERID).catch(() => []),
+        fetchWalletTransactions(customer.CUSTOMERID, { page: currentPage, pageSize }).catch(() => []),
         fetchWithdrawals({ customerId: customer.CUSTOMERID }).catch(() => []),
       ]);
 
       setWallet(walletRes);
       setTransactions(Array.isArray(txnsRes) ? txnsRes : []);
+      if (txnsRes?.pagination) {
+        setServerPagination(txnsRes.pagination);
+      }
       setMyWithdrawals(Array.isArray(wdRes) ? wdRes : []);
     } catch (err) {
       console.error("Failed to load employee wallet", err);
     } finally {
       setLoading(false);
     }
-  }, [customer?.CUSTOMERID]);
+  }, [customer?.CUSTOMERID, currentPage, pageSize]);
 
   useEffect(() => {
     loadWalletData();
@@ -94,6 +108,19 @@ export default function EmployeeWalletPage() {
       });
     } finally {
       setSubmittingWd(false);
+    }
+  };
+
+  const handleCancelWithdrawal = async (walletWdId) => {
+    if (!walletWdId) return;
+    setCancellingWdId(walletWdId);
+    try {
+      await cancelWithdrawal(walletWdId, { remarks: "Cancelled by customer" });
+      loadWalletData();
+    } catch (err) {
+      console.error("Failed to cancel withdrawal request", err);
+    } finally {
+      setCancellingWdId(null);
     }
   };
 
@@ -201,7 +228,7 @@ export default function EmployeeWalletPage() {
           <p className="text-4xl font-black text-slate-700 font-mono">
             {loading ? "—" : formatINR(wallet?.RESERVEDAMT ?? 0)}
           </p>
-          <p className="text-xs text-slate-500">Committed to active meal bookings</p>
+          <p className="text-xs text-slate-500">Locked for pending cash withdrawal requests</p>
         </div>
 
         {/* Account Status */}
@@ -229,6 +256,7 @@ export default function EmployeeWalletPage() {
                   <th className="p-3.5">Requested On</th>
                   <th className="p-3.5">Status</th>
                   <th className="p-3.5">Remarks</th>
+                  <th className="p-3.5 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -236,6 +264,7 @@ export default function EmployeeWalletPage() {
                   const wid = w.WALLETWDID || w.WITHDRAWID || idx;
                   const isPending = w.STATUSCODE === "REQ" || w.STATUSID === 50 || w.STATUSID === 40;
                   const isApproved = w.STATUSCODE === "COM" || w.STATUSID === 51 || w.STATUSID === 10;
+                  const isCancelled = w.STATUSCODE === "CAN" || w.STATUSID === 53;
                   return (
                     <tr key={wid} className="hover:bg-slate-50 transition-colors">
                       <td className="p-3.5 font-mono font-bold text-slate-900">#{wid}</td>
@@ -252,13 +281,33 @@ export default function EmployeeWalletPage() {
                               ? "bg-emerald-100 text-emerald-800"
                               : isPending
                               ? "bg-amber-100 text-amber-800"
+                              : isCancelled
+                              ? "bg-slate-100 text-slate-600"
                               : "bg-rose-100 text-rose-800"
                           }`}
                         >
-                          {isApproved ? "Approved / Paid" : isPending ? "Pending Review" : "Rejected"}
+                          {isApproved
+                            ? "Approved / Paid"
+                            : isPending
+                            ? "Pending Review"
+                            : isCancelled
+                            ? "Cancelled"
+                            : "Rejected"}
                         </span>
                       </td>
                       <td className="p-3.5 text-slate-500">{w.REMARKS || "—"}</td>
+                      <td className="p-3.5 text-right">
+                        {isPending && (
+                          <button
+                            type="button"
+                            onClick={() => handleCancelWithdrawal(w.WALLETWDID || w.WITHDRAWID)}
+                            disabled={cancellingWdId === (w.WALLETWDID || w.WITHDRAWID)}
+                            className="px-2.5 py-1 text-[0.7rem] font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors border border-rose-200 disabled:opacity-50"
+                          >
+                            {cancellingWdId === (w.WALLETWDID || w.WITHDRAWID) ? "Cancelling..." : "Cancel"}
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -327,6 +376,37 @@ export default function EmployeeWalletPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {(serverPagination.totalPages > 1 || serverPagination.totalRows > pageSize) && (
+          <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between text-xs text-slate-500 rounded-b-2xl">
+            <span>
+              Showing {((currentPage - 1) * pageSize) + 1} to{" "}
+              {Math.min(currentPage * pageSize, serverPagination.totalRows || transactions.length)} of{" "}
+              {serverPagination.totalRows || transactions.length} transactions
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="px-3 py-1 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-colors font-medium cursor-pointer"
+              >
+                Previous
+              </button>
+              <span className="px-2 font-bold text-slate-700">
+                {currentPage} / {serverPagination.totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(serverPagination.totalPages, p + 1))}
+                disabled={currentPage >= serverPagination.totalPages}
+                className="px-3 py-1 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-colors font-medium cursor-pointer"
+              >
+                Next
+              </button>
+            </div>
           </div>
         )}
       </div>

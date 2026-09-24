@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authenticate } from "../../middlewares/auth.middleware.js";
+import { authorizeAnyCanteenRole } from "../../middlewares/role.middleware.js";
 import { validate } from "../../middlewares/validate.middleware.js";
 import * as MenuTemplateController from "./menutemplate.controller.js";
 import * as validation from "./menutemplate.validation.js";
@@ -8,13 +9,7 @@ const router = Router();
 
 router.use(authenticate);
 
-const managerOrAssistant = (req, res, next) => {
-  const sysRoles = req.user?.SYSTEMROLES || [];
-  if (sysRoles.includes("SYSADM")) return next();
-  const canteenRoles = req.user?.CANTEENROLES || [];
-  if (canteenRoles.some((r) => r.ROLECODE === "CNTMGR" || r.ROLECODE === "CNTAST")) return next();
-  return res.status(403).json({ SUCCESS: false, MESSAGE: "Forbidden: Canteen Manager or Assistant role required" });
-};
+const managerOrAssistant = authorizeAnyCanteenRole("CNTMGR", "CNTAST");
 
 // Template Routes
 router.post(

@@ -1,8 +1,14 @@
 import crypto from "crypto";
 import { UnauthorizedError } from "../common/errors/appError.js";
+import { env } from "../config/env.js";
 
-// Ensure the secret is exactly 16 bytes for AES-128
-const SECRET_KEY = process.env.SSO_SECRET_KEY || "1234567890123456";
+const getSecretKey = () => {
+  const key = env.SSO_SECRET_KEY || process.env.SSO_SECRET_KEY;
+  if (!key || Buffer.from(key, "utf8").length !== 16) {
+    throw new UnauthorizedError("SSO authentication failed: Invalid or missing SSO secret key configuration");
+  }
+  return key;
+};
 
 /**
  * Decrypts a Base64Url encoded AES token.
@@ -14,6 +20,8 @@ const SECRET_KEY = process.env.SSO_SECRET_KEY || "1234567890123456";
  */
 export const decryptToken = (token) => {
   try {
+    const secretKey = getSecretKey();
+
     // Convert Base64Url to standard Base64
     let base64Token = token.replace(/-/g, "+").replace(/_/g, "/");
 
@@ -24,7 +32,7 @@ export const decryptToken = (token) => {
 
     const decipher = crypto.createDecipheriv(
       "aes-128-ecb",
-      Buffer.from(SECRET_KEY, "utf-8"),
+      Buffer.from(secretKey, "utf-8"),
       null // ECB mode does not use an IV
     );
 

@@ -25,14 +25,20 @@ export const getBookingController = asyncHandler(async (req, res) => {
 
 export const getBookingsController = asyncHandler(async (req, res) => {
   const filters = {
-    PCUSTOMERID: req.query.customerId,
-    PSERVICEID: req.query.serviceId,
-    PSTARTDATE: req.query.startDate || req.query.fromDate,
-    PENDDATE: req.query.endDate || req.query.toDate,
-    PSTATUS: req.query.status
+    PCUSTOMERID: req.query.customerId ? Number(req.query.customerId) : null,
+    PSERVICEID: req.query.serviceId ? Number(req.query.serviceId) : null,
+    PSTARTDATE: req.query.startDate || req.query.fromDate || null,
+    PENDDATE: req.query.endDate || req.query.toDate || null,
+    PSTATUS: req.query.status || null,
+    PCANTEENID: req.query.canteenId ? Number(req.query.canteenId) : null,
+    page: req.query.page ? Number(req.query.page) : null,
+    pageSize: req.query.pageSize ? Number(req.query.pageSize) : null,
   };
-  const data = await bookingService.listBookings(filters, req.user);
-  return sendSuccess(res, data, "Bookings retrieved successfully");
+  const result = await bookingService.listBookings(filters, req.user);
+  if (result && result.pagination) {
+    return sendSuccess(res, result.rows, "Bookings retrieved successfully", 200, result.pagination);
+  }
+  return sendSuccess(res, result, "Bookings retrieved successfully");
 });
 
 export const getKitchenPrepController = asyncHandler(async (req, res) => {
@@ -52,6 +58,15 @@ export const addBookingItemController = asyncHandler(async (req, res) => {
     req.user
   );
   return sendSuccess(res, data, "Booking item added successfully", 201);
+});
+
+export const updateBookingItemsBatchController = asyncHandler(async (req, res) => {
+  const data = await bookingService.updateBookingItemsBatch(
+    req.params.id,
+    req.validated.body.items,
+    req.user
+  );
+  return sendSuccess(res, data, "Booking items updated successfully");
 });
 
 export const updateBookingItemController = asyncHandler(async (req, res) => {

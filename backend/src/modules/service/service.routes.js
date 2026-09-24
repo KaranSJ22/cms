@@ -21,14 +21,12 @@ const router = express.Router();
 router.get(
   "/",
   authenticate,
-  authorizeAnyCanteenRole("CNTMGR", "CNTAST"),
   getServicesController
 );
 
 router.get(
   "/:id",
   authenticate,
-  authorizeAnyCanteenRole("CNTMGR", "CNTAST"),
   validate(serviceIdSchema),
   getServiceController
 );

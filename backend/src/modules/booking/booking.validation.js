@@ -55,6 +55,31 @@ export const addBookingItemSchema = z.object({
   }),
 });
 
+export const updateBookingItemsBatchSchema = z.object({
+  params: z.object({
+    id: z.string().regex(/^\d+$/, "Booking ID must be a positive integer"),
+  }),
+  body: z.object({
+    items: z.array(
+      z
+        .object({
+          dayMenuId: z.number().int().positive("Day Menu ID must be a positive integer").optional(),
+          DAYMENUID: z.number().int().positive("Day Menu ID must be a positive integer").optional(),
+          qty: z.number().int().min(1, "Quantity must be at least 1").optional(),
+          QTY: z.number().int().min(1, "Quantity must be at least 1").optional(),
+        })
+        .refine(
+          (item) =>
+            (item.dayMenuId !== undefined || item.DAYMENUID !== undefined) &&
+            (item.qty !== undefined || item.QTY !== undefined),
+          {
+            message: "Each item must specify dayMenuId and qty",
+          }
+        )
+    ),
+  }),
+});
+
 export const updateBookingItemSchema = z.object({
   params: z.object({
     id: z.string().regex(/^\d+$/, "Booking ID must be a positive integer"),

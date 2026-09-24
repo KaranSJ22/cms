@@ -28,6 +28,7 @@ export const CANTEEN_MANAGER_NAV = [
   { key: 'dayslots', label: 'Day Slots', category: 'menu', icon: 'CalendarIcon' },
   { key: 'daymenu', label: 'Menu Planner', category: 'menu', icon: 'ClipboardDocumentCheckIcon', hasBadge: true, badgeKey: 'pendingMenus' },
   { key: 'bulk-menu', label: 'Bulk Menu Creator', category: 'menu', icon: 'QueueListIcon' },
+  { key: 'menu-monitor', label: 'Weekly Menu Monitor', category: 'menu', icon: 'EyeIcon' },
 
   // Terminals & Kiosks
   { key: 'kiosk/serving-terminal', label: 'Serving Terminal', category: 'terminals', icon: 'ComputerDesktopIcon' },
@@ -53,6 +54,7 @@ export const CANTEEN_ASSISTANT_NAV = [
   { key: 'dayslots', label: 'Day Calendar Slots', category: 'menu', icon: 'CalendarIcon' },
   { key: 'daymenu', label: 'Menu Planner', category: 'menu', icon: 'ClipboardDocumentCheckIcon', hasBadge: true, badgeKey: 'pendingMenus' },
   { key: 'bulk-menu', label: 'Bulk Menu Creator', category: 'menu', icon: 'QueueListIcon' },
+  { key: 'menu-monitor', label: 'Weekly Menu Monitor', category: 'menu', icon: 'EyeIcon' },
 
   // Terminals
   { key: 'kiosk/serving-terminal', label: 'Serving Terminal', category: 'terminals', icon: 'ComputerDesktopIcon' },
@@ -71,7 +73,7 @@ export const CANTEEN_STAFF_NAV = [
 export const EMPLOYEE_NAV = [
   { key: 'home', label: 'Employee Portal', category: 'employee', icon: 'HomeIcon' },
   { key: 'prebooking', label: 'Pre-Book Meals', category: 'employee', icon: 'ShoppingBagIcon' },
-  { key: 'mybookings', label: 'My Bookings', category: 'employee', icon: 'DocumentTextIcon' },
+  { key: 'mybookings', label: 'Booking History', category: 'employee', icon: 'ClockIcon' },
 ]
 
 export const EMPLOYEE_OFFICIAL_EXTRA = [

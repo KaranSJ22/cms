@@ -114,6 +114,7 @@ This document maps all database stored procedures with their required parameters
 | `IN` | `PSTARTDATE` | `DATE` |
 | `IN` | `PENDDATE` | `DATE` |
 | `IN` | `PSTATUSCODE` | `VARCHAR(10)` |
+| `IN` | `PCANTEENID` | `INT` |
 
 ### `CMSLISTKITCHENPREP`
 | Direction | Parameter Name | Data Type |
@@ -126,6 +127,15 @@ This document maps all database stored procedures with their required parameters
 | `IN` | `PCUSTOMERID` | `INT` |
 | `IN` | `PSERVICEID` | `INT` |
 | `IN` | `PSTATUSCODE` | `VARCHAR(10)` |
+
+### `CMSADDBOOKWEEKLY`
+| Direction | Parameter Name | Data Type |
+|-----------|----------------|-----------|
+| `IN` | `PBOOKTYPECODE` | `VARCHAR(10)` |
+| `IN` | `PCUSTOMERID` | `INT` |
+| `IN` | `PBOOKINGSJSON` | `JSON` |
+| `IN` | `PBOOKEDBY` | `INT` |
+| `IN` | `PREMARKS` | `VARCHAR(255)` |
 
 ## CANTEENROLE_PROCEDURES.sql
 
@@ -583,6 +593,8 @@ This document maps all database stored procedures with their required parameters
 | `IN` | `PCANTEENID` | `INT` |
 | `IN` | `PDATEFROM` | `DATE` |
 | `IN` | `PDATETO` | `DATE` |
+| `IN` | `PPAGE` | `INT` |
+| `IN` | `PPAGESIZE` | `INT` |
 
 ### `CMSACTSLOT`
 | Direction | Parameter Name | Data Type |
@@ -1187,6 +1199,8 @@ This document maps all database stored procedures with their required parameters
 | `IN` | `PCUSTOMERID` | `INT` |
 | `IN` | `PFROMDATE` | `DATE` |
 | `IN` | `PTODATE` | `DATE` |
+| `IN` | `PPAGE` | `INT` |
+| `IN` | `PPAGESIZE` | `INT` |
 
 ### `CMSREQWALLETWD`
 | Direction | Parameter Name | Data Type |
@@ -1245,5 +1259,72 @@ This document maps all database stored procedures with their required parameters
 | Direction | Parameter Name | Data Type |
 |-----------|----------------|-----------|
 | `IN` | `PDAYSLOTID` | `INT` |
+
+### `CMSLISTBOOKHISTORY`
+| Direction | Parameter Name | Data Type |
+|-----------|----------------|-----------|
+| `IN` | `PCUSTOMERID` | `INT` |
+| `IN` | `PSTARTDATE` | `DATE` |
+| `IN` | `PENDDATE` | `DATE` |
+| `IN` | `PSTATUSCODE` | `VARCHAR(10)` |
+| `IN` | `PPAGE` | `INT` |
+| `IN` | `PPAGESIZE` | `INT` |
+
+## KIOSK_PROCEDURES.sql
+
+### `CMSIDENTIFYKIOSK`
+| Direction | Parameter Name | Data Type |
+|-----------|----------------|-----------|
+| `IN` | `PIPADDRESS` | `VARCHAR(45)` |
+
+### `CMSREGISTERKIOSKDEVICE`
+| Direction | Parameter Name | Data Type |
+|-----------|----------------|-----------|
+| `IN` | `PDEVICECODE` | `VARCHAR(30)` |
+| `IN` | `PDEVICENAME` | `VARCHAR(100)` |
+| `IN` | `PIPADDRESS` | `VARCHAR(45)` |
+| `IN` | `PMACADDRESS` | `VARCHAR(17)` |
+| `IN` | `PCANTEENID` | `INT` |
+| `IN` | `PKIOSKTYPE` | `VARCHAR(30)` |
+| `IN` | `PUSERID` | `INT` |
+
+### `CMSHEARTBEATKIOSK`
+| Direction | Parameter Name | Data Type |
+|-----------|----------------|-----------|
+| `IN` | `PKIOSKID` | `INT` |
+
+### `CMSLISTKIOSKDEVICES`
+| Direction | Parameter Name | Data Type |
+|-----------|----------------|-----------|
+| `IN` | `PCANTEENID` | `INT` |
+| `IN` | `PKIOSKTYPE` | `VARCHAR(30)` |
+
+### `CMSKIOSKGETCURRENTSLOT`
+| Direction | Parameter Name | Data Type |
+|-----------|----------------|-----------|
+| `IN` | `PCANTEENID` | `INT` |
+
+### `CMSKIOSKRESOLVEBOOKING`
+| Direction | Parameter Name | Data Type |
+|-----------|----------------|-----------|
+| `IN` | `PIDENTIFIER` | `VARCHAR(255)` |
+| `IN` | `PCANTEENID` | `INT` |
+| `IN` | `PSERVICEID` | `INT` |
+| `IN` | `PKIOSKID` | `INT` |
+| `IN` | `PDAYSLOTID` | `INT` |
+
+### `CMSKIOSKSERVEBOOKING`
+| Direction | Parameter Name | Data Type |
+|-----------|----------------|-----------|
+| `IN` | `PBOOKINGID` | `INT` |
+| `IN` | `PSERVEDBY` | `INT` |
+| `IN` | `PKIOSKID` | `INT` |
+| `IN` | `PREMARKS` | `VARCHAR(255)` |
+
+### `CMSKIOSKSCANSELFSERVICE`
+| Direction | Parameter Name | Data Type |
+|-----------|----------------|-----------|
+| `IN` | `PRFIDHASH` | `VARCHAR(255)` |
+| `IN` | `PKIOSKID` | `INT` |
 
 

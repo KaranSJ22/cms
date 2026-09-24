@@ -15,7 +15,7 @@ export function useDayMenu() {
       setDayMenus(data || []);
       return data;
     } catch (err) {
-      setError(err.response?.data?.message || err.message || "Failed to fetch day menu workspace");
+      setError(err.response?.data?.MESSAGE || err.response?.data?.message || err.response?.data?.error || err.message || "Failed to fetch day menu workspace");
       return null;
     } finally {
       setLoading(false);
@@ -27,7 +27,7 @@ export function useDayMenu() {
       await dayMenuApi.replaceDayMenuItems(daySlotId, itemsJson);
       return true;
     } catch (err) {
-      setError(err.response?.data?.message || err.message || "Failed to save draft");
+      setError(err.response?.data?.MESSAGE || err.response?.data?.message || err.response?.data?.error || err.message || "Failed to save draft");
       return false;
     }
   };
@@ -37,7 +37,7 @@ export function useDayMenu() {
       await dayMenuApi.submitDayMenu(daySlotId);
       return true;
     } catch (err) {
-      setError(err.response?.data?.message || err.message || "Failed to submit menu");
+      setError(err.response?.data?.MESSAGE || err.response?.data?.message || err.response?.data?.error || err.message || "Failed to submit menu");
       return false;
     }
   };
@@ -47,7 +47,7 @@ export function useDayMenu() {
       await dayMenuApi.approveDayMenu(daySlotId, remarks);
       return true;
     } catch (err) {
-      setError(err.response?.data?.message || err.message || "Failed to approve menu");
+      setError(err.response?.data?.MESSAGE || err.response?.data?.message || err.response?.data?.error || err.message || "Failed to approve menu");
       return false;
     }
   };
@@ -57,7 +57,7 @@ export function useDayMenu() {
       await dayMenuApi.rejectDayMenu(daySlotId, remarks);
       return true;
     } catch (err) {
-      setError(err.response?.data?.message || err.message || "Failed to reject menu");
+      setError(err.response?.data?.MESSAGE || err.response?.data?.message || err.response?.data?.error || err.message || "Failed to reject menu");
       return false;
     }
   };
@@ -70,7 +70,7 @@ export function useDayMenu() {
       setPendingMenus(data || []);
       return data;
     } catch (err) {
-      setError(err.response?.data?.message || err.message || "Failed to fetch pending menus");
+      setError(err.response?.data?.MESSAGE || err.response?.data?.message || err.response?.data?.error || err.message || "Failed to fetch pending menus");
       return null;
     } finally {
       setLoading(false);

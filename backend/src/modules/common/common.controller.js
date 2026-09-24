@@ -9,7 +9,8 @@ import {
 } from "./common.service.js";
 
 export const getStatus = asyncHandler(async (req, res) => {
-  const data = await fetchStatus();
+  const statusGrp = req.query.statusGrp || req.query.STATUSGRP || null;
+  const data = await fetchStatus(statusGrp);
   return sendSuccess(res, data, "Status list fetched successfully");
 });
 

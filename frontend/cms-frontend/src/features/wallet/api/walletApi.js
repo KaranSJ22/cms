@@ -1,10 +1,11 @@
 import api from '../../../config/axios'
 
-/** GET /api/wallets/customer-lookup/:customerId  (CTNMGR) */
-export async function lookupCustomerForWallet(customerId) {
-  const res = await api.get(`/wallets/customer-lookup/${customerId}`)
+/** GET /api/wallets/customer-lookup/:identifier  (ADMIN, CNTMGR, CNTAST) */
+export async function lookupCustomerForWallet(identifier) {
+  const res = await api.get(`/wallets/customer-lookup/${encodeURIComponent(identifier)}`)
   return res.data.DATA
 }
+
 
 /** POST /api/wallets  (ADMIN, CTNMGR) */
 export async function createWallet(body) {
@@ -27,7 +28,11 @@ export async function fetchWallet(customerId) {
 /** GET /api/wallets/customer/:customerId/transactions  (authenticated) */
 export async function fetchWalletTransactions(customerId, params = {}) {
   const res = await api.get(`/wallets/customer/${customerId}/transactions`, { params })
-  return res.data.DATA
+  const data = res.data.DATA || []
+  if (res.data.PAGINATION && Array.isArray(data)) {
+    data.pagination = res.data.PAGINATION
+  }
+  return data
 }
 
 /** POST /api/wallets/withdraw/request  (authenticated) */
@@ -42,14 +47,21 @@ export async function fetchWithdrawals(params = {}) {
   return res.data.DATA
 }
 
-/** POST /api/wallets/withdraw/:walletWdId/approve  (ADMIN, CTNMGR) */
-export async function approveWithdrawal(walletWdId) {
-  const res = await api.post(`/wallets/withdraw/${walletWdId}/approve`)
+/** POST /api/wallets/withdraw/:walletWdId/approve  (ADMIN, CNTMGR, CNTAST) */
+export async function approveWithdrawal(walletWdId, body = {}) {
+  const res = await api.post(`/wallets/withdraw/${walletWdId}/approve`, body)
   return res.data.DATA
 }
 
-/** POST /api/wallets/withdraw/:walletWdId/reject  (ADMIN, CTNMGR) */
+/** POST /api/wallets/withdraw/:walletWdId/reject  (ADMIN, CNTMGR, CNTAST) */
 export async function rejectWithdrawal(walletWdId, body) {
   const res = await api.post(`/wallets/withdraw/${walletWdId}/reject`, body)
   return res.data.DATA
 }
+
+/** POST /api/wallets/withdraw/:walletWdId/cancel  (authenticated: customer or staff) */
+export async function cancelWithdrawal(walletWdId, body = {}) {
+  const res = await api.post(`/wallets/withdraw/${walletWdId}/cancel`, body)
+  return res.data.DATA
+}
+

@@ -20,6 +20,7 @@ const ServicesPage      = lazy(() => import('../features/services/pages/Services
 const DaySlotsPage      = lazy(() => import('../features/dayslot/pages/DaySlotsPage'))
 const DayMenuPage       = lazy(() => import('../features/daymenu/pages/DayMenuPlannerPage'))
 const BulkMenuCreatorPage = lazy(() => import('../features/daymenu/pages/BulkMenuCreatorPage'))
+const MenuMonitorPage   = lazy(() => import('../features/daymenu/pages/MenuMonitorPage'))
 const BookingsMonitorPage = lazy(() => import('../features/booking/pages/BookingsMonitorPage'))
 const PricingPage       = lazy(() => import('../features/pricing/pages/PricingPage'))
 const WalletPage        = lazy(() => import('../features/wallet/pages/WalletPage'))
@@ -88,6 +89,11 @@ export default function AppRoutes() {
         <Route path="/bulk-menu"  element={
           <ProtectedRoute allowedRoles={['CNTMGR', 'CNTAST']}>
             <PageSuspense><BulkMenuCreatorPage /></PageSuspense>
+          </ProtectedRoute>
+        } />
+        <Route path="/menu-monitor" element={
+          <ProtectedRoute allowedRoles={['CNTMGR', 'CNTAST']}>
+            <PageSuspense><MenuMonitorPage /></PageSuspense>
           </ProtectedRoute>
         } />
         <Route path="/kitchen-prep" element={<Navigate to="/dashboard" replace />} />

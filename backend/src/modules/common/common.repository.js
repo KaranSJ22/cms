@@ -1,31 +1,25 @@
 import { pool } from "../../db/connection.js";
 
-export const getAllStatus = async () => {
-  const [resultSets] = await pool.execute("CALL CMSLISTSTATUS(?)", [null]);
+export const getAllStatus = async (statusGrp = null) => {
+  const [resultSets] = await pool.query("CALL CMSLISTSTATUS(?)", [statusGrp || null]);
 
   return resultSets[0] || [];
 };
 
 export const getAllCustomerTypes = async () => {
-  const [resultSets] = await pool.execute("CALL CMSLISTCUSTTYPE()");
+  const [resultSets] = await pool.query("CALL CMSLISTCUSTTYPE()");
 
   return resultSets[0] || [];
 };
 
 export const getAllScreens = async () => {
-  const [resultSets] = await pool.execute("CALL CMSLISTSCREEN()");
+  const [resultSets] = await pool.query("CALL CMSLISTSCREEN()");
 
   return resultSets[0] || [];
 };
 
 export const getAllAutonos = async () => {
-  const [resultSets] = await pool.execute("CALL CMSLISTAUTONO()");
-
-  return resultSets[0] || [];
-};
-
-export const getAllCanteens = async () => {
-  const [resultSets] = await pool.execute("CALL CMSLISTCANTEEN(?)", [null]);
+  const [resultSets] = await pool.query("CALL CMSLISTAUTONO()");
 
   return resultSets[0] || [];
 };

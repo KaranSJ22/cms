@@ -53,3 +53,82 @@ export function nextWorkingDays(n) {
   }
   return dates
 }
+
+/**
+ * Returns Monday ISO date string for given week offset or date string
+ * @param {number|string} offsetOrDateStr - week offset (number, 0 = current) or 'YYYY-MM-DD'
+ * @returns {string} 'YYYY-MM-DD'
+ */
+export function getMonday(offsetOrDateStr = 0) {
+  if (typeof offsetOrDateStr === 'string') {
+    if (!offsetOrDateStr) return ''
+    const [y, m, dayNum] = offsetOrDateStr.split('-').map(Number)
+    const dt = new Date(Date.UTC(y, m - 1, dayNum))
+    const day = dt.getUTCDay()
+    const diff = day === 0 ? -6 : 1 - day
+    dt.setUTCDate(dt.getUTCDate() + diff)
+    return dt.toISOString().slice(0, 10)
+  }
+  const d = new Date()
+  const day = d.getDay()
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1) + offsetOrDateStr * 7
+  const monday = new Date(d.setDate(diff))
+  monday.setHours(0, 0, 0, 0)
+  return formatDateISO(monday)
+}
+
+/**
+ * Returns a Date object representing Monday for a given week offset (0 = current week)
+ * @param {number} offsetWeeks
+ * @returns {Date}
+ */
+export function getMondayDate(offsetWeeks = 0) {
+  const d = new Date()
+  const day = d.getDay()
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1) + offsetWeeks * 7
+  const monday = new Date(d.setDate(diff))
+  monday.setHours(0, 0, 0, 0)
+  return monday
+}
+
+/** Format Date object to 'YYYY-MM-DD' */
+export function formatDateISO(d) {
+  if (!d) return ''
+  const dateObj = typeof d === 'string' ? new Date(d) : d
+  const year = dateObj.getFullYear()
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0')
+  const day = String(dateObj.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+/** Add N days to 'YYYY-MM-DD' string */
+export function addDays(dateStr, d) {
+  if (!dateStr) return ''
+  const [y, m, dayNum] = dateStr.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, dayNum + d))
+  return dt.toISOString().slice(0, 10)
+}
+
+/** Format ISO datetime or string to Indian locale short date */
+export function formatEventDate(dt) {
+  if (!dt) return '—'
+  const d = new Date(typeof dt === 'string' ? dt.replace(' ', 'T') : dt)
+  if (isNaN(d.getTime())) return String(dt)
+  return d.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
+/** Format ISO datetime or string to HH:MM (24h) */
+export function formatEventTime(dt) {
+  if (!dt) return '—'
+  const d = new Date(typeof dt === 'string' ? dt.replace(' ', 'T') : dt)
+  if (isNaN(d.getTime())) return '—'
+  return d.toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+}

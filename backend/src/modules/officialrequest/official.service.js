@@ -78,7 +78,7 @@ export const listServicesByCanteen = async (canteenId, statusId = null) => {
       st.STATUSNAME
     FROM CMS_OFFCOMBO oc
     JOIN CMS_STATUS st ON st.STATUSID = oc.STATUSID
-    WHERE oc.OFFSERVID IN (?)
+    WHERE oc.OFFSERVID IN (?) AND oc.STATUSID = 10
     ORDER BY oc.OFFCOMBOID ASC
     `,
     [serviceIds]
@@ -382,6 +382,29 @@ export const updateCombo = async (comboId, updateData, userId) => {
       }
     }
 
+    return true;
+  });
+};
+
+export const deleteCombo = async (comboId, userId) => {
+  return await withTransaction(async (conn) => {
+    const [bookingCheck] = await conn.query(
+      `SELECT COUNT(*) AS count FROM CMS_OFFBOOK WHERE OFFCOMBOID = ?`,
+      [comboId]
+    );
+    const hasBookings = (bookingCheck[0]?.count || 0) > 0;
+
+    if (hasBookings) {
+      // Soft-delete to preserve booking audit integrity (status 11 = DIS)
+      await conn.query(
+        `UPDATE CMS_OFFCOMBO SET STATUSID = 11, UPDATEDBY = ?, UPDATEDAT = CURRENT_TIMESTAMP WHERE OFFCOMBOID = ?`,
+        [userId, comboId]
+      );
+    } else {
+      // Hard delete combo items and combo
+      await conn.query(`DELETE FROM CMS_OFFCOMBO_ITEM WHERE OFFCOMBOID = ?`, [comboId]);
+      await conn.query(`DELETE FROM CMS_OFFCOMBO WHERE OFFCOMBOID = ?`, [comboId]);
+    }
     return true;
   });
 };
@@ -1424,3 +1447,75 @@ export const getOfficialKitchenPrepSummary = async (canteenId, targetDate) => {
     DISHES: dishesWithOrders,
   };
 };
+
+// ============================================================
+// CANTEEN & ENTITY RESOLUTION HELPERS (FOR RBAC & AUTHORIZATION)
+// ============================================================
+
+export const getCanteenIdByServiceId = async (serviceId) => {
+  const id = Number(serviceId);
+  if (!id) return null;
+  const [rows] = await pool.query(
+    "SELECT CANTEENID FROM CMS_OFFSERV WHERE OFFSERVID = ?",
+    [id]
+  );
+  return rows[0]?.CANTEENID || null;
+};
+
+export const getCanteenIdByComboId = async (comboId) => {
+  const id = Number(comboId);
+  if (!id) return null;
+  const [rows] = await pool.query(
+    "SELECT os.CANTEENID FROM CMS_OFFCOMBO oc JOIN CMS_OFFSERV os ON os.OFFSERVID = oc.OFFSERVID WHERE oc.OFFCOMBOID = ?",
+    [id]
+  );
+  return rows[0]?.CANTEENID || null;
+};
+
+export const getCanteenIdByBookingId = async (bookingId) => {
+  const id = Number(bookingId);
+  if (!id) return null;
+  const [rows] = await pool.query(
+    "SELECT CANTEENID FROM CMS_OFFBOOK WHERE OFFBOOKID = ?",
+    [id]
+  );
+  return rows[0]?.CANTEENID || null;
+};
+
+export const getServiceById = async (serviceId) => {
+  const [rows] = await pool.query(
+    `SELECT os.*, c.CANTEENNAME, st.STATUSNAME
+     FROM CMS_OFFSERV os
+     JOIN CMS_CANTEEN c ON c.CANTEENID = os.CANTEENID
+     JOIN CMS_STATUS st ON st.STATUSID = os.STATUSID
+     WHERE os.OFFSERVID = ?`,
+    [serviceId]
+  );
+  return rows[0] || null;
+};
+
+export const getComboById = async (comboId) => {
+  const [rows] = await pool.query(
+    `SELECT oc.*, os.CANTEENID, st.STATUSNAME
+     FROM CMS_OFFCOMBO oc
+     JOIN CMS_OFFSERV os ON os.OFFSERVID = oc.OFFSERVID
+     JOIN CMS_STATUS st ON st.STATUSID = oc.STATUSID
+     WHERE oc.OFFCOMBOID = ?`,
+    [comboId]
+  );
+  return rows[0] || null;
+};
+
+export const getBookingHeaderById = async (bookingId) => {
+  const [rows] = await pool.query(
+    `SELECT b.*, st.STATUSCODE, st.STATUSNAME, c.CANTEENNAME, os.SERVNAME
+     FROM CMS_OFFBOOK b
+     JOIN CMS_STATUS st ON st.STATUSID = b.STATUSID
+     JOIN CMS_CANTEEN c ON c.CANTEENID = b.CANTEENID
+     JOIN CMS_OFFSERV os ON os.OFFSERVID = b.OFFSERVID
+     WHERE b.OFFBOOKID = ?`,
+    [bookingId]
+  );
+  return rows[0] || null;
+};
+

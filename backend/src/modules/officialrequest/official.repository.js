@@ -1,12 +1,8 @@
 /**
  * Official Request Repository
- * 
- * NOTE: Per architecture guidelines, this file is strictly reserved for
- * Stored Procedure calls (e.g. using `callSP` from `../../db/connection.js`).
- * 
- * During this initial implementation phase, raw parameterized SQL queries
- * reside directly inside `official.service.js`. Once verified and approved,
- * corresponding Stored Procedures will be authored, synced, and invoked here.
+ * Centralized data access layer for official catering requests, combos, and workflows.
+ * Note: Prototyping raw SQL queries are placed in official.service.js.
+ * Once converted to Stored Procedures, repository functions will invoke CALL CMS... here.
  */
 
-export const officialRepositoryPlaceholder = true;
+// Stored Procedure calls will be added here as SPs are generated.

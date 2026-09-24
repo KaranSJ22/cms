@@ -99,6 +99,7 @@ const bulkDaySchema = z.object({
   DAYINDEX: z.coerce.number().int().min(0).max(6),
   STARTTIME: timeSchema.optional(),
   ENDTIME: timeSchema.optional(),
+  OVERRIDEHOLIDAY: z.boolean().optional(),
   ITEMS: z.array(bulkMenuItemSchema).min(0), // allow empty = skip that day
 });
 

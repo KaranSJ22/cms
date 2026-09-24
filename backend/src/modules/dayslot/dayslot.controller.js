@@ -10,6 +10,9 @@ import {
 
 export const getDaySlotsController = asyncHandler(async (req, res) => {
   const data = await fetchDaySlots(req.query);
+  if (data && data.pagination) {
+    return sendSuccess(res, data.rows, "Day slots fetched successfully", 200, data.pagination);
+  }
   return sendSuccess(res, data, "Day slots fetched successfully");
 });
 

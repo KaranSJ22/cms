@@ -1,7 +1,7 @@
 import { pool } from "../../db/connection.js";
 
 export const findLoginInfoByLoginId = async (loginId) => {
-  const [resultSets] = await pool.execute(
+  const [resultSets] = await pool.query(
     "CALL CMSLOGININFO(?)",
     [loginId]
   );

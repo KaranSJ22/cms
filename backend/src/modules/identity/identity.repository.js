@@ -21,11 +21,10 @@ export const getAllCustomers = async (TYPECODE = null, STATUS = null) => {
   return resultSets[0];
 };
 
-// NOT USEFULL
 export const findUserByLoginId = async (LOGINID) => {
-  const [resultSets] = await pool.execute(`CALL CMSLOGININFO(?)`, [LOGINID]);
+  const [resultSets] = await pool.query(`CALL CMSLOGININFO(?)`, [LOGINID]);
 
-  return resultSets[0] || null;
+  return resultSets[0]?.[0] || null;
 };
 
 export const createUserUsingProcedure = async ({
@@ -84,6 +83,48 @@ export const assignRoleUsingProcedure = async ({
 
 export const getUserRolesByUserId = async (USERID) => {
   const [resultSets] = await pool.execute("CALL CMSLISTCONSROL(?)", [USERID]);
+
+  return resultSets[0] || [];
+};
+
+export const assignCanteenRoleUsingProcedure = async ({
+  USERID,
+  ROLEID,
+  CANTEENID,
+  ISDEFAULT = 0,
+  VALIDFROM = null,
+  VALIDUNTIL = null,
+  ASSIGNEDBY,
+}) => {
+  await pool.query("CALL CMSASSIGNCANROL(?, ?, ?, ?, ?, ?, ?)", [
+    USERID,
+    ROLEID,
+    CANTEENID,
+    ISDEFAULT ? 1 : 0,
+    VALIDFROM,
+    VALIDUNTIL,
+    ASSIGNEDBY,
+  ]);
+
+  return true;
+};
+
+export const removeCanteenRoleUsingProcedure = async ({
+  USERID,
+  ROLEID,
+  CANTEENID,
+}) => {
+  await pool.query("CALL CMSREMOVECANROL(?, ?, ?)", [
+    USERID,
+    ROLEID,
+    CANTEENID,
+  ]);
+
+  return true;
+};
+
+export const getCanteenRolesByUserId = async (USERID) => {
+  const [resultSets] = await pool.query("CALL CMSLISTCANROL(?)", [USERID]);
 
   return resultSets[0] || [];
 };

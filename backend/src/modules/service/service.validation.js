@@ -23,7 +23,7 @@ export const serviceIdSchema = z.object({
 export const createServiceSchema = z.object({
   body: z
     .object({
-      SERVCODE: z.string().trim().min(1).max(20).optional(),
+      SERVCODE: z.string().trim().min(1, "Service Code is required").max(20),
       SERVNAME: z.string().trim().min(1).max(80),
       DEFSTART: timeSchema,
       DEFEND: timeSchema,
@@ -41,7 +41,7 @@ export const updateServiceSchema = z.object({
       SERVNAME: z.string().trim().min(1).max(80),
       DEFSTART: timeSchema,
       DEFEND: timeSchema,
-      STATUS: z.enum(["ACT", "DIS"]).default("ACT"),
+      STATUS: z.enum(["ACT", "DIS", "INACT"]).default("ACT"),
       CHGREASON: z.string().trim().max(255).nullable().optional(),
     }),
 });

@@ -101,9 +101,12 @@ export const authorizeAnyCanteenRole = (...allowedRoles) => {
       });
     }
 
-    const hasAccess = (req.user.CANTEENROLES || []).some((assignment) =>
-      flatRoles.includes(assignment.ROLECODE)
-    );
+    const isSysAdmin = (req.user.SYSTEMROLES || []).includes("SYSADM");
+    const hasAccess =
+      isSysAdmin ||
+      (req.user.CANTEENROLES || []).some((assignment) =>
+        flatRoles.includes(assignment.ROLECODE)
+      );
 
     if (!hasAccess) {
       return sendForbidden(res, "You do not have permission for this operation in any canteen");

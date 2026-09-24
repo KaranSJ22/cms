@@ -3,7 +3,11 @@ import api from '../../config/axios'
 /** GET /api/day-slots */
 export async function getDaySlots(params = {}) {
   const res = await api.get('/day-slots', { params })
-  return res.data.DATA
+  const data = res.data.DATA || []
+  if (res.data.PAGINATION && Array.isArray(data)) {
+    data.pagination = res.data.PAGINATION
+  }
+  return data
 }
 
 /** GET /api/day-slots/:id */

@@ -7,15 +7,10 @@ const kioskCache = new Map();
 const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
 
 /**
- * Extracts normalized client IP address
+ * Extracts normalized client IP address using Express's trusted proxy configuration
  */
 export function getClientIp(req) {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (forwarded) {
-    const rawIp = forwarded.split(",")[0].trim();
-    return rawIp.startsWith("::ffff:") ? rawIp.substring(7) : rawIp;
-  }
-  let ip = req.socket?.remoteAddress || req.ip || "";
+  let ip = req.ip || req.socket?.remoteAddress || "";
   if (ip.startsWith("::ffff:")) {
     ip = ip.substring(7);
   }

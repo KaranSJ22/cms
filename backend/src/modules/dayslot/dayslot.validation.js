@@ -45,3 +45,20 @@ export const updateDaySlotSchema = z.object({
     })
     ,
 });
+
+export const listDaySlotsSchema = z.object({
+  query: z.object({
+    DAYSLOTID: z.coerce.number().int().positive().optional(),
+    daySlotId: z.coerce.number().int().positive().optional(),
+    CANTEENID: z.coerce.number().int().positive().optional(),
+    canteenId: z.coerce.number().int().positive().optional(),
+    SERVICEID: z.coerce.number().int().positive().optional(),
+    serviceId: z.coerce.number().int().positive().optional(),
+    DATEFROM: dateSchema.optional(),
+    dateFrom: dateSchema.optional(),
+    DATETO: dateSchema.optional(),
+    dateTo: dateSchema.optional(),
+    servingDate: dateSchema.optional(),
+  }),
+});
+

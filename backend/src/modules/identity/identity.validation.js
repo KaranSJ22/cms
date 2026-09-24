@@ -58,7 +58,7 @@ export const createCustomerSchema = z.object({
 
       DISPNAME: z.string().trim().min(2).max(120),
 
-      STATUS: z.enum(["ACT", "DIS"]).default("ACT"),
+      STATUS: z.enum(["ACT", "DIS", "INACT"]).default("ACT"),
 
       VALIDFROM: z.string().datetime().nullable().optional(),
 
@@ -89,6 +89,24 @@ export const createPermanentEmployeeSchema = z.object({
         .trim()
         .min(2, "Designation is required")
         .max(100),
-    })
-    ,
+    }),
+});
+
+export const assignCanteenRoleSchema = z.object({
+  body: z.object({
+    USERID: z.coerce.number().int().positive("User ID must be a positive integer"),
+    ROLEID: z.coerce.number().int().positive("Role ID must be a positive integer"),
+    CANTEENID: z.coerce.number().int().positive("Canteen ID must be a positive integer"),
+    ISDEFAULT: z.coerce.number().int().min(0).max(1).default(0),
+    VALIDFROM: z.string().nullable().optional(),
+    VALIDUNTIL: z.string().nullable().optional(),
+  }),
+});
+
+export const removeCanteenRoleSchema = z.object({
+  body: z.object({
+    USERID: z.coerce.number().int().positive("User ID must be a positive integer"),
+    ROLEID: z.coerce.number().int().positive("Role ID must be a positive integer"),
+    CANTEENID: z.coerce.number().int().positive("Canteen ID must be a positive integer"),
+  }),
 });

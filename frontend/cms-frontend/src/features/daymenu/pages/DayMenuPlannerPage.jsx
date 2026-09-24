@@ -1,16 +1,24 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useDayMenu } from "../hooks/useDayMenu";
 import SingleDayBuilder from "../components/SingleDayBuilder";
 import DayMenuTable from "../components/DayMenuTable";
 import { useAuth } from "../../../hooks/useAuth";
 
 import * as servicesApi from "../../services/api/servicesApi";
-import { getActiveCanteens, getDaySlots, getDaySlot } from "../../dayslot/api/daySlotsApi";
+import { getActiveCanteens, getDaySlots, getDaySlot, createDaySlot, updateDaySlot } from "../../dayslot/api/daySlotsApi";
+import { holidayApi } from "../../holidays/api/holidayApi";
 
 export default function DayMenuPlannerPage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const queryCanteen = searchParams.get("canteen") || searchParams.get("canteenId") || "";
+  const queryDate = searchParams.get("date") || "";
+  const queryService = searchParams.get("service") || searchParams.get("serviceId") || "";
+
   const { 
     dayMenus, 
+    setDayMenus,
     loading, 
     error, 
     setError,
@@ -29,19 +37,51 @@ export default function DayMenuPlannerPage() {
   // Context State
   const [canteens, setCanteens] = useState([]);
   const [services, setServices] = useState([]);
-  const [selectedCanteen, setSelectedCanteen] = useState("");
-  const [selectedDate, setSelectedDate] = useState("");
-  const [selectedService, setSelectedService] = useState("");
+  const [holidays, setHolidays] = useState([]);
+  const [selectedCanteen, setSelectedCanteen] = useState(queryCanteen);
+  const [selectedDate, setSelectedDate] = useState(queryDate);
+  const [selectedService, setSelectedService] = useState(queryService);
+
+  // Sync if URL query parameters change dynamically
+  useEffect(() => {
+    const qCanteen = searchParams.get("canteen") || searchParams.get("canteenId");
+    const qDate = searchParams.get("date");
+    const qService = searchParams.get("service") || searchParams.get("serviceId");
+
+    if (qCanteen !== null && qCanteen !== selectedCanteen) setSelectedCanteen(qCanteen);
+    if (qDate !== null && qDate !== selectedDate) setSelectedDate(qDate);
+    if (qService !== null && qService !== selectedService) setSelectedService(qService);
+  }, [searchParams]);
   
+  // Timing & Holiday Override State
+  const [slotStartTime, setSlotStartTime] = useState("");
+  const [slotEndTime, setSlotEndTime] = useState("");
+  const [timingUpdating, setTimingUpdating] = useState(false);
+  const [timingMessage, setTimingMessage] = useState("");
+  const [holidayOverride, setHolidayOverride] = useState(false);
+
   const [resolvedSlot, setResolvedSlot] = useState(null);
   const [isResolving, setIsResolving] = useState(false);
+
+  // Build holiday map { 'YYYY-MM-DD': holidayName }
+  const holidayMap = useMemo(() => {
+    const map = {};
+    holidays.forEach(h => {
+      const d = (h.HOLIDAYDATE || h.HDATE || '').substring(0, 10);
+      if (d) map[d] = h.HOLIDAYNAME || h.DESCRIPTION || 'Holiday';
+    });
+    return map;
+  }, [holidays]);
+
+  const isCurrentDateHoliday = selectedDate ? Boolean(holidayMap[selectedDate]) : false;
 
   useEffect(() => {
     async function loadInitialData() {
       try {
-        const [canteenData, serviceData] = await Promise.all([
+        const [canteenData, serviceData, holidayData] = await Promise.all([
           getActiveCanteens(),
           servicesApi.getServices(),
+          holidayApi.getHolidays({ year: new Date().getFullYear() }).catch(() => ({ data: [] })),
         ]);
         
         // Filter canteens to only those the user has a role in
@@ -55,6 +95,9 @@ export default function DayMenuPlannerPage() {
         
         setCanteens(filteredCanteens);
         setServices((serviceData || []).filter((s) => s.STATUSCODE === "ACT"));
+
+        const hList = holidayData?.data?.DATA || holidayData?.data || holidayData?.DATA || [];
+        setHolidays(Array.isArray(hList) ? hList : []);
       } catch (err) {
         console.error("Failed to load initial data", err);
       }
@@ -62,10 +105,17 @@ export default function DayMenuPlannerPage() {
     loadInitialData();
   }, [user]);
 
-  // Try to resolve the DAYSLOTID whenever the 3 context fields change
+  // Try to resolve the DAYSLOTID whenever Canteen, Date, or Service changes
   useEffect(() => {
     async function resolveSlot() {
       if (selectedCanteen && selectedDate && selectedService) {
+        // If it's a holiday and manager hasn't enabled holiday override
+        if (isCurrentDateHoliday && !holidayOverride) {
+          setResolvedSlot(null);
+          if (typeof setDayMenus === 'function') setDayMenus([]);
+          return;
+        }
+
         setIsResolving(true);
         setError(null);
         try {
@@ -76,12 +126,31 @@ export default function DayMenuPlannerPage() {
             DATETO: selectedDate,
           });
           
+          const sObj = services.find((s) => s.SERVICEID === Number(selectedService));
+          const defStart = (sObj?.DEFSTART || "08:00").substring(0, 5);
+          const defEnd = (sObj?.DEFEND || "10:00").substring(0, 5);
+
           if (slots && slots.length > 0) {
             const slot = slots[0];
             setResolvedSlot(slot);
+            setSlotStartTime(slot.STARTTIME ? slot.STARTTIME.substring(0, 5) : defStart);
+            setSlotEndTime(slot.ENDTIME ? slot.ENDTIME.substring(0, 5) : defEnd);
             await fetchDayMenuWorkspace(slot.DAYSLOTID);
           } else {
-            setResolvedSlot(null);
+            // Virtual slot: Auto-creation on save/publish
+            const virtualSlot = {
+              isNew: true,
+              CANTEENID: Number(selectedCanteen),
+              SERVICEID: Number(selectedService),
+              SERVDATE: selectedDate,
+              STARTTIME: defStart,
+              ENDTIME: defEnd,
+              APPRSTATUSCODE: 'NEW',
+            };
+            setResolvedSlot(virtualSlot);
+            setSlotStartTime(defStart);
+            setSlotEndTime(defEnd);
+            if (typeof setDayMenus === 'function') setDayMenus([]);
           }
         } catch (error) {
           console.error("Failed to resolve slot", error);
@@ -94,23 +163,66 @@ export default function DayMenuPlannerPage() {
       }
     }
     resolveSlot();
-  }, [selectedCanteen, selectedDate, selectedService, fetchDayMenuWorkspace, setError]);
+  }, [selectedCanteen, selectedDate, selectedService, isCurrentDateHoliday, holidayOverride, services, fetchDayMenuWorkspace, setError]);
+
+  // Handle slot timings update for an existing slot
+  const handleUpdateTimings = async () => {
+    if (!resolvedSlot || resolvedSlot.isNew) return;
+    setTimingUpdating(true);
+    setError(null);
+    setTimingMessage("");
+    try {
+      await updateDaySlot(resolvedSlot.DAYSLOTID, {
+        STARTTIME: slotStartTime,
+        ENDTIME: slotEndTime,
+        STATUS: resolvedSlot.STATUSCODE || resolvedSlot.STATUS || 'ACT',
+        CHGREASON: 'Slot timing updated by manager',
+      });
+      const updatedSlot = await getDaySlot(resolvedSlot.DAYSLOTID);
+      if (updatedSlot) setResolvedSlot(updatedSlot);
+      setTimingMessage("Slot timings updated successfully!");
+      setTimeout(() => setTimingMessage(""), 3500);
+    } catch (err) {
+      setError(err.response?.data?.MESSAGE || err.response?.data?.message || err.message || "Failed to update slot timings");
+    } finally {
+      setTimingUpdating(false);
+    }
+  };
 
   const handleSaveSelection = async (itemsToSave) => {
     if (!resolvedSlot) return;
     setIsSubmitting(true);
-    const success = await replaceMenuItems(resolvedSlot.DAYSLOTID, itemsToSave);
-    if (success) {
-      await fetchDayMenuWorkspace(resolvedSlot.DAYSLOTID);
-      // Refresh the exact slot to get updated status (e.g. DRF)
-      const updatedSlot = await getDaySlot(resolvedSlot.DAYSLOTID);
-      if (updatedSlot) setResolvedSlot(updatedSlot);
+    setError(null);
+    try {
+      let slotId = resolvedSlot.DAYSLOTID;
+
+      // Point 14: Auto-create Day Slot if missing
+      if (resolvedSlot.isNew) {
+        const created = await createDaySlot({
+          CANTEENID: Number(selectedCanteen),
+          SERVICEID: Number(selectedService),
+          SERVDATE: selectedDate,
+          STARTTIME: slotStartTime || resolvedSlot.STARTTIME,
+          ENDTIME: slotEndTime || resolvedSlot.ENDTIME,
+        });
+        slotId = created.DAYSLOTID;
+      }
+
+      const success = await replaceMenuItems(slotId, itemsToSave);
+      if (success) {
+        await fetchDayMenuWorkspace(slotId);
+        const updatedSlot = await getDaySlot(slotId);
+        if (updatedSlot) setResolvedSlot(updatedSlot);
+      }
+    } catch (err) {
+      setError(err.response?.data?.MESSAGE || err.response?.data?.message || err.message || "Failed to save draft");
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   const handleAction = async (actionFn, actionName, args = []) => {
-    if (!resolvedSlot) return;
+    if (!resolvedSlot || resolvedSlot.isNew) return;
     setActionLoading(true);
     const success = await actionFn(resolvedSlot.DAYSLOTID, ...args);
     if (success) {
@@ -128,13 +240,13 @@ export default function DayMenuPlannerPage() {
   const isManager = userCanteenRole === 'CNTMGR' || userCanteenRole === 'CTNMGR' || user?.SYSTEMROLES?.includes('SYSADM');
   
   // Use status from slot (APPRSTATUSCODE from CMSLISTSLOT / CMSGETSLOT)
-  const slotStatus = resolvedSlot?.APPRSTATUSCODE || resolvedSlot?.APPRSTATUS || resolvedSlot?.MENUAPPRSTATUS || 'DRF';
+  const slotStatus = resolvedSlot?.APPRSTATUSCODE || resolvedSlot?.APPRSTATUS || resolvedSlot?.MENUAPPRSTATUS || (resolvedSlot?.isNew ? 'NEW' : 'DRF');
   const isDraftOrRejected = slotStatus === 'DRF' || slotStatus === 'REJ';
   const isPending = slotStatus === 'PEN';
   const isApproved = slotStatus === 'APR' || slotStatus === 'APP';
 
   const handleQuickPublish = async () => {
-    if (!resolvedSlot) return;
+    if (!resolvedSlot || resolvedSlot.isNew) return;
     setActionLoading(true);
     try {
       // Step 1: Submit to PEN
@@ -158,21 +270,43 @@ export default function DayMenuPlannerPage() {
   const handleSaveAndPublish = async (itemsToSave) => {
     if (!resolvedSlot) return;
     setIsSubmitting(true);
-    const saveSuccess = await replaceMenuItems(resolvedSlot.DAYSLOTID, itemsToSave);
-    if (saveSuccess) {
-      // Step 1: Submit to PEN
-      const submitSuccess = await submitMenu(resolvedSlot.DAYSLOTID);
-      if (submitSuccess) {
-        // Step 2: Immediately Approve/Publish
-        const approveSuccess = await approveMenu(resolvedSlot.DAYSLOTID, "Direct approval on save");
-        if (approveSuccess) {
-          await fetchDayMenuWorkspace(resolvedSlot.DAYSLOTID);
-          const updatedSlot = await getDaySlot(resolvedSlot.DAYSLOTID);
-          if (updatedSlot) setResolvedSlot(updatedSlot);
-        }
+    setError(null);
+    try {
+      let slotId = resolvedSlot.DAYSLOTID;
+      const isBrandNew = Boolean(resolvedSlot.isNew);
+
+      // Step 1: Auto-create slot if brand new
+      if (isBrandNew) {
+        const created = await createDaySlot({
+          CANTEENID: Number(selectedCanteen),
+          SERVICEID: Number(selectedService),
+          SERVDATE: selectedDate,
+          STARTTIME: slotStartTime || resolvedSlot.STARTTIME,
+          ENDTIME: slotEndTime || resolvedSlot.ENDTIME,
+        });
+        slotId = created.DAYSLOTID;
       }
+
+      // Step 2: Save menu items
+      const saveSuccess = await replaceMenuItems(slotId, itemsToSave);
+      if (saveSuccess) {
+        // Only submit and approve if it's draft, rejected, or newly created
+        if (isBrandNew || slotStatus === 'DRF' || slotStatus === 'REJ') {
+          const submitSuccess = await submitMenu(slotId);
+          if (submitSuccess) {
+            await approveMenu(slotId, "Direct approval on save and publish");
+          }
+        }
+        // If already approved (APR), items were replaced in-place, no need to resubmit
+        await fetchDayMenuWorkspace(slotId);
+        const updatedSlot = await getDaySlot(slotId);
+        if (updatedSlot) setResolvedSlot(updatedSlot);
+      }
+    } catch (err) {
+      setError(err.response?.data?.MESSAGE || err.response?.data?.message || err.message || "Failed to publish menu");
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   return (
@@ -204,6 +338,34 @@ export default function DayMenuPlannerPage() {
       {/* Step 1: Select Day Slot (Full Width Context Bar) */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-6 bg-slate-50 border-b border-slate-100">
+          {/* Holiday Alert Banner with granular override */}
+          {isCurrentDateHoliday && (
+            <div className="mb-5 p-4 rounded-xl border border-orange-200 bg-orange-50/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-300">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🏖️</span>
+                <div>
+                  <p className="text-sm font-bold text-orange-950">
+                    {selectedDate} is a Public Holiday: <span className="text-orange-700 underline">{holidayMap[selectedDate]}</span>
+                  </p>
+                  <p className="text-xs text-orange-800/80 mt-0.5">
+                    Canteen is closed by default. Toggle below to open catering services and configure menu for this day.
+                  </p>
+                </div>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-lg border border-orange-300 shadow-sm hover:border-orange-500 transition-all select-none shrink-0">
+                <input
+                  type="checkbox"
+                  checked={holidayOverride}
+                  onChange={(e) => setHolidayOverride(e.target.checked)}
+                  className="w-4 h-4 text-orange-600 rounded border-slate-300 focus:ring-orange-500"
+                />
+                <span className="text-xs font-bold text-orange-900">
+                  {holidayOverride ? "✓ Open Canteen on Holiday" : "Enable Canteen on Holiday"}
+                </span>
+              </label>
+            </div>
+          )}
+
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-slate-800">Step 1: Select Day Slot Context</h2>
             {/* Status Indicator */}
@@ -213,16 +375,21 @@ export default function DayMenuPlannerPage() {
                   <span className="animate-spin h-3.5 w-3.5 border-2 border-slate-400 border-t-transparent rounded-full"></span>
                   Resolving...
                 </span>
+              ) : resolvedSlot?.isNew ? (
+                <span className="px-3 py-1.5 bg-blue-100 text-blue-800 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                  <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                  Auto-Create Slot Mode
+                </span>
               ) : resolvedSlot ? (
-                <span className="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-full text-sm font-medium flex items-center gap-1.5">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <span className="px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                  <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                   </svg>
-                  Slot Found
+                  Existing Slot #{resolvedSlot.DAYSLOTID}
                 </span>
-              ) : selectedCanteen && selectedDate && selectedService ? (
-                <span className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-full text-sm font-medium">
-                  No Slot Found
+              ) : selectedCanteen && selectedDate && selectedService && isCurrentDateHoliday && !holidayOverride ? (
+                <span className="px-3 py-1.5 bg-rose-100 text-rose-700 rounded-full text-xs font-bold">
+                  Holiday (Closed)
                 </span>
               ) : null}
             </div>
@@ -265,6 +432,57 @@ export default function DayMenuPlannerPage() {
               </select>
             </div>
           </div>
+
+          {/* Inline Slot Timings Configuration */}
+          {resolvedSlot && (
+            <div className="mt-5 pt-5 border-t border-slate-200/80 grid grid-cols-1 md:grid-cols-3 gap-6 items-end animate-in fade-in duration-300">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                  Slot Start Time
+                </label>
+                <input
+                  type="time"
+                  value={slotStartTime}
+                  onChange={(e) => setSlotStartTime(e.target.value)}
+                  className="w-full px-4 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-mono text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                  Slot End Time
+                </label>
+                <input
+                  type="time"
+                  value={slotEndTime}
+                  onChange={(e) => setSlotEndTime(e.target.value)}
+                  className="w-full px-4 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-mono text-sm"
+                />
+              </div>
+              <div>
+                {resolvedSlot.isNew ? (
+                  <div className="text-xs text-blue-800 bg-blue-50/80 p-2.5 rounded-lg border border-blue-200">
+                    ✨ <strong>Auto-Slot:</strong> Slot will be created with these serving hours on save.
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleUpdateTimings}
+                      disabled={timingUpdating || !slotStartTime || !slotEndTime}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                    >
+                      {timingUpdating ? "Updating..." : "Update Timings"}
+                    </button>
+                    {timingMessage && (
+                      <span className="text-xs text-emerald-600 font-bold animate-in fade-in">
+                        {timingMessage}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -274,23 +492,25 @@ export default function DayMenuPlannerPage() {
           <div className="flex flex-col">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Slot Status & Actions</span>
             <div className="flex items-center gap-2 mt-1">
-              {slotStatus === 'DRF' && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">DRAFT</span>}
-              {slotStatus === 'REJ' && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-700 border border-rose-200">REJECTED</span>}
-              {slotStatus === 'PEN' && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200 animate-pulse">PENDING APPROVAL</span>}
-              {isApproved && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">✓ APPROVED & PUBLISHED</span>}
+              {resolvedSlot.isNew && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700 border border-blue-200">NEW SLOT (UNSAVED)</span>}
+              {!resolvedSlot.isNew && slotStatus === 'DRF' && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">DRAFT</span>}
+              {!resolvedSlot.isNew && slotStatus === 'REJ' && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-700 border border-rose-200">REJECTED</span>}
+              {!resolvedSlot.isNew && slotStatus === 'PEN' && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200 animate-pulse">PENDING APPROVAL</span>}
+              {!resolvedSlot.isNew && isApproved && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">✓ APPROVED & PUBLISHED</span>}
               
               <span className="text-slate-600 text-sm font-medium">
-                {slotStatus === 'DRF' && "Menu is in draft state. Save items, then submit or publish."}
-                {slotStatus === 'REJ' && "Menu was rejected. Make corrections and resubmit."}
-                {slotStatus === 'PEN' && "Waiting for Canteen Manager review and approval."}
-                {isApproved && "Menu is live! Employees can now pre-book meals."}
+                {resolvedSlot.isNew && "Select items from catalog below, then click Save Draft or Save & Publish."}
+                {!resolvedSlot.isNew && slotStatus === 'DRF' && "Menu is in draft state. Save items, then submit or publish."}
+                {!resolvedSlot.isNew && slotStatus === 'REJ' && "Menu was rejected. Make corrections and resubmit."}
+                {!resolvedSlot.isNew && slotStatus === 'PEN' && "Waiting for Canteen Manager review and approval."}
+                {!resolvedSlot.isNew && isApproved && "Menu is live! You can add/modify items below and update immediately."}
               </span>
             </div>
           </div>
           
           <div className="flex flex-wrap gap-2.5">
-            {/* Draft Actions */}
-            {isDraftOrRejected && (
+            {/* Draft / Unsaved Actions */}
+            {!resolvedSlot.isNew && isDraftOrRejected && (
               <>
                 <button
                   onClick={() => handleAction(submitMenu, 'submit')}
@@ -312,7 +532,7 @@ export default function DayMenuPlannerPage() {
             )}
             
             {/* Pending Approval Actions for Manager */}
-            {isPending && isManager && (
+            {!resolvedSlot.isNew && isPending && isManager && (
               <>
                 <button
                   onClick={() => setShowRejectModal(true)}

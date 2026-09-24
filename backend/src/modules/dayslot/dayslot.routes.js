@@ -7,6 +7,7 @@ import {
   createDaySlotSchema,
   updateDaySlotSchema,
   daySlotIdSchema,
+  listDaySlotsSchema,
 } from "./dayslot.validation.js";
 
 import {
@@ -22,6 +23,7 @@ router.get(
   "/",
   authenticate,
   authorizeAnyCanteenRole("CNTMGR", "CNTAST", "CNTSTF"),
+  validate(listDaySlotsSchema),
   getDaySlotsController
 );
 

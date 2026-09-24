@@ -38,6 +38,11 @@ export const updateComboController = asyncHandler(async (req, res) => {
   return sendSuccess(res, null, "Official combo updated successfully");
 });
 
+export const deleteComboController = asyncHandler(async (req, res) => {
+  await officialService.deleteCombo(req.params.id, req.user.USERID);
+  return sendSuccess(res, null, "Official combo deleted successfully");
+});
+
 export const listAvailableMenuItemsController = asyncHandler(async (req, res) => {
   const canteenId = req.query.canteenId ? Number(req.query.canteenId) : null;
   const items = await officialService.listAvailableMenuItems(canteenId);

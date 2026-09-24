@@ -9,6 +9,9 @@ import {
   assignUserRole,
   createCustomer,
   createPermanentEmployee,
+  assignCanteenRole,
+  removeCanteenRole,
+  fetchCanteenRoles,
 } from "./identity.service.js";
 
 export const getUsers = asyncHandler(async (req, res) => {
@@ -61,3 +64,18 @@ export const createPermanentEmployeeController = asyncHandler(
     );
   }
 );
+
+export const assignCanteenRoleController = asyncHandler(async (req, res) => {
+  const data = await assignCanteenRole(req.validated.body, req.user.USERID);
+  return sendSuccess(res, data, "Canteen role assigned successfully", 201);
+});
+
+export const removeCanteenRoleController = asyncHandler(async (req, res) => {
+  const data = await removeCanteenRole(req.validated.body);
+  return sendSuccess(res, data, "Canteen role removed successfully", 200);
+});
+
+export const getCanteenRolesController = asyncHandler(async (req, res) => {
+  const data = await fetchCanteenRoles(req.params.userId || req.user.USERID);
+  return sendSuccess(res, data, "Canteen roles fetched successfully");
+});

@@ -7,7 +7,9 @@ import {
   createUserSchema,
   assignUserRoleSchema,
   createCustomerSchema,
-  // createPermanentEmployeeSchema,
+  createPermanentEmployeeSchema,
+  assignCanteenRoleSchema,
+  removeCanteenRoleSchema,
 } from "./identity.validation.js";
 
 import {
@@ -17,7 +19,10 @@ import {
   createUserController,
   assignUserRoleController,
   createCustomerController,
-  // createPermanentEmployeeController,
+  createPermanentEmployeeController,
+  assignCanteenRoleController,
+  removeCanteenRoleController,
+  getCanteenRolesController,
 } from "./identity.controller.js";
 
 const router = express.Router();
@@ -52,16 +57,35 @@ router.post(
   createCustomerController
 );
 
+router.post(
+  "/permanent-employees",
+  authenticate,
+  authorizeRoles("SYSADM"),
+  validate(createPermanentEmployeeSchema),
+  createPermanentEmployeeController
+);
 
-// router.post(
-//   "/permanent-employees",
-//   authenticate,
-//   authorizeRoles("SYSADM"),
-//   validate(createPermanentEmployeeSchema),
-//   createPermanentEmployeeController
-// );
+router.post(
+  "/canteen-roles",
+  authenticate,
+  authorizeRoles("SYSADM"),
+  validate(assignCanteenRoleSchema),
+  assignCanteenRoleController
+);
 
+router.delete(
+  "/canteen-roles",
+  authenticate,
+  authorizeRoles("SYSADM"),
+  validate(removeCanteenRoleSchema),
+  removeCanteenRoleController
+);
 
-
+router.get(
+  "/canteen-roles/:userId",
+  authenticate,
+  authorizeRoles("SYSADM"),
+  getCanteenRolesController
+);
 
 export default router;

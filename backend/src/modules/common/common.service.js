@@ -5,8 +5,8 @@ import {
   getAllAutonos,
 } from "./common.repository.js";
 
-export const fetchStatus = async () => {
-  return await getAllStatus();
+export const fetchStatus = async (statusGrp = null) => {
+  return await getAllStatus(statusGrp);
 };
 
 export const fetchCustomerTypes = async () => {

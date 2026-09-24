@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
+import { env } from "../../config/env.js";
 import { findLoginInfoByLoginId } from "./auth.repository.js";
 import { decryptToken } from "../../utils/ssoCrypto.js";
 import { UnauthorizedError } from "../../common/errors/appError.js";
@@ -28,9 +29,9 @@ const generateLoginResponse = (user, CONSUMERROLES, CANTEENROLES) => {
 
   const token = jwt.sign(
     tokenPayload,
-    process.env.JWT_SECRET,
+    env.JWT_SECRET,
     {
-      expiresIn: process.env.JWT_EXPIRES_IN || "1d",
+      expiresIn: env.JWT_EXPIRES_IN || "1d",
     }
   );
 

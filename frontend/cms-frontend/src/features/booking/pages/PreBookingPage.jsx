@@ -267,7 +267,7 @@ export default function PreBookingPage() {
   };
 
   return (
-    <div className="max-w-[1550px] mx-auto pb-10 px-4 sm:px-6">
+    <div className="max-w-[1550px] mx-auto pb-28 px-4 sm:px-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-[#0F172A] mb-2">Pre-Book Meals</h1>
         <p className="text-slate-500">Plan ahead, reserve weekly passes, or update reservations to avoid the rush.</p>
@@ -285,7 +285,7 @@ export default function PreBookingPage() {
           }`}
         >
           <SparklesIcon className="w-4 h-4 text-orange-400" />
-          <span>5-Day Weekly Pass</span>
+          <span>Weekly Pass (7-Day)</span>
           <span className="px-1.5 py-0.5 bg-orange-500 text-white text-[9px] font-extrabold rounded-md uppercase">
             Recommended
           </span>
@@ -344,7 +344,8 @@ export default function PreBookingPage() {
             Object.entries(menuItems).map(([key, group]) => {
               const activeBooking = activeBookings[group.SERVICEID];
               const hasActiveBooking = Boolean(activeBooking);
-              const isReadOnly = activeBooking?.isReadOnly;
+              const isBookingServed = activeBooking?.HEADER?.STATUSCODE === "SRV";
+              const isReadOnly = activeBooking?.isReadOnly || isBookingServed;
 
               // Map active items for fast lookup: { [dayMenuId]: item }
               const activeItemsMap = {};
@@ -368,7 +369,12 @@ export default function PreBookingPage() {
 
                     {/* Mode Status Banner / Badges */}
                     {hasActiveBooking ? (
-                      isReadOnly ? (
+                      isBookingServed ? (
+                        <div className="flex items-center gap-2 bg-blue-50 text-blue-800 px-3.5 py-1.5 rounded-xl border border-blue-200 text-xs font-bold shadow-xs">
+                          <CheckCircleIcon className="w-4 h-4 text-blue-600" />
+                          <span>Booking #{activeBooking.HEADER.BOOKNO} — Served</span>
+                        </div>
+                      ) : isReadOnly ? (
                         <div className="flex items-center gap-2 bg-slate-100 text-slate-700 px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold">
                           <LockClosedIcon className="w-4 h-4 text-slate-500" />
                           <span>Booking #{activeBooking.HEADER.BOOKNO} (Locked - Cutoff passed)</span>

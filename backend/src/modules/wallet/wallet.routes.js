@@ -3,16 +3,17 @@ import { WalletController } from "./wallet.controller.js";
 import { walletValidation } from "./wallet.validation.js";
 import { validate } from "../../middlewares/validate.middleware.js";
 import { authenticate } from "../../middlewares/auth.middleware.js";
+import { authorizeAnyCanteenRole } from "../../middlewares/role.middleware.js";
 
 const router = Router();
 
-// Guard: Exclusively SYSADM or Canteen Manager (CNTMGR / CMGR)
+// Guard: Exclusively SYSADM or Canteen Staff (CNTMGR / CNTAST / CMGR)
 const isManager = (req) => {
   const sysRoles = req.user?.SYSTEMROLES || [];
   if (sysRoles.includes("SYSADM")) return true;
 
   const canteenRoles = req.user?.CANTEENROLES || [];
-  return canteenRoles.some((r) => r.ROLECODE === "CNTMGR" || r.ROLECODE === "CMGR");
+  return canteenRoles.some((r) => ["CNTMGR", "CNTAST", "CMGR"].includes(r.ROLECODE));
 };
 
 const getReqCustomerId = (req) => {
@@ -23,16 +24,8 @@ const getReqCustomerType = (req) => {
   return req.user?.CTYPECODE ?? req.user?.CUSTOMER?.CTYPECODE ?? null;
 };
 
-const canteenManagerOnly = [
-  (req, res, next) => {
-    if (isManager(req)) return next();
-
-    return res.status(403).json({
-      SUCCESS: false,
-      MESSAGE: "Only Canteen Managers can perform this wallet operation",
-    });
-  },
-];
+// Canteen Staff (CNTMGR / CNTAST) or System Admin
+const canteenManagerOnly = [authorizeAnyCanteenRole("CNTMGR", "CNTAST")];
 
 // Guard: Canteen Manager OR the owning customer (Contract Employee / Visitor)
 const walletOwnerOrManager = [
@@ -46,7 +39,7 @@ const walletOwnerOrManager = [
     if (
       userCustomerId &&
       userCustomerId === paramCustomerId &&
-      ["CNT", "VIS", "CONTEMP", "VISITOR"].includes(userCtype)
+      ["CNT", "VIS", "CONTEMP", "VISITOR", "CONT"].includes(userCtype)
     ) {
       return next();
     }
@@ -57,6 +50,7 @@ const walletOwnerOrManager = [
     });
   },
 ];
+
 
 // Guard: Customer requesting withdrawal for their own wallet
 const customerWithdrawalGuard = [
@@ -70,7 +64,7 @@ const customerWithdrawalGuard = [
     if (
       userCustomerId &&
       userCustomerId === bodyCustomerId &&
-      ["CNT", "VIS", "CONTEMP", "VISITOR"].includes(userCtype)
+      ["CNT", "VIS", "CONTEMP", "VISITOR", "CONT"].includes(userCtype)
     ) {
       return next();
     }
@@ -94,7 +88,7 @@ const withdrawalListGuard = [
     if (
       userCustomerId &&
       queryCustomerId === userCustomerId &&
-      ["CNT", "VIS", "CONTEMP", "VISITOR"].includes(userCtype)
+      ["CNT", "VIS", "CONTEMP", "VISITOR", "CONT"].includes(userCtype)
     ) {
       return next();
     }
@@ -106,15 +100,39 @@ const withdrawalListGuard = [
   },
 ];
 
+// Guard: Canteen Staff OR customer cancelling their own withdrawal request
+const cancelWithdrawalGuard = [
+  (req, res, next) => {
+    if (isManager(req)) return next();
+
+    const userCustomerId = getReqCustomerId(req);
+    const userCtype = getReqCustomerType(req);
+
+    if (
+      userCustomerId &&
+      ["CNT", "VIS", "CONTEMP", "VISITOR", "CONT"].includes(userCtype)
+    ) {
+      return next();
+    }
+
+    return res.status(403).json({
+      SUCCESS: false,
+      MESSAGE: "You do not have permission to cancel withdrawal requests",
+    });
+  },
+];
+
 router.use(authenticate);
 
-// Customer Profile & Wallet Lookup (Canteen Manager)
+// Customer Profile & Wallet Lookup (Canteen Staff / Manager)
+// Supports lookup by Employee ID (e.g. C001, P001), Login ID (cont1), or Customer ID
 router.get(
-  "/customer-lookup/:customerId",
+  "/customer-lookup/:identifier",
   ...canteenManagerOnly,
-  validate(walletValidation.fetchWallet),
+  validate(walletValidation.customerLookup),
   WalletController.customerLookup
 );
+
 
 // Create a wallet (Canteen Manager)
 router.post(
@@ -170,6 +188,14 @@ router.post(
   ...canteenManagerOnly,
   validate(walletValidation.rejectWithdrawal),
   WalletController.rejectWithdrawal
+);
+
+// Cancel a withdrawal request (Canteen Staff OR owning Customer)
+router.post(
+  "/withdraw/:walletWdId/cancel",
+  ...cancelWithdrawalGuard,
+  validate(walletValidation.cancelWithdrawal),
+  WalletController.cancelWithdrawal
 );
 
 // List withdrawal requests (Canteen Manager OR owning Customer)

@@ -1,12 +1,37 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { getBookings, getBooking, serveBooking, noShowBooking } from "../api/bookingApi";
 import { getServices } from "../../services/api/servicesApi";
+import { getActiveCanteens } from "../../dayslot/api/daySlotsApi";
+import { useAuth } from "../../../hooks/useAuth";
 import { formatINR } from "../../../utils/formatters";
 
 export default function BookingsMonitorPage() {
+  const { user, activeCanteenId, setActiveCanteenId } = useAuth();
+  const [canteens, setCanteens] = useState([]);
+  const [selectedCanteenId, setSelectedCanteenId] = useState(activeCanteenId || "");
   const [bookings, setBookings] = useState([]);
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }, []);
+
+  const isDateInFuture = useCallback(
+    (dateVal) => {
+      if (!dateVal) return false;
+      const dStr =
+        typeof dateVal === "string"
+          ? dateVal.slice(0, 10)
+          : new Date(dateVal).toISOString().slice(0, 10);
+      return dStr > todayStr;
+    },
+    [todayStr]
+  );
 
   // Filters
   const [filterDate, setFilterDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -14,13 +39,58 @@ export default function BookingsMonitorPage() {
   const [filterStatus, setFilterStatus] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
   // Booking detail modal
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
 
+  // 1. Fetch Canteens and filter strictly by user's assigned canteen roles (or all if SYSADM)
+  useEffect(() => {
+    getActiveCanteens()
+      .then((data) => {
+        const list = Array.isArray(data) ? data : [];
+        const userCanteenIds = (user?.CANTEENROLES || []).map((r) => r.CANTEENID);
+        const hasAdminRole = (user?.SYSTEMROLES || []).includes("SYSADM");
+
+        const allowed = hasAdminRole
+          ? list
+          : list.filter((c) => userCanteenIds.includes(c.CANTEENID));
+
+        setCanteens(allowed);
+
+        if (allowed.length > 0) {
+          const isCurrentValid = allowed.some((c) => c.CANTEENID === Number(selectedCanteenId));
+          if (!isCurrentValid) {
+            const matched = allowed.find((c) => c.CANTEENID === Number(activeCanteenId));
+            const targetId = matched ? matched.CANTEENID : allowed[0].CANTEENID;
+            setSelectedCanteenId(targetId);
+            if (!activeCanteenId) {
+              setActiveCanteenId(targetId);
+            }
+          }
+        }
+      })
+      .catch((err) => console.error("Failed to load canteens", err));
+  }, [user]);
+
+  // Keep selectedCanteenId in sync when activeCanteenId changes in header or sidebar
+  useEffect(() => {
+    if (activeCanteenId && canteens.some((c) => c.CANTEENID === Number(activeCanteenId))) {
+      setSelectedCanteenId(Number(activeCanteenId));
+    }
+  }, [activeCanteenId, canteens]);
+
   const loadBookings = useCallback(async () => {
+    if (!selectedCanteenId && canteens.length > 0) return;
+    setLoading(true);
     try {
       const params = {};
+      if (selectedCanteenId) {
+        params.canteenId = selectedCanteenId;
+      }
       if (filterDate) {
         params.fromDate = filterDate;
         params.toDate = filterDate;
@@ -36,7 +106,7 @@ export default function BookingsMonitorPage() {
     } finally {
       setLoading(false);
     }
-  }, [filterDate, filterService]);
+  }, [selectedCanteenId, filterDate, filterService, canteens.length]);
 
   useEffect(() => {
     getServices()
@@ -111,6 +181,20 @@ export default function BookingsMonitorPage() {
     return matchesStatus && matchesQuery;
   });
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCanteenId, filterDate, filterService, filterStatus, searchQuery]);
+
+  const currentCanteen = useMemo(() => {
+    return canteens.find((c) => c.CANTEENID === Number(selectedCanteenId)) || null;
+  }, [canteens, selectedCanteenId]);
+
+  const totalPages = Math.ceil(filteredBookings.length / pageSize) || 1;
+  const paginatedBookings = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredBookings.slice(start, start + pageSize);
+  }, [filteredBookings, currentPage, pageSize]);
+
   // Calculate summary counts
   const totalCount = filteredBookings.length;
   const servedCount = filteredBookings.filter((b) => b.STATUSCODE === "SRV" || b.STATUSID === 31).length;
@@ -124,9 +208,16 @@ export default function BookingsMonitorPage() {
         <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-orange-500/10 blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-500 text-slate-950 font-grotesk tracking-wide">
-              MONITORING & AUDIT
-            </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-500 text-slate-950 font-grotesk tracking-wide">
+                MONITORING & AUDIT
+              </span>
+              {currentCanteen && (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 flex items-center gap-1">
+                  📍 {currentCanteen.CANTEENNAME} ({currentCanteen.CANTEENCODE})
+                </span>
+              )}
+            </div>
             <h1 className="text-2xl md:text-3xl font-black font-grotesk mt-2 tracking-tight">
               Bookings Monitor
             </h1>
@@ -149,7 +240,33 @@ export default function BookingsMonitorPage() {
 
       {/* ── Filter Controls ── */}
       <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {/* Canteen Facility Dropdown */}
+          <div>
+            <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500 mb-1">
+              Canteen Facility
+            </label>
+            <select
+              value={selectedCanteenId}
+              onChange={(e) => {
+                const newId = Number(e.target.value);
+                setSelectedCanteenId(newId);
+                setActiveCanteenId(newId);
+              }}
+              className="w-full p-2.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-800 bg-white focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
+            >
+              {canteens.length === 0 ? (
+                <option value="">No Canteen Assigned</option>
+              ) : (
+                canteens.map((c) => (
+                  <option key={c.CANTEENID} value={c.CANTEENID}>
+                    {c.CANTEENNAME} ({c.CANTEENCODE})
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+
           {/* Serving Date */}
           <div>
             <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500 mb-1">
@@ -259,11 +376,12 @@ export default function BookingsMonitorPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredBookings.map((b) => {
+                {paginatedBookings.map((b) => {
                   const isServed = b.STATUSCODE === "SRV" || b.STATUSID === 32;
                   const isPending = b.STATUSCODE === "CRT" || b.STATUSID === 30;
                   const isCancelled = b.STATUSCODE === "CAN" || b.STATUSID === 33;
                   const isNoShow = b.STATUSCODE === "NOS" || b.STATUSID === 34;
+                  const isFuture = isDateInFuture(b.SERVICEDATE || filterDate);
 
                   return (
                     <tr key={b.BOOKID} className="hover:bg-slate-50 transition-colors">
@@ -272,7 +390,10 @@ export default function BookingsMonitorPage() {
                         {b.CUSTOMERNAME || `Customer #${b.CUSTOMERID}`}
                         {b.LOGINID && <span className="block text-[0.65rem] text-slate-400 font-mono">{b.LOGINID}</span>}
                       </td>
-                      <td className="p-3.5 text-slate-600">{b.SERVNAME || `Service #${b.SERVICEID}`}</td>
+                      <td className="p-3.5 text-slate-600">
+                        {b.SERVNAME || `Service #${b.SERVICEID}`}
+                        {b.CANTEENNAME && <span className="block text-[0.65rem] text-slate-400">{b.CANTEENNAME}</span>}
+                      </td>
                       <td className="p-3.5 text-center font-mono font-bold text-slate-800">{b.TOTALITEMS || b.TOTALQTY}</td>
                       <td className="p-3.5 text-right font-mono font-bold text-slate-900">{formatINR(b.TOTALAMOUNT)}</td>
                       <td className="p-3.5 text-center">
@@ -299,7 +420,7 @@ export default function BookingsMonitorPage() {
                         >
                           View
                         </button>
-                        {isPending && (
+                        {isPending && !isFuture && (
                           <button
                             onClick={() => handleServe(b.BOOKID)}
                             disabled={actionLoading}
@@ -308,12 +429,67 @@ export default function BookingsMonitorPage() {
                             Serve
                           </button>
                         )}
+                        {isPending && isFuture && (
+                          <span
+                            title={`Scheduled for ${b.SERVICEDATE?.slice(0, 10) || filterDate}. Serving opens on the day of service.`}
+                            className="inline-block px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none"
+                          >
+                            Future Order
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {(totalPages > 1 || filteredBookings.length > 25) && (
+          <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+            <div className="flex items-center gap-3">
+              <span>
+                Showing {((currentPage - 1) * pageSize) + 1} to{" "}
+                {Math.min(currentPage * pageSize, filteredBookings.length)} of {filteredBookings.length} bookings
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] text-slate-400">Rows per page:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="bg-white border border-slate-200 rounded px-1.5 py-0.5 text-xs text-slate-700 outline-none"
+                >
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="px-3 py-1 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-colors font-medium cursor-pointer"
+              >
+                Previous
+              </button>
+              <span className="px-2 font-bold text-slate-700">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="px-3 py-1 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-colors font-medium cursor-pointer"
+              >
+                Next
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -345,6 +521,10 @@ export default function BookingsMonitorPage() {
                 <strong className="text-slate-800">{selectedBooking.HEADER.CUSTOMERNAME}</strong>
               </div>
               <div>
+                <span className="text-slate-400 block">Canteen Facility</span>
+                <strong className="text-slate-800">{selectedBooking.HEADER.CANTEENNAME || currentCanteen?.CANTEENNAME || "N/A"}</strong>
+              </div>
+              <div>
                 <span className="text-slate-400 block">Service / Date</span>
                 <strong className="text-slate-800">
                   {selectedBooking.HEADER.SERVNAME} ({selectedBooking.HEADER.SERVICEDATE?.slice(0, 10)})
@@ -354,7 +534,7 @@ export default function BookingsMonitorPage() {
                 <span className="text-slate-400 block">Total Amount</span>
                 <strong className="text-slate-800 font-mono">{formatINR(selectedBooking.HEADER.TOTALAMOUNT)}</strong>
               </div>
-              <div>
+              <div className="col-span-2">
                 <span className="text-slate-400 block">Current Status</span>
                 <span className="font-bold text-orange-600 uppercase">{selectedBooking.HEADER.STATUSCODE}</span>
               </div>
@@ -391,6 +571,18 @@ export default function BookingsMonitorPage() {
             </div>
 
             {/* Modal Actions */}
+            {isDateInFuture(selectedBooking.HEADER.SERVICEDATE) && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 flex items-start gap-2.5 text-xs text-amber-900">
+                <span className="text-base leading-none">ℹ️</span>
+                <div>
+                  <strong className="font-bold">Future Booking Notice:</strong>
+                  <p className="mt-0.5 text-amber-800">
+                    This order is scheduled for {selectedBooking.HEADER.SERVICEDATE?.slice(0, 10)}. Food dispensing and attendance status can only be recorded on the day of service.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
               <button
                 type="button"
@@ -399,26 +591,27 @@ export default function BookingsMonitorPage() {
               >
                 Close
               </button>
-              {(selectedBooking.HEADER.STATUSCODE === "CRT" || selectedBooking.HEADER.STATUSID === 30) && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => handleNoShow(selectedBooking.HEADER.BOOKID)}
-                    disabled={actionLoading}
-                    className="px-3 py-2 rounded-xl text-xs font-bold bg-purple-100 hover:bg-purple-200 text-purple-800 transition-all disabled:opacity-50"
-                  >
-                    Mark No-Show
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleServe(selectedBooking.HEADER.BOOKID)}
-                    disabled={actionLoading}
-                    className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white transition-all shadow-sm disabled:opacity-50"
-                  >
-                    Mark Served
-                  </button>
-                </>
-              )}
+              {(selectedBooking.HEADER.STATUSCODE === "CRT" || selectedBooking.HEADER.STATUSID === 30) &&
+                !isDateInFuture(selectedBooking.HEADER.SERVICEDATE) && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleNoShow(selectedBooking.HEADER.BOOKID)}
+                      disabled={actionLoading}
+                      className="px-3 py-2 rounded-xl text-xs font-bold bg-purple-100 hover:bg-purple-200 text-purple-800 transition-all disabled:opacity-50"
+                    >
+                      Mark No-Show
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleServe(selectedBooking.HEADER.BOOKID)}
+                      disabled={actionLoading}
+                      className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white transition-all shadow-sm disabled:opacity-50"
+                    >
+                      Mark Served
+                    </button>
+                  </>
+                )}
             </div>
           </div>
         </div>

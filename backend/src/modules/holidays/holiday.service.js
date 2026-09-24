@@ -19,9 +19,14 @@ export const getHoliday = async (id) => {
   return result;
 };
 
-export const listHolidays = async (year) => {
+export const listHolidays = async (year, includeInactive = false) => {
   const result = await HolidayRepository.listHolidays(year);
-  return result;
+  if (includeInactive) {
+    return result;
+  }
+  return (result || []).filter(
+    (h) => h.STATUSCODE === "ACT" || h.STATUSID === 10
+  );
 };
 
 export const deactivateHoliday = async (id) => {

@@ -42,3 +42,4 @@ CALL CMSADDSTATUS(44, 'DBT', 'Debit', 'WALLET_TXN', 'Funds permanently deducted 
 CALL CMSADDSTATUS(50, 'REQ', 'Requested', 'WITHDRAW_REQ', 'Withdrawal requested by user');
 CALL CMSADDSTATUS(51, 'COM', 'Completed', 'WITHDRAW_REQ', 'Withdrawal processed and completed');
 CALL CMSADDSTATUS(52, 'REJ', 'Rejected', 'WITHDRAW_REQ', 'Withdrawal request rejected');
+CALL CMSADDSTATUS(53, 'CAN', 'Cancelled', 'WITHDRAW_REQ', 'Withdrawal request cancelled by user');

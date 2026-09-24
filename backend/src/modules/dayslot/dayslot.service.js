@@ -17,12 +17,16 @@ export const fetchDaySlots = async (params = {}) => {
   const SERVICEID = params.SERVICEID ?? params.serviceId ?? null;
   const DATEFROM = params.DATEFROM ?? params.dateFrom ?? params.servingDate ?? null;
   const DATETO = params.DATETO ?? params.dateTo ?? params.servingDate ?? null;
+  const PAGE = params.PAGE ?? params.page ?? null;
+  const PAGESIZE = params.PAGESIZE ?? params.pageSize ?? null;
 
   return await getDaySlots({
     SERVICEID: SERVICEID ? Number(SERVICEID) : null,
     CANTEENID: CANTEENID ? Number(CANTEENID) : null,
     DATEFROM: DATEFROM || null,
     DATETO: DATETO || null,
+    PAGE: PAGE ? Number(PAGE) : null,
+    PAGESIZE: PAGESIZE ? Number(PAGESIZE) : null,
   });
 };
 

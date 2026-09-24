@@ -14,4 +14,8 @@ export const env = {
   DB_PASSWORD: process.env.DB_PASSWORD || "",
   DB_NAME: process.env.DB_NAME || "CMS_DB",
   DB_SSL: process.env.DB_SSL === "true",
+
+  JWT_SECRET: process.env.JWT_SECRET || "cms_default_jwt_secret_key_change_in_production",
+  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || "8h",
+  SSO_SECRET_KEY: process.env.SSO_SECRET_KEY || "",
 };

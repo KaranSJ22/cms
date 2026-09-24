@@ -1,21 +1,23 @@
 import * as walletRepo from "./wallet.repository.js";
 import { getCustomerById } from "../identity/identity.repository.js";
+import { findCustomerByIdentifier } from "../identity/identity.service.js";
 import { NotFoundError } from "../../common/errors/appError.js";
 
 export class WalletService {
   /**
    * Look up a customer profile and check their wallet eligibility & activation status.
+   * Supports lookup by Employee ID (CONTCODE / EMPCODE), Login ID (LOGINID), or Customer ID.
    */
-  static async customerLookup(customerId) {
-    const customer = await getCustomerById(customerId);
+  static async customerLookup(identifier) {
+    const customer = await findCustomerByIdentifier(identifier);
     if (!customer) {
-      throw new NotFoundError("Customer record not found");
+      throw new NotFoundError(`No employee or customer record found matching "${identifier}"`);
     }
 
-    const isEligible = ["CNT", "VIS", "CONTEMP", "VISITOR"].includes(customer.CTYPECODE);
+    const isEligible = ["CNT", "VIS", "CONTEMP", "VISITOR", "CONT"].includes(customer.CTYPECODE);
     const isPermanent = ["PRM", "PERM", "PERMEMP"].includes(customer.CTYPECODE);
 
-    const wallet = await walletRepo.getWallet(customerId);
+    const wallet = await walletRepo.getWallet(customer.CUSTOMERID);
 
     return {
       customer: {
@@ -27,6 +29,12 @@ export class WalletService {
         CTYPECODE: customer.CTYPECODE,
         CTYPENAME: customer.CTYPENAME,
         STATUSCODE: customer.STATUSCODE,
+        EMPLOYEE_CODE: customer.EMPLOYEE_CODE || customer.CONTCODE || customer.EMPCODE || customer.LOGINID,
+        CONTCODE: customer.CONTCODE || null,
+        EMPCODE: customer.EMPCODE || null,
+        VENDORNAME: customer.VENDORNAME || null,
+        DEPT: customer.DEPT || null,
+        DESIG: customer.DESIG || null,
       },
       isEligible,
       isPermanent,
@@ -34,6 +42,7 @@ export class WalletService {
       wallet: wallet || null,
     };
   }
+
 
   /**
    * Add a new wallet for a customer.
@@ -73,8 +82,8 @@ export class WalletService {
   /**
    * List wallet transactions.
    */
-  static async listTransactions(customerId, fromDate, toDate) {
-    return await walletRepo.listWalletTransactions(customerId, fromDate, toDate);
+  static async listTransactions(customerId, fromDate, toDate, page = null, pageSize = null) {
+    return await walletRepo.listWalletTransactions(customerId, fromDate, toDate, page, pageSize);
   }
 
   /**
@@ -102,6 +111,13 @@ export class WalletService {
    */
   static async rejectWithdrawal(walletWdId, processedBy, remarks) {
     return await walletRepo.rejectWalletWithdrawal(walletWdId, processedBy, remarks);
+  }
+
+  /**
+   * Cancel a withdrawal request by customer.
+   */
+  static async cancelWithdrawal(walletWdId, customerId, remarks) {
+    return await walletRepo.cancelWalletWithdrawal(walletWdId, customerId, remarks);
   }
 
   /**

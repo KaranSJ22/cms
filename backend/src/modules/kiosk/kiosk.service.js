@@ -1,5 +1,6 @@
 import * as KioskRepository from "./kiosk.repository.js";
 import * as bookingService from "../booking/booking.service.js";
+import { pool } from "../../db/connection.js";
 import { NotFoundError, BadRequestError, ForbiddenError } from "../../common/errors/appError.js";
 import { getTodayIST, getTomorrowIST, toMySQLDate } from "../../utils/dateTime.js";
 
@@ -92,11 +93,79 @@ export const scanSelfService = async (data) => {
 };
 
 /**
+ * Gets next day menu published for a canteen where ISKIOSK = 1
+ */
+export const getNextDayKioskMenu = async (canteenId, serviceDate) => {
+  const [rows] = await pool.query(
+    `SELECT 
+        DM.DAYMENUID,
+        DM.DAYSLOTID,
+        DS.SERVICEID,
+        S.SERVNAME,
+        S.STARTTIME,
+        S.ENDTIME,
+        DM.MENUITEMID,
+        MI.MENUCODE,
+        MI.SHORTNAME,
+        MI.ITEMNAME,
+        MI.ITEMDESCR AS ITEMDESC,
+        COALESCE(
+          (SELECT IPD.PRICE 
+           FROM CMS_ITEMPRICE IP
+           JOIN CMS_ITEMPRICEDT IPD ON IPD.ITEMPRICEID = IP.ITEMPRICEID
+           WHERE IP.MENUITEMID = MI.MENUITEMID 
+             AND IP.STATUSID = 10 
+             AND IP.EFFFROM <= ?
+           ORDER BY IP.EFFFROM DESC 
+           LIMIT 1),
+          0.00
+        ) AS RATE,
+        DM.BOOKUNTIL,
+        DM.CANCELUNTIL,
+        DM.AVAILQTY,
+        DM.MAXQTY
+     FROM CMS_DAYMENU DM
+     JOIN CMS_DAYSLOT DS ON DS.DAYSLOTID = DM.DAYSLOTID
+     JOIN CMS_SERVICE S ON S.SERVICEID = DS.SERVICEID
+     JOIN CMS_MENUITEM MI ON MI.MENUITEMID = DM.MENUITEMID
+     WHERE DS.CANTEENID = ?
+       AND DS.SERVDATE = ?
+       AND DM.ISKIOSK = 1
+       AND DM.STATUSID = 10
+     ORDER BY S.STARTTIME ASC, MI.ITEMNAME ASC`,
+    [serviceDate, canteenId, serviceDate]
+  );
+  return rows;
+};
+
+/**
+ * Resolves USERID and CUSTOMERID from CMS_CUSTOMER
+ */
+export const getCustomerUser = async (customerId) => {
+  const [rows] = await pool.query(
+    "SELECT USERID, CUSTOMERID FROM CMS_CUSTOMER WHERE CUSTOMERID = ? LIMIT 1",
+    [customerId]
+  );
+  return rows[0] || null;
+};
+
+/**
+ * Retrieves basic booking metadata for validation and authorization
+ */
+export const getBookingBasic = async (bookingId) => {
+  const [rows] = await pool.query(
+    "SELECT BOOKID, CUSTOMERID, STATUSID, SERVICEDATE, SERVICEID FROM CMS_BOOKING WHERE BOOKID = ? LIMIT 1",
+    [bookingId]
+  );
+  return rows[0] || null;
+};
+
+/**
  * Gets tomorrow's kiosk-enabled menu for self-service pre-booking
  */
 export const getNextDayMenu = async (canteenId) => {
   const tomorrow = getTomorrowIST();
-  const items = await KioskRepository.getNextDayKioskMenu(canteenId, tomorrow);
+  const items = await getNextDayKioskMenu(canteenId, tomorrow);
 
   // Group items by meal service
   const serviceMap = new Map();
@@ -154,7 +223,7 @@ export const bookNextDay = async (data, kiosk = null) => {
   }));
 
   // Resolve user id from customer record
-  const customerRow = await KioskRepository.getCustomerUser(data.CUSTOMERID);
+  const customerRow = await getCustomerUser(data.CUSTOMERID);
   const userId = customerRow?.USERID || 1; // Fallback to system admin if customer has no user account
 
   const bookingResult = await bookingService.createBooking(
@@ -181,7 +250,7 @@ export const cancelKioskBooking = async (data, kiosk = null) => {
   const customerId = Number(data.CUSTOMERID);
 
   // Verify booking belongs to this customer and is still active
-  const booking = await KioskRepository.getBookingBasic(bookingId);
+  const booking = await getBookingBasic(bookingId);
 
   if (!booking) {
     throw new NotFoundError("Booking not found");
@@ -194,7 +263,7 @@ export const cancelKioskBooking = async (data, kiosk = null) => {
   }
 
   // Resolve user id for audit tracking
-  const customerRow = await KioskRepository.getCustomerUser(customerId);
+  const customerRow = await getCustomerUser(customerId);
   const userId = customerRow?.USERID || 1;
 
   const result = await KioskRepository.cancelBooking(
@@ -235,6 +304,23 @@ export const resolveServingBooking = async (identifier, canteenId = null, kioskI
  * Marks a booking as served from the kiosk terminal with operator attribution
  */
 export const serveBooking = async (bookingId, userId, kioskId = null) => {
+  const booking = await bookingService.getBooking(bookingId);
+  const servDate = booking?.HEADER?.SERVICEDATE;
+  if (servDate) {
+    const servDateStr =
+      typeof servDate === "string"
+        ? servDate.slice(0, 10)
+        : new Date(servDate).toISOString().slice(0, 10);
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+    if (servDateStr > todayStr) {
+      throw new BadRequestError(
+        `Cannot serve a future booking before its scheduled date (Scheduled: ${servDateStr}, Today: ${todayStr})`
+      );
+    }
+  }
+
   return await KioskRepository.serveKioskBooking(bookingId, userId, kioskId);
 };
 
@@ -242,14 +328,41 @@ export const serveBooking = async (bookingId, userId, kioskId = null) => {
  * Retrieves all active canteens
  */
 export const getActiveCanteens = async () => {
-  return await KioskRepository.getActiveCanteens();
+  const [rows] = await pool.query(
+    "SELECT CANTEENID, CANTEENCODE, CANTEENNAME, LOCATION FROM CMS_CANTEEN WHERE STATUSID = 10 ORDER BY CANTEENID ASC"
+  );
+  return rows;
 };
 
 /**
  * Retrieves all meal slots scheduled for today at a canteen
  */
 export const getTodaySlots = async (canteenId) => {
-  return await KioskRepository.getTodaySlots(canteenId);
+  const [rows] = await pool.query(
+    `SELECT 
+        DS.DAYSLOTID,
+        DS.SLOTNO,
+        DS.SERVICEID,
+        S.SERVCODE,
+        S.SERVNAME,
+        DS.CANTEENID,
+        DS.SERVDATE,
+        DS.STARTTIME,
+        DS.ENDTIME,
+        DS.STATUSID,
+        (CASE 
+          WHEN CURRENT_TIME() BETWEEN (DS.STARTTIME - INTERVAL 15 MINUTE) AND (DS.ENDTIME + INTERVAL 15 MINUTE) THEN 1 
+          ELSE 0 
+        END) AS ISCURRENT
+     FROM CMS_DAYSLOT DS
+     JOIN CMS_SERVICE S ON S.SERVICEID = DS.SERVICEID
+     WHERE DS.CANTEENID = ?
+       AND DS.SERVDATE = CURDATE()
+       AND DS.STATUSID = 10
+     ORDER BY DS.STARTTIME ASC`,
+    [Number(canteenId)]
+  );
+  return rows;
 };
 
 

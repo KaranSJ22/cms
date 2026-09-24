@@ -1,4 +1,4 @@
-export default function DaySlotsTable({ daySlots, onEdit }) {
+export default function DaySlotsTable({ daySlots, onEdit, pagination, onPageChange }) {
   if (!daySlots || daySlots.length === 0) {
     return (
       <div className="p-8 text-center text-slate-500 bg-white rounded-xl shadow-sm border border-slate-100">
@@ -16,6 +16,9 @@ export default function DaySlotsTable({ daySlots, onEdit }) {
       day: "numeric",
     });
   };
+
+  const showPagination =
+    pagination && (pagination.totalPages > 1 || pagination.totalRows > pagination.pageSize);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -65,7 +68,7 @@ export default function DaySlotsTable({ daySlots, onEdit }) {
                 <td className="py-4 px-6 text-right">
                   <button
                     onClick={() => onEdit(slot)}
-                    className="inline-flex items-center justify-center p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                    className="inline-flex items-center justify-center p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                     title="Edit Day Slot"
                   >
                     <svg
@@ -89,6 +92,37 @@ export default function DaySlotsTable({ daySlots, onEdit }) {
           </tbody>
         </table>
       </div>
+
+      {showPagination && (
+        <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between text-xs text-slate-500">
+          <span>
+            Showing {((pagination.currentPage - 1) * pagination.pageSize) + 1} to{" "}
+            {Math.min(pagination.currentPage * pagination.pageSize, pagination.totalRows)} of{" "}
+            {pagination.totalRows} slots
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => onPageChange(Math.max(1, pagination.currentPage - 1))}
+              disabled={pagination.currentPage <= 1}
+              className="px-3 py-1 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-colors font-medium cursor-pointer"
+            >
+              Previous
+            </button>
+            <span className="px-2 font-bold text-slate-700">
+              {pagination.currentPage} / {pagination.totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => onPageChange(Math.min(pagination.totalPages, pagination.currentPage + 1))}
+              disabled={pagination.currentPage >= pagination.totalPages}
+              className="px-3 py-1 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-colors font-medium cursor-pointer"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

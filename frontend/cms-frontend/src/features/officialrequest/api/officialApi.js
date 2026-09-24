@@ -36,6 +36,11 @@ export async function updateOfficialCombo(comboId, data) {
   return res.data.DATA;
 }
 
+export async function deleteOfficialCombo(comboId) {
+  const res = await api.delete(`/official-requests/combos/${comboId}`);
+  return res.data.DATA;
+}
+
 export async function getOfficialMenuItems(canteenId = null) {
   const params = canteenId ? { canteenId } : {};
   const res = await api.get("/official-requests/services/menu-items", { params });

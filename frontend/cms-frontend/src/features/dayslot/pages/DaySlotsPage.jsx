@@ -4,7 +4,7 @@ import DaySlotsTable from "../components/DaySlotsTable";
 import DaySlotForm from "../components/DaySlotForm";
 
 export default function DaySlotsPage() {
-  const { daySlots, loading, error, addDaySlot, editDaySlot } = useDaySlots();
+  const { daySlots, loading, error, pagination, setPage, addDaySlot, editDaySlot } = useDaySlots();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingSlot, setEditingSlot] = useState(null);
@@ -111,7 +111,12 @@ export default function DaySlotsPage() {
             </div>
           </div>
         ) : (
-          <DaySlotsTable daySlots={daySlots} onEdit={handleOpenEditForm} />
+          <DaySlotsTable
+            daySlots={daySlots}
+            onEdit={handleOpenEditForm}
+            pagination={pagination}
+            onPageChange={setPage}
+          />
         )}
       </div>
 

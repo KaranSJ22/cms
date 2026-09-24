@@ -16,6 +16,8 @@ import {
   CurrencyRupeeIcon,
   InformationCircleIcon,
   LockClosedIcon,
+  BuildingOfficeIcon,
+  UserIcon,
 } from "@heroicons/react/24/outline";
 
 export default function OfficialBookingForm({ onSuccess, initialData = null }) {
@@ -113,6 +115,10 @@ export default function OfficialBookingForm({ onSuccess, initialData = null }) {
       .catch((err) => console.error("Failed to load approvers", err));
   }, [apprLvl]);
 
+  // Helper references for summary
+  const selectedCanteen = canteens.find((c) => c.CANTEENID === Number(selectedCanteenId));
+  const selectedApprover = approvers.find((a) => a.USERID === Number(selectedApproverId));
+
   // Pricing calculation: Total = (Quantity * Gross Price) + Handling Charges
   const grossUnitPrice = Number(
     activeCombo?.GROSSPRICE !== undefined && activeCombo?.GROSSPRICE !== null
@@ -132,6 +138,16 @@ export default function OfficialBookingForm({ onSuccess, initialData = null }) {
       cutoffWarning = `Selected service requires at least ${activeService.CUTOFFHOURS}h notice. You provided approximately ${Math.max(0, Math.floor(hoursNotice))}h.`;
     }
   }
+
+  const formattedEventDate = eventDateTime
+    ? new Date(eventDateTime).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -193,435 +209,534 @@ export default function OfficialBookingForm({ onSuccess, initialData = null }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {error && (
-        <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 flex items-start gap-3">
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 flex items-start gap-3">
           <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <span className="text-sm font-medium">{error}</span>
         </div>
       )}
 
       {success && (
-        <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 flex items-start gap-3">
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-start gap-3">
           <CheckCircleIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <span className="text-sm font-medium">{success}</span>
         </div>
       )}
 
-      {/* Section 1: Canteen & Service Selection */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
-        <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-          <SparklesIcon className="w-5 h-5 text-orange-500" />
-          1. Catering Canteen & Service
-        </h3>
+      {/* 2-Column Responsive Workspace: Forms on Left (8 Cols), Sticky Live Rail on Right (4 Cols) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left Column: Form Sections */}
+        <div className="lg:col-span-8 space-y-6">
+          {/* Section 1: Canteen & Service Selection */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+            <h3 className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <SparklesIcon className="w-5 h-5 text-orange-500" />
+              1. Catering Facility & Menu Combo Package
+            </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
-              Catering Canteen *
-            </label>
-            <select
-              value={selectedCanteenId}
-              onChange={(e) => setSelectedCanteenId(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-orange-500 outline-none transition"
-              required
-            >
-              {canteens.map((c) => (
-                <option key={c.CANTEENID} value={c.CANTEENID}>
-                  {c.CANTEENNAME} ({c.CANTEENCODE})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
-              Official Service *
-            </label>
-            <select
-              value={selectedServiceId}
-              onChange={(e) => setSelectedServiceId(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-orange-500 outline-none transition"
-              required
-            >
-              {services.map((s) => (
-                <option key={s.OFFSERVID} value={s.OFFSERVID}>
-                  {s.SERVNAME} (Cutoff: {s.CUTOFFHOURS}h notice)
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {activeService && (
-          <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/40 p-3.5 rounded-xl border border-slate-200/60 dark:border-slate-700/60 mb-5">
-            <span className="font-semibold text-slate-700 dark:text-slate-300">Service Policy: </span>
-            {activeService.DESCR || "Official departmental meeting and conference catering."} Minimum notice requirement:{" "}
-            <span className="font-semibold text-orange-600 dark:text-orange-400">{activeService.CUTOFFHOURS} hours</span> before scheduled event time.
-          </div>
-        )}
-
-        {/* Combo Selection Cards */}
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-3">
-            Select Combo Package *
-          </label>
-          {activeCombos.length === 0 ? (
-            <div className="text-center py-6 text-sm text-slate-500 border border-dashed border-slate-300 dark:border-slate-700 rounded-xl">
-              No active combo packages configured under this service yet.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                {activeCombos.map((combo) => {
-                  const isSelected = Number(selectedComboId) === combo.OFFCOMBOID;
-                  const grossVal = Number(combo.GROSSPRICE !== undefined && combo.GROSSPRICE !== null ? combo.GROSSPRICE : combo.COMBOPRICE);
-                  const handlingVal = Number(combo.HANDLINGCHARGE || 0);
-
-                  return (
-                    <div
-                      key={combo.OFFCOMBOID}
-                      onClick={() => setSelectedComboId(combo.OFFCOMBOID)}
-                      className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex flex-col justify-between ${
-                        isSelected
-                          ? "border-orange-500 bg-orange-50/40 dark:bg-orange-950/20 shadow-sm"
-                          : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-800/50"
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <h4 className="font-bold text-slate-900 dark:text-white text-sm">{combo.COMBONAME}</h4>
-                          <span className="font-black text-orange-600 dark:text-orange-400 text-sm">
-                            ₹{grossVal.toFixed(2)}
-                            <span className="text-[10px] font-normal text-slate-400 ml-0.5">/portion</span>
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-2.5">{combo.DESCR || "Official packaged catering"}</p>
-
-                        {/* Bundled Dish Chips Preview */}
-                        {combo.ITEMS && combo.ITEMS.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mb-3">
-                            {combo.ITEMS.map((dish) => (
-                              <span
-                                key={dish.COMBOITEMID || dish.MENUITEMID}
-                                className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700/80 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600"
-                              >
-                                <span>{dish.MENUNAME || dish.ITEMNAME}</span>
-                                <span className="text-orange-600 dark:text-orange-400 font-bold">×{dish.QTY}</span>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="pt-2.5 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between text-xs">
-                        <span className="text-slate-400 text-[11px]">
-                          {handlingVal > 0 ? `+ ₹${handlingVal.toFixed(2)} flat handling` : "No handling fee"}
-                        </span>
-                        <span
-                          className={`px-2 py-0.5 rounded font-medium text-[11px] ${
-                            isSelected
-                              ? "bg-orange-600 text-white"
-                              : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-                          }`}
-                        >
-                          {isSelected ? "Selected" : "Choose"}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  Catering Canteen *
+                </label>
+                <select
+                  value={selectedCanteenId}
+                  onChange={(e) => setSelectedCanteenId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition text-sm font-medium"
+                  required
+                >
+                  {canteens.map((c) => (
+                    <option key={c.CANTEENID} value={c.CANTEENID}>
+                      {c.CANTEENNAME} ({c.CANTEENCODE})
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              {/* Prominent Included Dishes in Selected Combo Panel */}
-              {activeCombo && (
-                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2.5">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white font-grotesk">
-                        Included Dishes in {activeCombo.COMBONAME}
-                      </h4>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800">
-                        {activeCombo.ITEMS?.length || 0} dishes
-                      </span>
-                    </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  Official Service *
+                </label>
+                <select
+                  value={selectedServiceId}
+                  onChange={(e) => setSelectedServiceId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition text-sm font-medium"
+                  required
+                >
+                  {services.map((s) => (
+                    <option key={s.OFFSERVID} value={s.OFFSERVID}>
+                      {s.SERVNAME} (Cutoff: {s.CUTOFFHOURS}h notice)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
-                    <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                      Gross Rate: <strong className="text-slate-900 dark:text-white">₹{grossUnitPrice.toFixed(2)}</strong> / person
-                      {flatHandlingCharge > 0 && (
-                        <span> • Flat Handling: <strong className="text-slate-900 dark:text-white">₹{flatHandlingCharge.toFixed(2)}</strong></span>
-                      )}
-                    </div>
-                  </div>
+            {activeService && (
+              <div className="text-xs text-slate-600 bg-amber-50/60 p-3.5 rounded-xl border border-amber-200/60 mb-5">
+                <span className="font-bold text-slate-800">Service Policy: </span>
+                {activeService.DESCR || "Official departmental meeting and conference catering."} Minimum notice requirement:{" "}
+                <span className="font-bold text-orange-600">{activeService.CUTOFFHOURS} hours</span> before scheduled event time.
+              </div>
+            )}
 
-                  {!activeCombo.ITEMS || activeCombo.ITEMS.length === 0 ? (
-                    <div className="p-3 text-xs text-slate-400 italic text-center bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
-                      No dishes bundled in this combo package yet.
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                      {activeCombo.ITEMS.map((dish) => (
+            {/* Combo Selection Cards */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Select Combo Package *
+                </label>
+                {activeCombos.length > 0 && (
+                  <span className="text-xs text-slate-500">
+                    {activeCombos.length} package{activeCombos.length > 1 ? "s" : ""} available
+                  </span>
+                )}
+              </div>
+
+              {activeCombos.length === 0 ? (
+                <div className="text-center py-8 text-sm text-slate-500 border border-dashed border-slate-300 rounded-xl bg-slate-50">
+                  No active combo packages configured under this service yet.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    {activeCombos.map((combo) => {
+                      const isSelected = Number(selectedComboId) === combo.OFFCOMBOID;
+                      const grossVal = Number(combo.GROSSPRICE !== undefined && combo.GROSSPRICE !== null ? combo.GROSSPRICE : combo.COMBOPRICE);
+                      const handlingVal = Number(combo.HANDLINGCHARGE || 0);
+
+                      return (
                         <div
-                          key={dish.COMBOITEMID || dish.MENUITEMID}
-                          className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between"
+                          key={combo.OFFCOMBOID}
+                          onClick={() => setSelectedComboId(combo.OFFCOMBOID)}
+                          className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex flex-col justify-between ${
+                            isSelected
+                              ? "border-orange-500 bg-orange-50/50 shadow-sm ring-1 ring-orange-500/20"
+                              : "border-slate-200 hover:border-slate-300 bg-white"
+                          }`}
                         >
-                          <div className="min-w-0 pr-2">
-                            <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                              {dish.MENUNAME || dish.ITEMNAME}
+                          <div>
+                            <div className="flex items-center justify-between gap-2 mb-1.5">
+                              <h4 className="font-bold text-slate-900 text-sm">{combo.COMBONAME}</h4>
+                              <span className="font-black text-orange-600 text-sm">
+                                ₹{grossVal.toFixed(2)}
+                                <span className="text-[10px] font-normal text-slate-400 ml-0.5">/portion</span>
+                              </span>
                             </div>
-                            <div className="text-[10px] text-slate-400">
-                              {dish.CATCODE} • Qty: {dish.QTY}
-                            </div>
+                            <p className="text-xs text-slate-500 mb-2.5 line-clamp-2">{combo.DESCR || "Official packaged catering"}</p>
+
+                            {/* Bundled Dish Chips Preview */}
+                            {combo.ITEMS && combo.ITEMS.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mb-3">
+                                {combo.ITEMS.map((dish) => (
+                                  <span
+                                    key={dish.COMBOITEMID || dish.MENUITEMID}
+                                    className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200"
+                                  >
+                                    <span>{dish.MENUNAME || dish.ITEMNAME}</span>
+                                    <span className="text-orange-600 font-bold">×{dish.QTY}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                          <div className="text-right shrink-0">
-                            <span className="text-[11px] font-mono font-semibold text-slate-700 dark:text-slate-300">
-                              ₹{(Number(dish.OFFPRICE || 0) * Number(dish.QTY || 1)).toFixed(2)}
+
+                          <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
+                            <span className="text-slate-500 text-[11px]">
+                              {handlingVal > 0 ? `+ ₹${handlingVal.toFixed(2)} flat handling` : "No handling fee"}
+                            </span>
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] transition ${
+                                isSelected
+                                  ? "bg-orange-500 text-white"
+                                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                              }`}
+                            >
+                              {isSelected ? "Selected ✓" : "Choose"}
                             </span>
                           </div>
                         </div>
-                      ))}
+                      );
+                    })}
+                  </div>
+
+                  {/* Included Dishes in Selected Combo Panel */}
+                  {activeCombo && (
+                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 font-grotesk">
+                            Included Dishes in {activeCombo.COMBONAME}
+                          </h4>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-700 border border-orange-200">
+                            {activeCombo.ITEMS?.length || 0} dishes
+                          </span>
+                        </div>
+
+                        <div className="text-xs text-slate-500 font-mono">
+                          Rate: <strong className="text-slate-900">₹{grossUnitPrice.toFixed(2)}</strong> / person
+                          {flatHandlingCharge > 0 && (
+                            <span> • Handling: <strong className="text-slate-900">₹{flatHandlingCharge.toFixed(2)}</strong></span>
+                          )}
+                        </div>
+                      </div>
+
+                      {!activeCombo.ITEMS || activeCombo.ITEMS.length === 0 ? (
+                        <div className="p-3 text-xs text-slate-400 italic text-center bg-white rounded-lg border border-slate-200">
+                          No dishes bundled in this combo package yet.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                          {activeCombo.ITEMS.map((dish) => (
+                            <div
+                              key={dish.COMBOITEMID || dish.MENUITEMID}
+                              className="p-2.5 rounded-lg bg-white border border-slate-200 flex items-center justify-between shadow-2xs"
+                            >
+                              <div className="min-w-0 pr-2">
+                                <div className="text-xs font-bold text-slate-900 truncate">
+                                  {dish.MENUNAME || dish.ITEMNAME}
+                                </div>
+                                <div className="text-[10px] text-slate-400">
+                                  {dish.CATCODE} • Qty: {dish.QTY}
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <span className="text-[11px] font-mono font-semibold text-slate-700">
+                                  ₹{(Number(dish.OFFPRICE || 0) * Number(dish.QTY || 1)).toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               )}
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Section 2: Event Details & Counts */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
-        <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-          <CalendarDaysIcon className="w-5 h-5 text-orange-500" />
-          2. Event Details & Attendance
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
-              Purpose / Meeting Title *
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. Project Review Meeting / VIP Seminar"
-              value={purpose}
-              onChange={(e) => setPurpose(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-orange-500 outline-none transition text-sm"
-              required
-            />
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
-              Venue / Location *
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="e.g. Conference Hall A, 2nd Floor"
-                value={venue}
-                onChange={(e) => setVenue(e.target.value)}
-                className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-orange-500 outline-none transition text-sm"
-                required
-              />
-              <MapPinIcon className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+          {/* Section 2: Event Details & Counts */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+            <h3 className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <CalendarDaysIcon className="w-5 h-5 text-orange-500" />
+              2. Event Details & Attendance
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  Purpose / Meeting Title *
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Project Review Meeting / VIP Seminar"
+                  value={purpose}
+                  onChange={(e) => setPurpose(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition text-sm"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  Venue / Location *
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="e.g. Conference Hall A, 2nd Floor"
+                    value={venue}
+                    onChange={(e) => setVenue(e.target.value)}
+                    className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition text-sm"
+                    required
+                  />
+                  <MapPinIcon className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                </div>
+              </div>
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  Event Date & Time *
+                </label>
+                <input
+                  type="datetime-local"
+                  value={eventDateTime}
+                  onChange={(e) => setEventDateTime(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition text-sm font-medium"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  Quantity (Billable Servings) *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition text-sm font-bold"
+                  required
+                />
+                <span className="text-[11px] text-slate-400 mt-1 block">Total plates/portions ordered</span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  Number of People (Headcount) *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={noOfPeople}
+                  onChange={(e) => setNoOfPeople(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition text-sm font-bold"
+                  required
+                />
+                <span className="text-[11px] text-slate-400 mt-1 block">Assists kitchen with batch prep</span>
+              </div>
+            </div>
+
+            {cutoffWarning && (
+              <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-800 text-xs flex items-center gap-2">
+                <ClockIcon className="w-4 h-4 flex-shrink-0" />
+                <span>{cutoffWarning}</span>
+              </div>
+            )}
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
-              Event Date & Time *
-            </label>
-            <input
-              type="datetime-local"
-              value={eventDateTime}
-              onChange={(e) => setEventDateTime(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-orange-500 outline-none transition text-sm"
-              required
-            />
-          </div>
+          {/* Section 3: Approver Selection */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+            <h3 className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <UserGroupIcon className="w-5 h-5 text-orange-500" />
+              3. Officer Approval Routing
+            </h3>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
-              Quantity (Billable Servings) *
-            </label>
-            <input
-              type="number"
-              min="1"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-orange-500 outline-none transition text-sm"
-              required
-            />
-            <span className="text-[11px] text-slate-400">Total plates/portions ordered</span>
-          </div>
+            {/* Required Approval Policy Badge */}
+            {activeService?.REQAPPRLVL === "L2" ? (
+              <div className="mb-4 p-3.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-800 text-xs flex items-center gap-2">
+                <InformationCircleIcon className="w-4 h-4 shrink-0 text-purple-600" />
+                <div>
+                  <span className="font-bold">Required Approval Policy:</span> This service (
+                  <strong>{activeService?.SERVNAME}</strong>) strictly requires <strong>Level 2 approval</strong>.
+                  Routing is restricted only to senior Level 2 Officers.
+                </div>
+              </div>
+            ) : (
+              <div className="mb-4 p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-xs flex items-center gap-2">
+                <InformationCircleIcon className="w-4 h-4 shrink-0 text-blue-600" />
+                <div>
+                  <span className="font-bold">Required Approval Policy:</span> This service requires{" "}
+                  <strong>Level 1 approval</strong>. You may choose either a Level 1 or Level 2 officer.
+                </div>
+              </div>
+            )}
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
-              Number of People (Headcount) *
-            </label>
-            <input
-              type="number"
-              min="1"
-              value={noOfPeople}
-              onChange={(e) => setNoOfPeople(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-orange-500 outline-none transition text-sm"
-              required
-            />
-            <span className="text-[11px] text-slate-400">Assists kitchen with batch prep</span>
-          </div>
-        </div>
+            {/* Step 1: Approver Tier */}
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                Step 1: Select Approver Classification Level *
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label
+                  className={`flex items-center justify-center gap-2 p-3 rounded-xl border-2 transition ${
+                    activeService?.REQAPPRLVL === "L2"
+                      ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-60"
+                      : apprLvl === "L1"
+                      ? "border-orange-500 bg-orange-50/50 text-orange-600 font-bold cursor-pointer ring-1 ring-orange-500/20"
+                      : "border-slate-200 text-slate-700 bg-white hover:border-slate-300 cursor-pointer"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="apprLvl"
+                    value="L1"
+                    disabled={activeService?.REQAPPRLVL === "L2"}
+                    checked={apprLvl === "L1"}
+                    onChange={() => activeService?.REQAPPRLVL !== "L2" && setApprLvl("L1")}
+                    className="hidden"
+                  />
+                  {activeService?.REQAPPRLVL === "L2" && (
+                    <LockClosedIcon className="w-4 h-4 text-slate-400 shrink-0" />
+                  )}
+                  <span className="text-xs">
+                    Level 1 {activeService?.REQAPPRLVL === "L2" ? "(Locked for this service)" : "(L1 & L2 Eligible)"}
+                  </span>
+                </label>
 
-        {cutoffWarning && (
-          <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 rounded-xl text-amber-800 dark:text-amber-300 text-xs flex items-center gap-2">
-            <ClockIcon className="w-4 h-4 flex-shrink-0" />
-            <span>{cutoffWarning}</span>
-          </div>
-        )}
-      </div>
+                <label
+                  className={`flex items-center justify-center gap-2 p-3 rounded-xl border-2 cursor-pointer transition ${
+                    apprLvl === "L2"
+                      ? "border-orange-500 bg-orange-50/50 text-orange-600 font-bold ring-1 ring-orange-500/20"
+                      : "border-slate-200 text-slate-700 bg-white hover:border-slate-300"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="apprLvl"
+                    value="L2"
+                    checked={apprLvl === "L2"}
+                    onChange={() => setApprLvl("L2")}
+                    className="hidden"
+                  />
+                  <span className="text-xs">Level 2 (Senior / L2 Officers Only)</span>
+                </label>
+              </div>
+            </div>
 
-      {/* Section 3: Approver Selection (Option 1) */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
-        <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-          <UserGroupIcon className="w-5 h-5 text-orange-500" />
-          3. Approver Selection (Two-Step Routing)
-        </h3>
-
-        {/* Required Approval Policy Badge */}
-        {activeService?.REQAPPRLVL === "L2" ? (
-          <div className="mb-4 p-3 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-300 text-xs flex items-center gap-2">
-            <InformationCircleIcon className="w-4 h-4 shrink-0 text-purple-600 dark:text-purple-400" />
+            {/* Step 2: Specific Approver Officer */}
             <div>
-              <span className="font-bold">Required Approval Policy:</span> This service (
-              <strong>{activeService?.SERVNAME}</strong>) strictly requires <strong>Level 2 approval</strong>.
-              Routing is restricted only to senior Level 2 Officers.
-            </div>
-          </div>
-        ) : (
-          <div className="mb-4 p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 text-xs flex items-center gap-2">
-            <InformationCircleIcon className="w-4 h-4 shrink-0 text-blue-600 dark:text-blue-400" />
-            <div>
-              <span className="font-bold">Required Approval Policy:</span> This service requires{" "}
-              <strong>Level 1 approval</strong>. You may choose either a Level 1 or Level 2 officer.
-            </div>
-          </div>
-        )}
-
-        {/* Step 1: Approver Tier */}
-        <div className="mb-4">
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
-            Step 1: Select Approver Classification Level *
-          </label>
-          <div className="flex gap-4">
-            <label
-              className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border-2 transition ${
-                activeService?.REQAPPRLVL === "L2"
-                  ? "border-slate-200 dark:border-slate-800 bg-slate-100/60 dark:bg-slate-800/40 text-slate-400 cursor-not-allowed opacity-60"
-                  : apprLvl === "L1"
-                  ? "border-orange-500 bg-orange-50/40 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400 font-bold cursor-pointer"
-                  : "border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 cursor-pointer"
-              }`}
-            >
-              <input
-                type="radio"
-                name="apprLvl"
-                value="L1"
-                disabled={activeService?.REQAPPRLVL === "L2"}
-                checked={apprLvl === "L1"}
-                onChange={() => activeService?.REQAPPRLVL !== "L2" && setApprLvl("L1")}
-                className="hidden"
-              />
-              {activeService?.REQAPPRLVL === "L2" && (
-                <LockClosedIcon className="w-4 h-4 text-slate-400 shrink-0" />
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                Step 2: Select Specific Approving Officer *
+              </label>
+              {approvers.length === 0 ? (
+                <div className="p-3 bg-slate-50 text-slate-500 text-xs rounded-xl border border-slate-200">
+                  No eligible approver officers found for classification {apprLvl}. Please contact Administrator.
+                </div>
+              ) : (
+                <select
+                  value={selectedApproverId}
+                  onChange={(e) => setSelectedApproverId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition text-sm font-medium"
+                  required
+                >
+                  {approvers.map((appr) => (
+                    <option key={appr.USERID} value={appr.USERID}>
+                      {appr.FULLNAME} — {appr.DESIG || "Officer"} ({appr.DEPT || "Center"}) [Emp: {appr.EMPCODE} | Tier: {appr.APPRLVL}]
+                    </option>
+                  ))}
+                </select>
               )}
-              <span>
-                Level 1 {activeService?.REQAPPRLVL === "L2" ? "(Locked for this service)" : "(L1 & L2 Approvers Eligible)"}
-              </span>
-            </label>
-
-            <label
-              className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border-2 cursor-pointer transition ${
-                apprLvl === "L2"
-                  ? "border-orange-500 bg-orange-50/40 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400 font-bold"
-                  : "border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
-              }`}
-            >
-              <input
-                type="radio"
-                name="apprLvl"
-                value="L2"
-                checked={apprLvl === "L2"}
-                onChange={() => setApprLvl("L2")}
-                className="hidden"
-              />
-              <span>Level 2 (Senior / L2 Approvers Only)</span>
-            </label>
-          </div>
-        </div>
-
-        {/* Step 2: Specific Approver Officer */}
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
-            Step 2: Select Specific Approving Officer *
-          </label>
-          {approvers.length === 0 ? (
-            <div className="p-3 bg-slate-50 dark:bg-slate-800 text-slate-500 text-xs rounded-xl border border-slate-200 dark:border-slate-700">
-              No eligible approver officers found for classification {apprLvl}. Please contact Administrator.
+              <p className="text-[11px] text-slate-400 mt-1.5">
+                Self-approval is forbidden. The request will be assigned strictly to the selected officer.
+              </p>
             </div>
-          ) : (
-            <select
-              value={selectedApproverId}
-              onChange={(e) => setSelectedApproverId(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-orange-500 outline-none transition text-sm"
-              required
-            >
-              {approvers.map((appr) => (
-                <option key={appr.USERID} value={appr.USERID}>
-                  {appr.FULLNAME} — {appr.DESIG || "Officer"} ({appr.DEPT || "Center"}) [Emp: {appr.EMPCODE} | Tier: {appr.APPRLVL}]
-                </option>
-              ))}
-            </select>
-          )}
-          <p className="text-[11px] text-slate-400 mt-1.5">
-            Self-approval is forbidden. The request will be assigned strictly to the selected officer.
-          </p>
-        </div>
-      </div>
-
-      {/* Section 4: Pricing Summary & Submit */}
-      <div className="bg-slate-900 text-white rounded-2xl p-6 shadow-md border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-6">
-        <div>
-          <span className="text-xs uppercase tracking-widest text-slate-400 font-semibold block mb-1">
-            Official Amount Calculation
-          </span>
-          <div className="flex items-baseline gap-3">
-            <span className="text-2xl font-black text-white font-mono">
-              ₹{totalAmount.toFixed(2)}
-            </span>
-            <span className="text-xs text-slate-300">
-              ({quantity} servings × ₹{grossUnitPrice.toFixed(2)} Food Rate)
-              {flatHandlingCharge > 0 && ` + ₹${flatHandlingCharge.toFixed(2)} Flat Handling`}
-            </span>
           </div>
-          <span className="text-[11px] text-slate-400 block mt-1">
-            * Formula: (Quantity × Gross Food Rate) + Flat Handling Fee. Official audit records are billed accordingly.
-          </span>
         </div>
 
-        <button
-          type="submit"
-          disabled={loading || !!cutoffWarning || !activeCombo}
-          className="w-full md:w-auto px-8 py-3.5 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold rounded-xl shadow-lg shadow-orange-500/25 transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
-        >
-          {loading ? (
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <>
-              <span>Submit Official Request</span>
-              <SparklesIcon className="w-4 h-4" />
-            </>
-          )}
-        </button>
+        {/* Right Column: Sticky Live Order Summary & Submit Rail */}
+        <div className="lg:col-span-4 lg:sticky lg:top-6 space-y-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse" />
+                <h4 className="font-bold text-slate-900 text-sm">Booking Summary</h4>
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
+                Official Rail
+              </span>
+            </div>
+
+            {/* Live Details Breakdown */}
+            <div className="space-y-3 text-xs">
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-slate-500">Catering Facility:</span>
+                <span className="font-bold text-slate-800 text-right truncate">
+                  {selectedCanteen?.CANTEENNAME || "Not selected"}
+                </span>
+              </div>
+
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-slate-500">Service:</span>
+                <span className="font-semibold text-slate-800 text-right">
+                  {activeService?.SERVNAME || "Not selected"}
+                </span>
+              </div>
+
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-slate-500">Combo Package:</span>
+                <span className="font-bold text-orange-600 text-right">
+                  {activeCombo?.COMBONAME || "None selected"}
+                </span>
+              </div>
+
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-slate-500">Schedule:</span>
+                <span className="font-semibold text-slate-800 text-right">
+                  {formattedEventDate || "Date not specified"}
+                </span>
+              </div>
+
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-slate-500">Venue:</span>
+                <span className="font-semibold text-slate-800 text-right truncate max-w-[160px]">
+                  {venue || "Venue not specified"}
+                </span>
+              </div>
+
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-slate-500">Plates / Attendance:</span>
+                <span className="font-bold text-slate-900 text-right">
+                  {quantity} plates ({noOfPeople} attendees)
+                </span>
+              </div>
+
+              <div className="flex items-start justify-between gap-2 pt-2 border-t border-slate-100">
+                <span className="text-slate-500">Approving Officer:</span>
+                <span className="font-semibold text-slate-800 text-right truncate max-w-[160px]">
+                  {selectedApprover?.FULLNAME || "Select officer"}
+                </span>
+              </div>
+            </div>
+
+            {/* Cost Breakdown Box */}
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">
+                Cost Calculation
+              </span>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex items-center justify-between text-slate-600">
+                  <span>Food Rate ({quantity} × ₹{grossUnitPrice.toFixed(2)})</span>
+                  <span className="font-mono font-semibold text-slate-900">
+                    ₹{(Number(quantity || 0) * grossUnitPrice).toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-slate-600">
+                  <span>Flat Handling Fee</span>
+                  <span className="font-mono font-semibold text-slate-900">
+                    {flatHandlingCharge > 0 ? `₹${flatHandlingCharge.toFixed(2)}` : "₹0.00 (Free)"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200 pt-2.5 flex items-baseline justify-between">
+                <div>
+                  <span className="text-xs font-bold text-slate-800 block">Total Official Cost</span>
+                  <span className="text-[10px] text-slate-400">Billed to Division</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-2xl font-black text-slate-900 font-mono tracking-tight">
+                    ₹{totalAmount.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Direct Action Button */}
+            <button
+              type="submit"
+              disabled={loading || !!cutoffWarning || !activeCombo || !selectedApproverId}
+              className="w-full py-3.5 px-4 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold rounded-xl shadow-lg shadow-orange-500/25 transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2 text-sm"
+            >
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  <span>Submit Official Request</span>
+                  <SparklesIcon className="w-4 h-4" />
+                </>
+              )}
+            </button>
+
+            <p className="text-[11px] text-slate-400 text-center leading-relaxed">
+              * Once submitted, your request is immediately forwarded to the selected officer for L1/L2 approval.
+            </p>
+          </div>
+        </div>
       </div>
     </form>
   );

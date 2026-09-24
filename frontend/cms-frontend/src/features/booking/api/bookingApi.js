@@ -3,7 +3,11 @@ import api from '../../../config/axios'
 /** GET /api/bookings  (authenticated) */
 export async function getBookings(params = {}) {
   const res = await api.get('/bookings', { params })
-  return res.data.DATA
+  const data = res.data.DATA || []
+  if (res.data.PAGINATION && Array.isArray(data)) {
+    data.pagination = res.data.PAGINATION
+  }
+  return data
 }
 
 /** GET /api/bookings/active  (authenticated) */
@@ -27,6 +31,12 @@ export async function getBooking(id) {
 /** POST /api/bookings  (authenticated) */
 export async function createBooking(body) {
   const res = await api.post('/bookings', body)
+  return res.data.DATA
+}
+
+/** PUT /api/bookings/:id/items (authenticated - atomic batch items replace & wallet adjustment) */
+export async function updateBookingItemsBatch(bookingId, items) {
+  const res = await api.put(`/bookings/${bookingId}/items`, { items })
   return res.data.DATA
 }
 
