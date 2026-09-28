@@ -1,0 +1,186 @@
+/* ============================================================
+   FILE    : EMPLOYEES_VISITOR_SCHEMA.sql
+   ENGINE  : SAP Sybase ASE 16.0 SP04+
+   MODULE  : Customer Sub-Type Profile Tables
+   TABLES  : CMS_PERMEMP, CMS_CONTEMP, CMS_OCEEMP, CMS_VISITOR
+   ORDER   : Execute SEVENTEENTH (after CUSTOMER_SCHEMA.sql)
+   NOTES   :
+   - CMS_PERMEMP: permanent ISRO employees. EMPCODE maps to
+     cowaa.COMMON_MIS_LOGIN_TB.USER_ID via CMS_SYNC_COWAA_USERS.
+   - CMS_CONTEMP: contractors. CONTSTART/CONTEND: DATETIME
+     normalised to midnight (DATE if ODBC supports it).
+   - CMS_OCEEMP: OCE (other-centre) employees visiting another
+     ISRO centre's canteen. Composite unique on (EMPCODE, CENTERNAME).
+   - CMS_VISITOR: external visitors (VISDATE DATETIME at midnight).
+   - All ON UPDATE CURRENT_TIMESTAMP removed; handled in SPs.
+   - ISRO STATUSID not added to profile tables (status is
+     tracked on CMS_CUSTOMER, not the sub-type record).
+   ============================================================ */
+
+USE CMS_DB
+GO
+
+-- Drop in reverse dependency order
+IF OBJECT_ID('dbo.CMS_VISITOR') IS NOT NULL
+    DROP TABLE dbo.CMS_VISITOR
+GO
+
+IF OBJECT_ID('dbo.CMS_OCEEMP') IS NOT NULL
+    DROP TABLE dbo.CMS_OCEEMP
+GO
+
+IF OBJECT_ID('dbo.CMS_CONTEMP') IS NOT NULL
+    DROP TABLE dbo.CMS_CONTEMP
+GO
+
+IF OBJECT_ID('dbo.CMS_PERMEMP') IS NOT NULL
+    DROP TABLE dbo.CMS_PERMEMP
+GO
+
+-- ============================================================
+-- CMS_PERMEMP
+-- Permanent ISRO employee profile.
+-- Populated / synced by CMS_SYNC_COWAA_USERS procedure.
+-- ============================================================
+CREATE TABLE dbo.CMS_PERMEMP (
+    PERMEMPID  INT          IDENTITY NOT NULL,
+    CUSTOMERID INT          NOT NULL,
+    EMPCODE    VARCHAR(50)  NOT NULL,
+    DEPT       VARCHAR(100) NOT NULL,
+    DESIG      VARCHAR(100) NOT NULL,
+    LEVEL      INT          NOT NULL DEFAULT 13,
+    STATUSID   INT          NOT NULL DEFAULT 10,
+    CREATEDAT  DATETIME     NOT NULL DEFAULT GETDATE(),
+    UPDATEDAT  DATETIME     NULL,
+    PRIMARY KEY (PERMEMPID)
+)
+LOCK DATAROWS
+GO
+
+CREATE UNIQUE INDEX UQ_PERMEMP_CUSTID
+    ON dbo.CMS_PERMEMP (CUSTOMERID)
+GO
+
+CREATE UNIQUE INDEX UQ_PERMEMP_EMPCODE
+    ON dbo.CMS_PERMEMP (EMPCODE)
+GO
+
+ALTER TABLE dbo.CMS_PERMEMP
+    ADD CONSTRAINT FK_PE_CUST
+    FOREIGN KEY (CUSTOMERID) REFERENCES dbo.CMS_CUSTOMER(CUSTOMERID)
+GO
+
+ALTER TABLE dbo.CMS_PERMEMP
+    ADD CONSTRAINT FK_PE_STATUS
+    FOREIGN KEY (STATUSID) REFERENCES dbo.CMS_STATUS(STATUSID)
+GO
+
+-- ============================================================
+-- CMS_CONTEMP
+-- Contractor employee profile. Has a contract validity window.
+-- ============================================================
+CREATE TABLE dbo.CMS_CONTEMP (
+    CONTEMPID  INT          IDENTITY NOT NULL,
+    CUSTOMERID INT          NOT NULL,
+    CONTCODE   VARCHAR(50)  NOT NULL,
+    VENDORNAME VARCHAR(150) NOT NULL,
+    CONTSTART  DATETIME     NOT NULL,
+    CONTEND    DATETIME     NOT NULL,
+    CREATEDAT  DATETIME     NOT NULL DEFAULT GETDATE(),
+    UPDATEDAT  DATETIME     NULL,
+    PRIMARY KEY (CONTEMPID),
+    CONSTRAINT CK_CONT_DATES CHECK (CONTEND >= CONTSTART)
+)
+LOCK DATAROWS
+GO
+
+CREATE UNIQUE INDEX UQ_CONTEMP_CUSTID
+    ON dbo.CMS_CONTEMP (CUSTOMERID)
+GO
+
+CREATE UNIQUE INDEX UQ_CONTEMP_CONTCODE
+    ON dbo.CMS_CONTEMP (CONTCODE)
+GO
+
+ALTER TABLE dbo.CMS_CONTEMP
+    ADD CONSTRAINT FK_CE_CUST
+    FOREIGN KEY (CUSTOMERID) REFERENCES dbo.CMS_CUSTOMER(CUSTOMERID)
+GO
+
+-- ============================================================
+-- CMS_OCEEMP
+-- OCE (other-centre) employee visiting a different ISRO canteen.
+-- Composite unique on (EMPCODE, CENTERNAME).
+-- ============================================================
+CREATE TABLE dbo.CMS_OCEEMP (
+    OCEEMPID   INT          IDENTITY NOT NULL,
+    CUSTOMERID INT          NOT NULL,
+    EMPCODE    VARCHAR(50)  NOT NULL,
+    CENTERNAME VARCHAR(120) NOT NULL,
+    DEPT       VARCHAR(100) NULL,
+    DESIG      VARCHAR(100) NULL,
+    VALIDFROM  DATETIME     NULL,
+    VALIDUNTIL DATETIME     NULL,
+    CREATEDAT  DATETIME     NOT NULL DEFAULT GETDATE(),
+    UPDATEDAT  DATETIME     NULL,
+    PRIMARY KEY (OCEEMPID)
+)
+LOCK DATAROWS
+GO
+
+CREATE UNIQUE INDEX UQ_OCEEMP_CUSTID
+    ON dbo.CMS_OCEEMP (CUSTOMERID)
+GO
+
+CREATE UNIQUE INDEX UQ_OCE_CODE_CENTRE
+    ON dbo.CMS_OCEEMP (EMPCODE, CENTERNAME)
+GO
+
+ALTER TABLE dbo.CMS_OCEEMP
+    ADD CONSTRAINT FK_OCE_CUST
+    FOREIGN KEY (CUSTOMERID) REFERENCES dbo.CMS_CUSTOMER(CUSTOMERID)
+GO
+
+-- ============================================================
+-- CMS_VISITOR
+-- External visitor profile. One record per visit.
+-- ============================================================
+CREATE TABLE dbo.CMS_VISITOR (
+    VISITORID  INT          IDENTITY NOT NULL,
+    CUSTOMERID INT          NOT NULL,
+    VISNAME    VARCHAR(120) NOT NULL,
+    VISMOBILE  VARCHAR(20)  NULL,
+    VISORG     VARCHAR(150) NULL,
+    VISPURPOSE VARCHAR(255) NULL,
+    VISDATE    DATETIME     NOT NULL,
+    VALIDUNTIL DATETIME     NOT NULL,
+    CREATEDBY  INT          NOT NULL,
+    STATUSID   INT          NOT NULL DEFAULT 10,
+    CREATEDAT  DATETIME     NOT NULL DEFAULT GETDATE(),
+    UPDATEDAT  DATETIME     NULL,
+    PRIMARY KEY (VISITORID)
+)
+LOCK DATAROWS
+GO
+
+CREATE UNIQUE INDEX UQ_VISITOR_CUSTID
+    ON dbo.CMS_VISITOR (CUSTOMERID)
+GO
+
+ALTER TABLE dbo.CMS_VISITOR
+    ADD CONSTRAINT FK_VIS_CUST
+    FOREIGN KEY (CUSTOMERID) REFERENCES dbo.CMS_CUSTOMER(CUSTOMERID)
+GO
+
+ALTER TABLE dbo.CMS_VISITOR
+    ADD CONSTRAINT FK_VIS_BY
+    FOREIGN KEY (CREATEDBY) REFERENCES dbo.CMS_USER(USERID)
+GO
+
+ALTER TABLE dbo.CMS_VISITOR
+    ADD CONSTRAINT FK_VIS_STATUS
+    FOREIGN KEY (STATUSID) REFERENCES dbo.CMS_STATUS(STATUSID)
+GO
+
+PRINT 'EMPLOYEES_VISITOR_SCHEMA created successfully.'
+GO

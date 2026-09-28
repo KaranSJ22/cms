@@ -1,0 +1,166 @@
+/* ============================================================
+   FILE    : DAYSLOT_SCHEMA.sql
+   ENGINE  : SAP Sybase ASE 16.0 SP04+
+   MODULE  : Day Slot (Dated meal service instances)
+   TABLES  : CMS_DAYSLOT, CMS_SLOTHIST
+   ORDER   : Execute TWELFTH (after KIOSK_SCHEMA.sql and
+             SERVICE_SCHEMA.sql)
+   NOTES   :
+   - DATE type: supported in ASE 15.7+. If ODBC issues arise,
+     use DATETIME normalised to midnight (00:00:00.000).
+   - TIME type: same caveat as DATE.
+   - Composite unique on (CANTEENID, SERVICEID, SERVDATE)
+     prevents duplicate slots for the same service-date-canteen.
+   - CMS_SLOTHIST is an audit table: no IDENTITY PK
+     (@@IDENTITY trigger hazard protocol).
+   - APPRSTATUSID: draft=20, submitted=21, approved=12,
+     rejected=22 — all reference CMS_STATUS(STATUSID).
+   ============================================================ */
+
+USE CMS_DB
+GO
+
+-- Drop in reverse dependency order
+IF OBJECT_ID('dbo.CMS_SLOTHIST') IS NOT NULL
+    DROP TABLE dbo.CMS_SLOTHIST
+GO
+
+IF OBJECT_ID('dbo.CMS_DAYSLOT') IS NOT NULL
+    DROP TABLE dbo.CMS_DAYSLOT
+GO
+
+-- ============================================================
+-- CMS_DAYSLOT
+-- Each row is one dated operational meal slot for a canteen.
+-- e.g. Canteen-3 Lunch on 2026-09-26.
+-- ============================================================
+CREATE TABLE dbo.CMS_DAYSLOT (
+    DAYSLOTID       INT          IDENTITY NOT NULL,
+    SLOTNO          VARCHAR(30)  NOT NULL,
+    SERVICEID       INT          NOT NULL,
+    SERVDATE        DATETIME     NOT NULL,   -- Normalised to midnight; use DATE if ODBC driver supports it
+    CANTEENID       INT          NOT NULL,
+    STARTTIME       TIME         NOT NULL,
+    ENDTIME         TIME         NOT NULL,
+    STATUSID        INT          NOT NULL DEFAULT 10,
+    APPRSTATUSID    INT          NOT NULL DEFAULT 20,
+    MENUSUBMITTEDBY INT          NULL,
+    MENUSUBMITTEDAT DATETIME     NULL,
+    MENUAPPROVEDBY  INT          NULL,
+    MENUAPPROVEDAT  DATETIME     NULL,
+    MENUREMARKS     VARCHAR(255) NULL,
+    CREATEDBY       INT          NOT NULL,
+    CREATEDAT       DATETIME     NOT NULL DEFAULT GETDATE(),
+    UPDATEDAT       DATETIME     NULL,
+    PRIMARY KEY (DAYSLOTID),
+    CONSTRAINT CK_DS_TIME CHECK (ENDTIME > STARTTIME)
+)
+LOCK DATAROWS
+GO
+
+CREATE UNIQUE INDEX UQ_SLOTNO
+    ON dbo.CMS_DAYSLOT (SLOTNO)
+GO
+
+-- One slot per canteen-service-date combination
+CREATE UNIQUE INDEX UQ_DAYSLOT
+    ON dbo.CMS_DAYSLOT (CANTEENID, SERVICEID, SERVDATE)
+GO
+
+ALTER TABLE dbo.CMS_DAYSLOT
+    ADD CONSTRAINT FK_DS_SERV
+    FOREIGN KEY (SERVICEID) REFERENCES dbo.CMS_SERVICE(SERVICEID)
+GO
+
+ALTER TABLE dbo.CMS_DAYSLOT
+    ADD CONSTRAINT FK_DS_CAN
+    FOREIGN KEY (CANTEENID) REFERENCES dbo.CMS_CANTEEN(CANTEENID)
+GO
+
+ALTER TABLE dbo.CMS_DAYSLOT
+    ADD CONSTRAINT FK_DS_BY
+    FOREIGN KEY (CREATEDBY) REFERENCES dbo.CMS_USER(USERID)
+GO
+
+ALTER TABLE dbo.CMS_DAYSLOT
+    ADD CONSTRAINT FK_DS_MSBY
+    FOREIGN KEY (MENUSUBMITTEDBY) REFERENCES dbo.CMS_USER(USERID)
+GO
+
+ALTER TABLE dbo.CMS_DAYSLOT
+    ADD CONSTRAINT FK_DS_MABY
+    FOREIGN KEY (MENUAPPROVEDBY) REFERENCES dbo.CMS_USER(USERID)
+GO
+
+ALTER TABLE dbo.CMS_DAYSLOT
+    ADD CONSTRAINT FK_DS_STATUS
+    FOREIGN KEY (STATUSID) REFERENCES dbo.CMS_STATUS(STATUSID)
+GO
+
+ALTER TABLE dbo.CMS_DAYSLOT
+    ADD CONSTRAINT FK_DS_APPRSTATUS
+    FOREIGN KEY (APPRSTATUSID) REFERENCES dbo.CMS_STATUS(STATUSID)
+GO
+
+-- ============================================================
+-- CMS_SLOTHIST
+-- Immutable audit trail of all dayslot changes.
+-- No IDENTITY PK — audit tables must not carry IDENTITY
+-- to prevent @@IDENTITY overwrite in stored procedures.
+-- ============================================================
+CREATE TABLE dbo.CMS_SLOTHIST (
+    SLOTHISTID      INT          NOT NULL,
+    DAYSLOTID       INT          NOT NULL,
+    SLOTNO          VARCHAR(30)  NOT NULL,
+    SERVICEID       INT          NOT NULL,
+    CANTEENID       INT          NOT NULL,
+    SERVDATE        DATETIME     NOT NULL,
+    STARTTIME       TIME         NOT NULL,
+    ENDTIME         TIME         NOT NULL,
+    STATUSID        INT          NOT NULL,
+    APPRSTATUSID    INT          NOT NULL,
+    MENUSUBMITTEDBY INT          NULL,
+    MENUSUBMITTEDAT DATETIME     NULL,
+    MENUAPPROVEDBY  INT          NULL,
+    MENUAPPROVEDAT  DATETIME     NULL,
+    MENUREMARKS     VARCHAR(255) NULL,
+    CHANGEDBY       INT          NOT NULL,
+    CHANGEDAT       DATETIME     NOT NULL DEFAULT GETDATE(),
+    CHGREASON       VARCHAR(255) NULL,
+    PRIMARY KEY (SLOTHISTID)
+)
+LOCK DATAROWS
+GO
+
+ALTER TABLE dbo.CMS_SLOTHIST
+    ADD CONSTRAINT FK_SLH_SLOT
+    FOREIGN KEY (DAYSLOTID) REFERENCES dbo.CMS_DAYSLOT(DAYSLOTID)
+GO
+
+ALTER TABLE dbo.CMS_SLOTHIST
+    ADD CONSTRAINT FK_SLH_SERV
+    FOREIGN KEY (SERVICEID) REFERENCES dbo.CMS_SERVICE(SERVICEID)
+GO
+
+ALTER TABLE dbo.CMS_SLOTHIST
+    ADD CONSTRAINT FK_SLH_CAN
+    FOREIGN KEY (CANTEENID) REFERENCES dbo.CMS_CANTEEN(CANTEENID)
+GO
+
+ALTER TABLE dbo.CMS_SLOTHIST
+    ADD CONSTRAINT FK_SLH_BY
+    FOREIGN KEY (CHANGEDBY) REFERENCES dbo.CMS_USER(USERID)
+GO
+
+ALTER TABLE dbo.CMS_SLOTHIST
+    ADD CONSTRAINT FK_SLH_STATUS
+    FOREIGN KEY (STATUSID) REFERENCES dbo.CMS_STATUS(STATUSID)
+GO
+
+ALTER TABLE dbo.CMS_SLOTHIST
+    ADD CONSTRAINT FK_SLH_APPRSTATUS
+    FOREIGN KEY (APPRSTATUSID) REFERENCES dbo.CMS_STATUS(STATUSID)
+GO
+
+PRINT 'DAYSLOT_SCHEMA created successfully.'
+GO

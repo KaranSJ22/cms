@@ -1,0 +1,55 @@
+/* ============================================================
+   FILE    : CANTEEN_SCHEMA.sql
+   ENGINE  : SAP Sybase ASE 16.0 SP04+
+   MODULE  : Canteen Facility Registry
+   TABLES  : CMS_CANTEEN
+   ORDER   : Execute SEVENTH (after CENTER_SCHEMA.sql)
+   NOTES   :
+   - Composite unique index on (CENTERID, CANTEENCODE)
+     prevents duplicate canteen codes within the same campus.
+   ============================================================ */
+
+USE CMS_DB
+GO
+
+IF OBJECT_ID('dbo.CMS_CANTEEN') IS NOT NULL
+    DROP TABLE dbo.CMS_CANTEEN
+GO
+
+CREATE TABLE dbo.CMS_CANTEEN (
+    CANTEENID   INT          IDENTITY NOT NULL,
+    CENTERID    INT          NOT NULL,
+    CANTEENCODE VARCHAR(20)  NOT NULL,
+    CANTEENNAME VARCHAR(120) NOT NULL,
+    LOCATION    VARCHAR(150) NULL,
+    CREATEDBY   INT          NOT NULL,
+    STATUSID    INT          NOT NULL DEFAULT 10,
+    CREATEDAT   DATETIME     NOT NULL DEFAULT GETDATE(),
+    UPDATEDAT   DATETIME     NULL,
+    PRIMARY KEY (CANTEENID)
+)
+LOCK DATAROWS
+GO
+
+-- Composite unique: same canteen code can exist in different centers
+CREATE UNIQUE INDEX UQ_CENTER_CANTEEN
+    ON dbo.CMS_CANTEEN (CENTERID, CANTEENCODE)
+GO
+
+ALTER TABLE dbo.CMS_CANTEEN
+    ADD CONSTRAINT FK_CAN_CENTER
+    FOREIGN KEY (CENTERID) REFERENCES dbo.CMS_CENTER(CENTERID)
+GO
+
+ALTER TABLE dbo.CMS_CANTEEN
+    ADD CONSTRAINT FK_CANT_BY
+    FOREIGN KEY (CREATEDBY) REFERENCES dbo.CMS_USER(USERID)
+GO
+
+ALTER TABLE dbo.CMS_CANTEEN
+    ADD CONSTRAINT FK_CANT_STATUS
+    FOREIGN KEY (STATUSID) REFERENCES dbo.CMS_STATUS(STATUSID)
+GO
+
+PRINT 'CANTEEN_SCHEMA created successfully.'
+GO

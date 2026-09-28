@@ -1,0 +1,139 @@
+/* ============================================================
+   FILE    : DAYMENU_SCHEMA.sql
+   ENGINE  : SAP Sybase ASE 16.0 SP04+
+   MODULE  : Day Menu (Published menu items per day-slot)
+   TABLES  : CMS_DAYMENU, CMS_DMENUHIST
+   ORDER   : Execute FIFTEENTH (after DAYSLOT_SCHEMA.sql and
+             MENUITEM_PRICE_SCHEMA.sql)
+   NOTES   :
+   - DMENUNO is auto-generated via CMSGENAUTO (Prefix: DMN).
+   - ISBASE/ISSPECIAL/ISPREBOOK/ISKIOSK: TINYINT(1) → TINYINT.
+   - Composite unique on (DAYSLOTID, MENUITEMID).
+   - CMS_DMENUHIST: audit table, non-IDENTITY PK
+     (@@IDENTITY trigger hazard protocol).
+   - BOOKUNTIL / CANCELUNTIL: CHECK CANCELUNTIL <= BOOKUNTIL
+     preserved (Sybase supports column-level multi-col CHECK).
+   ============================================================ */
+
+USE CMS_DB
+GO
+
+-- Drop in reverse dependency order
+IF OBJECT_ID('dbo.CMS_DMENUHIST') IS NOT NULL
+    DROP TABLE dbo.CMS_DMENUHIST
+GO
+
+IF OBJECT_ID('dbo.CMS_DAYMENU') IS NOT NULL
+    DROP TABLE dbo.CMS_DAYMENU
+GO
+
+-- ============================================================
+-- CMS_DAYMENU
+-- Each row is one food item offered on one specific day-slot.
+-- This is what customers pre-book and kiosks serve against.
+-- ============================================================
+CREATE TABLE dbo.CMS_DAYMENU (
+    DAYMENUID   INT           IDENTITY NOT NULL,
+    DMENUNO     VARCHAR(20)   NOT NULL,
+    DAYSLOTID   INT           NOT NULL,
+    MENUITEMID  INT           NOT NULL,
+    ISBASE      TINYINT       NOT NULL DEFAULT 1,
+    ISSPECIAL   TINYINT       NOT NULL DEFAULT 0,
+    ISPREBOOK   TINYINT       NOT NULL DEFAULT 1,
+    ISKIOSK     TINYINT       NOT NULL DEFAULT 1,
+    BOOKUNTIL   DATETIME      NOT NULL,
+    CANCELUNTIL DATETIME      NOT NULL,
+    AVAILQTY    INT           NULL,
+    MAXQTY      INT           NOT NULL DEFAULT 1,
+    STATUSID    INT           NOT NULL DEFAULT 10,
+    CREATEDAT   DATETIME      NOT NULL DEFAULT GETDATE(),
+    CREATEDBY   INT           NOT NULL,
+    UPDATEDAT   DATETIME      NULL,
+    PRIMARY KEY (DAYMENUID),
+    CONSTRAINT CK_DM_QTY      CHECK (MAXQTY >= 1 AND (AVAILQTY IS NULL OR AVAILQTY >= 0)),
+    CONSTRAINT CK_DM_CHANNELS CHECK (ISPREBOOK IN (0,1) AND ISKIOSK IN (0,1) AND ISSPECIAL IN (0,1)),
+    CONSTRAINT CK_DM_TIMES    CHECK (CANCELUNTIL <= BOOKUNTIL)
+)
+LOCK DATAROWS
+GO
+
+CREATE UNIQUE INDEX UQ_DMENUNO
+    ON dbo.CMS_DAYMENU (DMENUNO)
+GO
+
+-- One item per slot (prevents duplicate food entries on same day-slot)
+CREATE UNIQUE INDEX UQ_DAYMENU
+    ON dbo.CMS_DAYMENU (DAYSLOTID, MENUITEMID)
+GO
+
+ALTER TABLE dbo.CMS_DAYMENU
+    ADD CONSTRAINT FK_DM_SLOT
+    FOREIGN KEY (DAYSLOTID) REFERENCES dbo.CMS_DAYSLOT(DAYSLOTID)
+GO
+
+ALTER TABLE dbo.CMS_DAYMENU
+    ADD CONSTRAINT FK_DM_ITEM
+    FOREIGN KEY (MENUITEMID) REFERENCES dbo.CMS_MENUITEM(MENUITEMID)
+GO
+
+ALTER TABLE dbo.CMS_DAYMENU
+    ADD CONSTRAINT FK_DM_ADD
+    FOREIGN KEY (CREATEDBY) REFERENCES dbo.CMS_USER(USERID)
+GO
+
+ALTER TABLE dbo.CMS_DAYMENU
+    ADD CONSTRAINT FK_DM_STATUS
+    FOREIGN KEY (STATUSID) REFERENCES dbo.CMS_STATUS(STATUSID)
+GO
+
+-- ============================================================
+-- CMS_DMENUHIST
+-- Immutable audit trail for day-menu changes.
+-- Non-IDENTITY PK — audit table @@IDENTITY safety protocol.
+-- No FK on DAYMENUID (parent may be deleted; history preserved).
+-- ============================================================
+CREATE TABLE dbo.CMS_DMENUHIST (
+    DMENUHISTID INT      NOT NULL,
+    DAYMENUID   INT      NOT NULL,
+    DMENUNO     VARCHAR(20)  NOT NULL,
+    DAYSLOTID   INT      NOT NULL,
+    MENUITEMID  INT      NOT NULL,
+    ISSPECIAL   TINYINT  NOT NULL,
+    ISPREBOOK   TINYINT  NOT NULL,
+    ISKIOSK     TINYINT  NOT NULL,
+    ISBASE      TINYINT  NOT NULL,
+    BOOKUNTIL   DATETIME NOT NULL,
+    CANCELUNTIL DATETIME NOT NULL,
+    AVAILQTY    INT      NULL,
+    MAXQTY      INT      NOT NULL,
+    STATUSID    INT      NOT NULL,
+    CHANGEDBY   INT      NOT NULL,
+    CHANGEDAT   DATETIME NOT NULL DEFAULT GETDATE(),
+    CHGREASON   VARCHAR(255) NULL,
+    PRIMARY KEY (DMENUHISTID)
+)
+LOCK DATAROWS
+GO
+
+ALTER TABLE dbo.CMS_DMENUHIST
+    ADD CONSTRAINT FK_DMH_SLOT
+    FOREIGN KEY (DAYSLOTID) REFERENCES dbo.CMS_DAYSLOT(DAYSLOTID)
+GO
+
+ALTER TABLE dbo.CMS_DMENUHIST
+    ADD CONSTRAINT FK_DMH_ITEM
+    FOREIGN KEY (MENUITEMID) REFERENCES dbo.CMS_MENUITEM(MENUITEMID)
+GO
+
+ALTER TABLE dbo.CMS_DMENUHIST
+    ADD CONSTRAINT FK_DMH_BY
+    FOREIGN KEY (CHANGEDBY) REFERENCES dbo.CMS_USER(USERID)
+GO
+
+ALTER TABLE dbo.CMS_DMENUHIST
+    ADD CONSTRAINT FK_DMH_STATUS
+    FOREIGN KEY (STATUSID) REFERENCES dbo.CMS_STATUS(STATUSID)
+GO
+
+PRINT 'DAYMENU_SCHEMA created successfully.'
+GO

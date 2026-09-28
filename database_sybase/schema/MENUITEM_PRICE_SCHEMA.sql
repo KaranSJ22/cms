@@ -1,0 +1,210 @@
+/* ============================================================
+   FILE    : MENUITEM_PRICE_SCHEMA.sql
+   ENGINE  : SAP Sybase ASE 16.0 SP04+
+   MODULE  : Menu Item Catalog & Pricing (Type-2 SCD)
+   TABLES  : CMS_MENUITEM, CMS_MENUHIST, CMS_ITEMPRICE,
+             CMS_ITEMPRICEDT
+   ORDER   : Execute THIRTEENTH (after SERVICE_SCHEMA.sql,
+             before DAYMENU_SCHEMA.sql)
+   NOTES   :
+   - ISSPECIAL / OFFSER: TINYINT(1) → TINYINT.
+   - CHECK constraint CK_MI_SPECIAL preserved.
+   - Non-unique INDEX IX_MI_SERVICEID → CREATE INDEX.
+   - Non-unique INDEX IX_IP_ITEM_EFF → CREATE INDEX.
+   - CMS_MENUHIST: audit table → non-IDENTITY integer PK
+     (@@IDENTITY safety protocol).
+   - CMS_ITEMPRICE.EFFFROM: DATE type (ASE 15.7+).
+     If ODBC issues: replace with DATETIME + CONVERT normalization.
+   - CTE pricing logic relies on the composite index
+     (MENUITEMID, EFFFROM) for high-speed partition scans.
+   ============================================================ */
+
+USE CMS_DB
+GO
+
+-- Drop in strict reverse FK dependency order
+IF OBJECT_ID('dbo.CMS_ITEMPRICEDT') IS NOT NULL
+    DROP TABLE dbo.CMS_ITEMPRICEDT
+GO
+
+IF OBJECT_ID('dbo.CMS_ITEMPRICE') IS NOT NULL
+    DROP TABLE dbo.CMS_ITEMPRICE
+GO
+
+IF OBJECT_ID('dbo.CMS_MENUHIST') IS NOT NULL
+    DROP TABLE dbo.CMS_MENUHIST
+GO
+
+IF OBJECT_ID('dbo.CMS_MENUITEM') IS NOT NULL
+    DROP TABLE dbo.CMS_MENUITEM
+GO
+
+-- ============================================================
+-- CMS_MENUITEM
+-- Shared food item catalog. Prices are NOT stored here;
+-- they live in CMS_ITEMPRICE / CMS_ITEMPRICEDT (Type-2 SCD).
+-- ============================================================
+CREATE TABLE dbo.CMS_MENUITEM (
+    MENUITEMID INT          IDENTITY NOT NULL,
+    SERVICEID  INT          NULL,
+    MENUCODE   VARCHAR(20)  NOT NULL,
+    SHORTNAME  VARCHAR(30)  NOT NULL,
+    ITEMNAME   VARCHAR(100) NOT NULL,
+    ITEMDESCR  VARCHAR(255) NULL,
+    ISSPECIAL  TINYINT      NOT NULL DEFAULT 0,
+    OFFSER     TINYINT      NOT NULL DEFAULT 0,
+    STATUSID   INT          NOT NULL DEFAULT 10,
+    CREATEDBY  INT          NOT NULL,
+    CREATEDAT  DATETIME     NOT NULL DEFAULT GETDATE(),
+    UPDATEDAT  DATETIME     NULL,
+    PRIMARY KEY (MENUITEMID),
+    CONSTRAINT CK_MI_SPECIAL CHECK (ISSPECIAL IN (0, 1))
+)
+LOCK DATAROWS
+GO
+
+CREATE UNIQUE INDEX UQ_MENUCODE
+    ON dbo.CMS_MENUITEM (MENUCODE)
+GO
+
+-- Non-unique index for service-category filtering
+CREATE INDEX IX_MI_SERVICEID
+    ON dbo.CMS_MENUITEM (SERVICEID)
+GO
+
+ALTER TABLE dbo.CMS_MENUITEM
+    ADD CONSTRAINT FK_MI_SERV
+    FOREIGN KEY (SERVICEID) REFERENCES dbo.CMS_SERVICE(SERVICEID)
+GO
+
+ALTER TABLE dbo.CMS_MENUITEM
+    ADD CONSTRAINT FK_MI_BY
+    FOREIGN KEY (CREATEDBY) REFERENCES dbo.CMS_USER(USERID)
+GO
+
+ALTER TABLE dbo.CMS_MENUITEM
+    ADD CONSTRAINT FK_MI_STATUS
+    FOREIGN KEY (STATUSID) REFERENCES dbo.CMS_STATUS(STATUSID)
+GO
+
+-- ============================================================
+-- CMS_MENUHIST
+-- Immutable audit trail for menu item changes.
+-- Non-IDENTITY PK — audit table @@IDENTITY safety protocol.
+-- ============================================================
+CREATE TABLE dbo.CMS_MENUHIST (
+    MENUHISTID INT          NOT NULL,
+    MENUITEMID INT          NOT NULL,
+    SERVICEID  INT          NULL,
+    MENUCODE   VARCHAR(20)  NOT NULL,
+    SHORTNAME  VARCHAR(30)  NOT NULL,
+    ITEMNAME   VARCHAR(100) NOT NULL,
+    ITEMDESCR  VARCHAR(255) NULL,
+    ISSPECIAL  TINYINT      NOT NULL,
+    OFFSER     TINYINT      NOT NULL DEFAULT 0,
+    STATUSID   INT          NOT NULL,
+    CHANGEDBY  INT          NOT NULL,
+    CHANGEDAT  DATETIME     NOT NULL DEFAULT GETDATE(),
+    CHGREASON  VARCHAR(255) NULL,
+    PRIMARY KEY (MENUHISTID)
+)
+LOCK DATAROWS
+GO
+
+ALTER TABLE dbo.CMS_MENUHIST
+    ADD CONSTRAINT FK_MH_ITEM
+    FOREIGN KEY (MENUITEMID) REFERENCES dbo.CMS_MENUITEM(MENUITEMID)
+GO
+
+ALTER TABLE dbo.CMS_MENUHIST
+    ADD CONSTRAINT FK_MH_SERV
+    FOREIGN KEY (SERVICEID) REFERENCES dbo.CMS_SERVICE(SERVICEID)
+GO
+
+ALTER TABLE dbo.CMS_MENUHIST
+    ADD CONSTRAINT FK_MH_BY
+    FOREIGN KEY (CHANGEDBY) REFERENCES dbo.CMS_USER(USERID)
+GO
+
+ALTER TABLE dbo.CMS_MENUHIST
+    ADD CONSTRAINT FK_MH_STATUS
+    FOREIGN KEY (STATUSID) REFERENCES dbo.CMS_STATUS(STATUSID)
+GO
+
+-- ============================================================
+-- CMS_ITEMPRICE (Header)
+-- One row per item per effective-from date (Type-2 SCD).
+-- No EFFUNTIL: the end of one band is implied by the EFFFROM
+-- of the next row — ORDER BY EFFFROM DESC FETCH FIRST 1 ROW
+-- via ROW_NUMBER() in CMSVIEWMENURANGE CTE.
+-- ============================================================
+CREATE TABLE dbo.CMS_ITEMPRICE (
+    ITEMPRICEID INT      IDENTITY NOT NULL,
+    MENUITEMID  INT      NOT NULL,
+    EFFFROM     DATETIME NOT NULL,   -- Normalised to midnight; use DATE if ODBC driver supports it
+    STATUSID    INT      NOT NULL DEFAULT 10,
+    CREATEDBY   INT      NOT NULL,
+    CREATEDAT   DATETIME NOT NULL DEFAULT GETDATE(),
+    UPDATEDAT   DATETIME NULL,
+    PRIMARY KEY (ITEMPRICEID)
+)
+LOCK DATAROWS
+GO
+
+-- Unique: one price band start per item per date
+CREATE UNIQUE INDEX UQ_ITEMPRICE
+    ON dbo.CMS_ITEMPRICE (MENUITEMID, EFFFROM)
+GO
+
+-- Covering index used by CMSVIEWMENURANGE CTE window partition
+CREATE INDEX IX_IP_ITEM_EFF
+    ON dbo.CMS_ITEMPRICE (MENUITEMID, EFFFROM)
+GO
+
+ALTER TABLE dbo.CMS_ITEMPRICE
+    ADD CONSTRAINT FK_IP_ITEM
+    FOREIGN KEY (MENUITEMID) REFERENCES dbo.CMS_MENUITEM(MENUITEMID)
+GO
+
+ALTER TABLE dbo.CMS_ITEMPRICE
+    ADD CONSTRAINT FK_IP_BY
+    FOREIGN KEY (CREATEDBY) REFERENCES dbo.CMS_USER(USERID)
+GO
+
+ALTER TABLE dbo.CMS_ITEMPRICE
+    ADD CONSTRAINT FK_IP_STATUS
+    FOREIGN KEY (STATUSID) REFERENCES dbo.CMS_STATUS(STATUSID)
+GO
+
+-- ============================================================
+-- CMS_ITEMPRICEDT (Detail)
+-- Per customer-type price row for each price band header.
+-- e.g. ITEMPRICEID=5 → PRM=25.00, CNT=30.00, VIS=35.00
+-- ============================================================
+CREATE TABLE dbo.CMS_ITEMPRICEDT (
+    ITEMPRICEDTID INT           IDENTITY NOT NULL,
+    ITEMPRICEID   INT           NOT NULL,
+    CTYPECODE     VARCHAR(20)   NOT NULL,
+    PRICE         DECIMAL(10,2) NOT NULL,
+    PRIMARY KEY (ITEMPRICEDTID),
+    CONSTRAINT CK_IPDT_PRICE CHECK (PRICE >= 0)
+)
+LOCK DATAROWS
+GO
+
+CREATE UNIQUE INDEX UQ_IPDT
+    ON dbo.CMS_ITEMPRICEDT (ITEMPRICEID, CTYPECODE)
+GO
+
+ALTER TABLE dbo.CMS_ITEMPRICEDT
+    ADD CONSTRAINT FK_IPDT_HDR
+    FOREIGN KEY (ITEMPRICEID) REFERENCES dbo.CMS_ITEMPRICE(ITEMPRICEID)
+GO
+
+ALTER TABLE dbo.CMS_ITEMPRICEDT
+    ADD CONSTRAINT FK_IPDT_CTYPE
+    FOREIGN KEY (CTYPECODE) REFERENCES dbo.CMS_CUSTTYPE(CTYPECODE)
+GO
+
+PRINT 'MENUITEM_PRICE_SCHEMA created successfully.'
+GO

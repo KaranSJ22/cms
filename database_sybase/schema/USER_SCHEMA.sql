@@ -1,0 +1,53 @@
+/* ============================================================
+   FILE    : USER_SCHEMA.sql
+   ENGINE  : SAP Sybase ASE 16.0 SP04+
+   MODULE  : User Identity
+   TABLES  : CMS_USER
+   ORDER   : Execute THIRD (after COMMON_SCHEMA.sql)
+   NOTES   :
+   - LOGINID maps to cowaa.COMMON_MIS_LOGIN_TB.USER_ID (VARCHAR(7)
+     in COWAA, widened to VARCHAR(50) for LOCAL auth flexibility).
+   - STATUSID INT replaces ISACTIVE TINYINT to align with
+     CMS_STATUS dictionary (10=Active, 11=Inactive).
+   - AUTHPROV: 'COWAA' for enterprise users, 'LOCAL' for admin.
+   ============================================================ */
+
+USE CMS_DB
+GO
+
+IF OBJECT_ID('dbo.CMS_USER') IS NOT NULL
+    DROP TABLE dbo.CMS_USER
+GO
+
+CREATE TABLE dbo.CMS_USER (
+    USERID    INT          IDENTITY NOT NULL,
+    LOGINID   VARCHAR(50)  NOT NULL,
+    FULLNAME  VARCHAR(120) NOT NULL,
+    EMAIL     VARCHAR(120) NULL,
+    MOBILENO  VARCHAR(20)  NULL,
+    PWDHASH   VARCHAR(255) NOT NULL,
+    AUTHPROV  VARCHAR(20)  NOT NULL DEFAULT 'LOCAL',
+    AUTHID    VARCHAR(120) NULL,
+    STATUSID  INT          NOT NULL DEFAULT 10,
+    CREATEDAT DATETIME     NOT NULL DEFAULT GETDATE(),
+    UPDATEDAT DATETIME     NULL,
+    PRIMARY KEY (USERID)
+)
+LOCK DATAROWS
+GO
+
+CREATE UNIQUE INDEX UQ_USER_LOGINID
+    ON dbo.CMS_USER (LOGINID)
+GO
+
+CREATE UNIQUE INDEX UQ_USER_EMAIL
+    ON dbo.CMS_USER (EMAIL)
+GO
+
+ALTER TABLE dbo.CMS_USER
+    ADD CONSTRAINT FK_USER_STATUS
+    FOREIGN KEY (STATUSID) REFERENCES dbo.CMS_STATUS(STATUSID)
+GO
+
+PRINT 'USER_SCHEMA created successfully.'
+GO

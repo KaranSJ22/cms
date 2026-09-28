@@ -20,7 +20,7 @@ const generateLoginResponse = (user, CONSUMERROLES, CANTEENROLES) => {
 
   const tokenPayload = {
     USERID: user.USERID,
-    LOGINID: user.LOGINID, //same as userid for perm employee
+    LOGINID: user.LOGINID, 
     CUSTOMERID: user.CUSTOMERID || null,
     CTYPECODE: user.CTYPECODE || null,
     SYSTEMROLES: systemRoles,
@@ -31,7 +31,7 @@ const generateLoginResponse = (user, CONSUMERROLES, CANTEENROLES) => {
     tokenPayload,
     env.JWT_SECRET,
     {
-      expiresIn: env.JWT_EXPIRES_IN || "1d",
+      expiresIn: env.JWT_EXPIRES_IN || "15m",
     }
   );
 

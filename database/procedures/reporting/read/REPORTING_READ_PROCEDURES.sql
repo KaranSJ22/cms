@@ -1,0 +1,490 @@
+USE cms_db;
+
+DROP PROCEDURE IF EXISTS CMSGETBOOKFORSERVING;
+DROP PROCEDURE IF EXISTS CMSGETMONTHLYEXP;
+DROP PROCEDURE IF EXISTS CMSLISTBOOKHISTORY;
+DROP PROCEDURE IF EXISTS CMSGETKITCHENSUMMARY;
+DROP PROCEDURE IF EXISTS CMSREPORTMONTHLYPAYROLL;
+DROP PROCEDURE IF EXISTS CMSREPORTGETEMPLOYEEPROFILE;
+DROP PROCEDURE IF EXISTS CMSREPORTGETEMPLOYEEBOOKINGS;
+DROP PROCEDURE IF EXISTS CMSREPORTGETBOOKINGITEMS;
+
+DELIMITER $$
+
+-- ============================================================
+-- CMSGETBOOKFORSERVING
+--
+-- Serving-counter lookup. Returns two result sets:
+--   RS-1: Booking header
+--   RS-2: Booking items
+--
+-- Lookup priority:
+--   If PBOOKNO is supplied  → look up by BOOKNO (exact match).
+--   If only PLOGINID is supplied → find the employee's ACTIVE (CR)
+--     booking for TODAY in ANY service.
+--   If both are supplied    → PBOOKNO takes precedence.
+-- ============================================================
+CREATE PROCEDURE CMSGETBOOKFORSERVING (
+    IN PLOGINID   VARCHAR(255),
+    IN PBOOKNO    VARCHAR(30),
+    IN PCANTEENID INT,
+    IN PSERVICEID INT
+)
+BEGIN
+    DECLARE VBOOKID     INT DEFAULT NULL;
+    DECLARE VCUSTOMERID INT DEFAULT NULL;
+
+    IF PLOGINID IS NULL AND PBOOKNO IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Either Identifier/LOGINID or BOOKNO is required';
+    END IF;
+
+    IF PBOOKNO IS NOT NULL THEN
+        -- Direct lookup by formatted business booking number
+        SELECT BOOKID INTO VBOOKID
+        FROM CMS_BOOKING
+        WHERE BOOKNO = PBOOKNO
+        LIMIT 1;
+    ELSE
+        -- 1. Try resolving via CMS_ACCKEY (RFID / QR Card UID)
+        SELECT AK.CUSTOMERID INTO VCUSTOMERID
+        FROM CMS_ACCKEY AK
+        JOIN CMS_STATUS STAK ON STAK.STATUSID = AK.STATUSID
+        WHERE AK.KEYVALUE = TRIM(PLOGINID)
+          AND STAK.STATUSCODE = 'ACT'
+          AND (AK.EXPIRESAT IS NULL OR AK.EXPIRESAT > CURRENT_TIMESTAMP)
+        LIMIT 1;
+
+        -- 2. Fallback to CMS_USER.LOGINID
+        IF VCUSTOMERID IS NULL THEN
+            SELECT C.CUSTOMERID INTO VCUSTOMERID
+            FROM CMS_USER U
+            JOIN CMS_CUSTOMER C ON C.USERID = U.USERID
+            WHERE U.LOGINID = TRIM(PLOGINID)
+            LIMIT 1;
+        END IF;
+
+        -- 3. Fallback to direct numeric CUSTOMERID
+        IF VCUSTOMERID IS NULL AND PLOGINID REGEXP '^[0-9]+$' THEN
+            SELECT C.CUSTOMERID INTO VCUSTOMERID
+            FROM CMS_CUSTOMER C
+            WHERE C.CUSTOMERID = CAST(PLOGINID AS UNSIGNED)
+            LIMIT 1;
+        END IF;
+
+        IF VCUSTOMERID IS NOT NULL THEN
+            -- Lookup today's booking for this customer (prioritizing CRT, with canteen/service scoping)
+            SELECT B.BOOKID INTO VBOOKID
+            FROM CMS_BOOKING B
+            JOIN CMS_BOOKTYPE BT ON BT.BOOKTYPEID = B.BOOKTYPEID
+            JOIN CMS_STATUS ST ON ST.STATUSID = B.STATUSID
+            LEFT JOIN CMS_BOOKITEM BI ON BI.BOOKID = B.BOOKID
+            LEFT JOIN CMS_DAYMENU DM ON DM.DAYMENUID = BI.DAYMENUID
+            LEFT JOIN CMS_DAYSLOT DS ON DS.DAYSLOTID = DM.DAYSLOTID
+            WHERE B.CUSTOMERID = VCUSTOMERID
+              AND B.SERVICEDATE = CURDATE()
+              AND ST.STATUSCODE IN ('CRT', 'SRV')
+              AND (PCANTEENID IS NULL OR DS.CANTEENID = PCANTEENID)
+              AND (PSERVICEID IS NULL OR B.SERVICEID = PSERVICEID)
+            ORDER BY (CASE WHEN ST.STATUSCODE = 'CRT' THEN 0 ELSE 1 END) ASC, B.BOOKID DESC
+            LIMIT 1;
+        END IF;
+    END IF;
+
+    IF VBOOKID IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'No active booking found';
+    END IF;
+
+    -- Result Set 1: Booking header
+    SELECT
+        B.BOOKID,
+        B.BOOKNO,
+        BT.BOOKTYPECODE,
+        BT.BOOKTYPENAME,
+        B.CUSTOMERID,
+        C.CTYPECODE,
+        C.DISPNAME    AS CUSTOMERNAME,
+        U.LOGINID,
+        B.SERVICEID,
+        S.SERVNAME,
+        B.SERVICEDATE,
+        B.STATUSID,
+        ST.STATUSCODE AS STATUSCODE,
+        B.TOTALITEMS,
+        B.TOTALQTY,
+        B.TOTALAMOUNT,
+        B.BOOKEDON,
+        B.SERVEDBY,
+        USRV.FULLNAME AS SERVEDBYNAME,
+        B.SERVEDON,
+        B.REMARKS
+    FROM CMS_BOOKING  B
+    JOIN CMS_BOOKTYPE BT ON BT.BOOKTYPEID  = B.BOOKTYPEID
+    JOIN CMS_CUSTOMER C  ON C.CUSTOMERID   = B.CUSTOMERID
+    JOIN CMS_SERVICE  S  ON S.SERVICEID    = B.SERVICEID
+    JOIN CMS_STATUS   ST ON ST.STATUSID    = B.STATUSID
+    LEFT JOIN CMS_USER U ON U.USERID       = C.USERID
+    LEFT JOIN CMS_USER USRV ON USRV.USERID = B.SERVEDBY
+    WHERE B.BOOKID = VBOOKID;
+
+    -- Result Set 2: Booking items
+    SELECT
+        BI.BOOKITEMID,
+        BI.DAYMENUID,
+        BI.MENUITEMID,
+        MI.MENUCODE,
+        MI.SHORTNAME,
+        MI.ITEMNAME,
+        BI.QTY,
+        BI.RATE,
+        BI.AMOUNT,
+        BI.STATUSID,
+        ST.STATUSCODE AS STATUSCODE
+    FROM CMS_BOOKITEM  BI
+    JOIN CMS_MENUITEM  MI ON MI.MENUITEMID = BI.MENUITEMID
+    JOIN CMS_STATUS    ST ON ST.STATUSID   = BI.STATUSID
+    WHERE BI.BOOKID = VBOOKID
+    ORDER BY BI.BOOKITEMID;
+
+END$$
+
+
+-- ============================================================
+-- CMSGETMONTHLYEXP
+--
+-- Monthly expenditure summary for the employee dashboard.
+-- Returns one row with spend breakdown:
+--   AMOUNTSPENT   — sum of TOTALAMOUNT for served (SRV) and no-show (NOS) bookings
+--   AMOUNTPENDING — sum of TOTALAMOUNT for bookings still active (CR)
+--   TOTALCOMMITTED — AMOUNTSPENT + AMOUNTPENDING
+--   TOTALBOOKINGS  — count of all non-cancelled bookings that month
+-- ============================================================
+CREATE PROCEDURE CMSGETMONTHLYEXP (
+    IN PCUSTOMERID INT,
+    IN PYEAR       INT,
+    IN PMONTH      INT
+)
+BEGIN
+    IF PCUSTOMERID IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Customer ID is required';
+    END IF;
+    IF PYEAR IS NULL OR PMONTH IS NULL OR PMONTH < 1 OR PMONTH > 12 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Valid year and month (1-12) are required';
+    END IF;
+
+    SELECT
+        PCUSTOMERID                                                              AS CUSTOMERID,
+        PYEAR                                                                    AS EXPYEAR,
+        PMONTH                                                                   AS EXPMONTH,
+        COALESCE(SUM(CASE WHEN ST.STATUSCODE IN ('SRV','NOS') THEN B.TOTALAMOUNT ELSE 0 END), 0) AS AMOUNTSPENT,
+        COALESCE(SUM(CASE WHEN ST.STATUSCODE = 'CRT'          THEN B.TOTALAMOUNT ELSE 0 END), 0) AS AMOUNTPENDING,
+        COALESCE(SUM(CASE WHEN ST.STATUSCODE IN ('SRV','NOS','CRT') THEN B.TOTALAMOUNT ELSE 0 END), 0) AS TOTALCOMMITTED,
+        COUNT(CASE WHEN ST.STATUSCODE IN ('SRV','NOS','CRT') THEN 1 END)              AS TOTALBOOKINGS
+    FROM CMS_BOOKING B
+    JOIN CMS_STATUS ST ON ST.STATUSID = B.STATUSID
+    WHERE B.CUSTOMERID          = PCUSTOMERID
+      AND YEAR(B.SERVICEDATE)   = PYEAR
+      AND MONTH(B.SERVICEDATE)  = PMONTH;
+END$$
+
+
+-- ============================================================
+-- CMSLISTBOOKHISTORY
+--
+-- Paginated booking history for a specific employee.
+-- Returns one result set that includes pagination metadata
+-- (TOTALROWS, CURRENTPAGE, PAGESIZE, TOTALPAGES) on every row
+-- so the frontend has everything it needs in a single call.
+--
+-- All filter parameters are optional (NULL = no filter).
+-- Default: page 1, page size 20. Max page size enforced at 100.
+-- ============================================================
+CREATE PROCEDURE CMSLISTBOOKHISTORY (
+    IN PCUSTOMERID INT,
+    IN PSTARTDATE  DATE,
+    IN PENDDATE    DATE,
+    IN PSTATUSCODE VARCHAR(10),
+    IN PPAGE       INT,
+    IN PPAGESIZE   INT
+)
+BEGIN
+    DECLARE VOFFSET    INT DEFAULT 0;
+    DECLARE VTOTAL     INT DEFAULT 0;
+    DECLARE VSTATUSID  INT DEFAULT NULL;
+
+    IF PCUSTOMERID IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Customer ID is required';
+    END IF;
+
+    IF PSTATUSCODE IS NOT NULL THEN
+        SELECT STATUSID INTO VSTATUSID FROM CMS_STATUS WHERE STATUSCODE = PSTATUSCODE AND STATUSGRP = 'BOOKING';
+        IF VSTATUSID IS NULL THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid status code';
+        END IF;
+    END IF;
+
+    -- Sanitise pagination inputs
+    SET PPAGE     = COALESCE(PPAGE, 1);
+    SET PPAGESIZE = COALESCE(PPAGESIZE, 20);
+    IF PPAGE < 1       THEN SET PPAGE     = 1;  END IF;
+    IF PPAGESIZE < 1   THEN SET PPAGESIZE = 20; END IF;
+    IF PPAGESIZE > 100 THEN SET PPAGESIZE = 100; END IF;
+
+    SET VOFFSET = (PPAGE - 1) * PPAGESIZE;
+
+    -- Count matching rows first
+    SELECT COUNT(*) INTO VTOTAL
+    FROM CMS_BOOKING B
+    WHERE B.CUSTOMERID = PCUSTOMERID
+      AND (PSTARTDATE IS NULL OR B.SERVICEDATE >= PSTARTDATE)
+      AND (PENDDATE   IS NULL OR B.SERVICEDATE <= PENDDATE)
+      AND (VSTATUSID  IS NULL OR B.STATUSID     = VSTATUSID);
+
+    -- Return the requested page with pagination metadata
+    SELECT
+        B.BOOKID,
+        B.BOOKNO,
+        BT.BOOKTYPECODE,
+        BK_CAN.CANTEENID,
+        BK_CAN.CANTEENNAME,
+        B.SERVICEID,
+        S.SERVNAME,
+        B.SERVICEDATE,
+        B.STATUSID,
+        ST.STATUSCODE AS STATUSCODE,
+        B.TOTALITEMS,
+        B.TOTALQTY,
+        B.TOTALAMOUNT,
+        B.BOOKEDON,
+        B.CANCELLEDON,
+        B.SERVEDON,
+        B.NOSHOWON,
+        VTOTAL                        AS TOTALROWS,
+        PPAGE                         AS CURRENTPAGE,
+        PPAGESIZE                     AS PAGESIZE,
+        CEIL(VTOTAL / PPAGESIZE)      AS TOTALPAGES
+    FROM CMS_BOOKING  B
+    JOIN CMS_BOOKTYPE BT ON BT.BOOKTYPEID = B.BOOKTYPEID
+    JOIN CMS_SERVICE  S  ON S.SERVICEID   = B.SERVICEID
+    JOIN CMS_STATUS   ST ON ST.STATUSID   = B.STATUSID
+    LEFT JOIN (
+        SELECT BI.BOOKID, DS.CANTEENID, C.CANTEENNAME
+        FROM CMS_BOOKITEM BI
+        JOIN CMS_DAYMENU DM ON DM.DAYMENUID = BI.DAYMENUID
+        JOIN CMS_DAYSLOT DS ON DS.DAYSLOTID = DM.DAYSLOTID
+        JOIN CMS_CANTEEN C  ON C.CANTEENID  = DS.CANTEENID
+        GROUP BY BI.BOOKID, DS.CANTEENID, C.CANTEENNAME
+    ) BK_CAN ON BK_CAN.BOOKID = B.BOOKID
+    WHERE B.CUSTOMERID = PCUSTOMERID
+      AND (PSTARTDATE IS NULL OR B.SERVICEDATE >= PSTARTDATE)
+      AND (PENDDATE   IS NULL OR B.SERVICEDATE <= PENDDATE)
+      AND (VSTATUSID  IS NULL OR B.STATUSID     = VSTATUSID)
+    ORDER BY B.SERVICEDATE DESC, B.BOOKID DESC
+    LIMIT PPAGESIZE OFFSET VOFFSET;
+END$$
+
+
+-- ============================================================
+-- CMSGETKITCHENSUMMARY
+--
+-- Generates a preparation report for a given DAYSLOTID.
+-- Returns RS-1: Aggregated item totals.
+-- Returns RS-2: Separated item totals by Customer Type.
+-- ============================================================
+CREATE PROCEDURE CMSGETKITCHENSUMMARY (
+    IN PDAYSLOTID INT
+)
+BEGIN
+    -- RS-1: Aggregated
+    SELECT MI.MENUITEMID, MI.ITEMNAME, SUM(BI.QTY) AS TOTALQTY
+    FROM CMS_BOOKITEM BI
+    JOIN CMS_DAYMENU DM ON DM.DAYMENUID = BI.DAYMENUID
+    JOIN CMS_BOOKING B ON B.BOOKID = BI.BOOKID
+    JOIN CMS_STATUS B_ST ON B_ST.STATUSID = B.STATUSID
+    JOIN CMS_MENUITEM MI ON MI.MENUITEMID = BI.MENUITEMID
+    WHERE DM.DAYSLOTID = PDAYSLOTID
+      AND B_ST.STATUSCODE IN ('CRT', 'SRV', 'NOS')
+    GROUP BY MI.MENUITEMID, MI.ITEMNAME
+    ORDER BY MI.ITEMNAME;
+
+    -- RS-2: Break down by Customer Type
+    SELECT MI.MENUITEMID, MI.ITEMNAME, C.CTYPECODE, SUM(BI.QTY) AS CTYPEQTY
+    FROM CMS_BOOKITEM BI
+    JOIN CMS_DAYMENU DM ON DM.DAYMENUID = BI.DAYMENUID
+    JOIN CMS_BOOKING B ON B.BOOKID = BI.BOOKID
+    JOIN CMS_CUSTOMER C ON C.CUSTOMERID = B.CUSTOMERID
+    JOIN CMS_STATUS B_ST ON B_ST.STATUSID = B.STATUSID
+    JOIN CMS_MENUITEM MI ON MI.MENUITEMID = BI.MENUITEMID
+    WHERE DM.DAYSLOTID = PDAYSLOTID
+      AND B_ST.STATUSCODE IN ('CRT', 'SRV', 'NOS')
+    GROUP BY MI.MENUITEMID, MI.ITEMNAME, C.CTYPECODE
+    ORDER BY MI.ITEMNAME, C.CTYPECODE;
+END$$
+
+
+-- ============================================================
+-- CMSREPORTMONTHLYPAYROLL — Monthly Employee Payroll Recovery Aggregates
+-- ============================================================
+CREATE PROCEDURE CMSREPORTMONTHLYPAYROLL (
+    IN PSTARTDATE  DATE,
+    IN PENDDATE    DATE,
+    IN PCANTEENID  INT,
+    IN PCTYPECODE  VARCHAR(50),
+    IN PLOGINID    VARCHAR(50)
+)
+BEGIN
+    SELECT 
+        c.CUSTOMERID,
+        u.USERID,
+        u.LOGINID,
+        u.FULLNAME,
+        c.CTYPECODE,
+        CASE 
+            WHEN c.CTYPECODE IN ('PRM', 'PERMEMP') THEN 'Permanent Employee'
+            WHEN c.CTYPECODE IN ('OCE', 'OCEEMP') THEN 'Other Centre Employee'
+            ELSE c.CTYPECODE
+        END AS CTYPENAME,
+        COALESCE(pe.EMPCODE, oe.EMPCODE, u.LOGINID) AS EMPCODE,
+        COALESCE(pe.DEPT, oe.DEPT, 'N/A') AS DEPT,
+        COALESCE(pe.DESIG, oe.DESIG, 'N/A') AS DESIG,
+        oe.CENTERNAME,
+        COUNT(DISTINCT b.SERVICEDATE) AS DAYS_BOOKED,
+        COUNT(DISTINCT b.BOOKID) AS TOTAL_BOOKINGS,
+        SUM(CASE WHEN b.STATUSID = 32 THEN 1 ELSE 0 END) AS SERVED_BOOKINGS,
+        SUM(CASE WHEN b.STATUSID = 34 THEN 1 ELSE 0 END) AS NOSHOW_BOOKINGS,
+        SUM(CASE WHEN b.STATUSID = 30 THEN 1 ELSE 0 END) AS CREATED_BOOKINGS,
+        COALESCE(SUM(b.TOTALAMOUNT), 0) AS TOTAL_AMOUNT,
+        GROUP_CONCAT(DISTINCT can.CANTEENNAME ORDER BY can.CANTEENNAME SEPARATOR ', ') AS CANTEENS_USED
+    FROM CMS_CUSTOMER c
+    INNER JOIN CMS_USER u ON c.USERID = u.USERID
+    LEFT JOIN CMS_PERMEMP pe ON c.CUSTOMERID = pe.CUSTOMERID
+    LEFT JOIN CMS_OCEEMP oe ON c.CUSTOMERID = oe.CUSTOMERID
+    INNER JOIN (
+        SELECT 
+            b_in.BOOKID,
+            b_in.CUSTOMERID,
+            b_in.SERVICEDATE,
+            b_in.STATUSID,
+            b_in.TOTALAMOUNT,
+            MIN(ds.CANTEENID) AS CANTEENID
+        FROM CMS_BOOKING b_in
+        INNER JOIN CMS_BOOKITEM bi ON b_in.BOOKID = bi.BOOKID
+        INNER JOIN CMS_DAYMENU dm ON bi.DAYMENUID = dm.DAYMENUID
+        INNER JOIN CMS_DAYSLOT ds ON dm.DAYSLOTID = ds.DAYSLOTID
+        WHERE b_in.STATUSID != 33
+          AND b_in.SERVICEDATE >= PSTARTDATE
+          AND b_in.SERVICEDATE <= PENDDATE
+          AND (PCANTEENID IS NULL OR ds.CANTEENID = PCANTEENID)
+        GROUP BY b_in.BOOKID, b_in.CUSTOMERID, b_in.SERVICEDATE, b_in.STATUSID, b_in.TOTALAMOUNT
+    ) b ON c.CUSTOMERID = b.CUSTOMERID
+    INNER JOIN CMS_CANTEEN can ON b.CANTEENID = can.CANTEENID
+    WHERE (
+            PCTYPECODE IS NULL 
+            OR PCTYPECODE = 'ALL' 
+            OR (PCTYPECODE IN ('PRM', 'PERMEMP') AND c.CTYPECODE IN ('PRM', 'PERMEMP'))
+            OR (PCTYPECODE IN ('OCE', 'OCEEMP') AND c.CTYPECODE IN ('OCE', 'OCEEMP'))
+            OR c.CTYPECODE = PCTYPECODE
+          )
+      AND (PLOGINID IS NULL OR u.LOGINID LIKE CONCAT('%', TRIM(PLOGINID), '%'))
+    GROUP BY 
+        c.CUSTOMERID, 
+        u.USERID, 
+        u.LOGINID, 
+        u.FULLNAME, 
+        c.CTYPECODE, 
+        pe.EMPCODE, 
+        oe.EMPCODE, 
+        pe.DEPT, 
+        oe.DEPT, 
+        pe.DESIG, 
+        oe.DESIG, 
+        oe.CENTERNAME
+    ORDER BY u.LOGINID ASC;
+END$$
+
+
+-- ============================================================
+-- CMSREPORTGETEMPLOYEEPROFILE — Employee Profile for Settlement Slips
+-- ============================================================
+CREATE PROCEDURE CMSREPORTGETEMPLOYEEPROFILE (
+    IN PCUSTOMERID INT
+)
+BEGIN
+    SELECT 
+        c.CUSTOMERID,
+        u.USERID,
+        u.LOGINID,
+        u.FULLNAME,
+        c.CTYPECODE,
+        COALESCE(pe.EMPCODE, oe.EMPCODE, u.LOGINID) AS EMPCODE,
+        COALESCE(pe.DEPT, oe.DEPT, 'N/A') AS DEPT,
+        COALESCE(pe.DESIG, oe.DESIG, 'N/A') AS DESIG,
+        oe.CENTERNAME
+    FROM CMS_CUSTOMER c
+    INNER JOIN CMS_USER u ON c.USERID = u.USERID
+    LEFT JOIN CMS_PERMEMP pe ON c.CUSTOMERID = pe.CUSTOMERID
+    LEFT JOIN CMS_OCEEMP oe ON c.CUSTOMERID = oe.CUSTOMERID
+    WHERE c.CUSTOMERID = PCUSTOMERID
+    LIMIT 1;
+END$$
+
+
+-- ============================================================
+-- CMSREPORTGETEMPLOYEEBOOKINGS — Monthly Bookings for Employee Settlement
+-- ============================================================
+CREATE PROCEDURE CMSREPORTGETEMPLOYEEBOOKINGS (
+    IN PCUSTOMERID INT,
+    IN PSTARTDATE  DATE,
+    IN PENDDATE    DATE
+)
+BEGIN
+    SELECT 
+        b.BOOKID,
+        b.BOOKNO,
+        DATE_FORMAT(b.SERVICEDATE, '%Y-%m-%d') AS SERVICEDATE,
+        b.SERVICEID,
+        COALESCE(s.SERVNAME, 'Meal Service') AS SERVNAME,
+        b.STATUSID,
+        COALESCE(st.STATUSCODE, 'CRT') AS STATUSCODE,
+        COALESCE(st.STATUSNAME, 'Confirmed') AS STATUSNAME,
+        b.TOTALQTY,
+        b.TOTALAMOUNT,
+        b.BOOKEDON,
+        b.SERVEDON
+    FROM CMS_BOOKING b
+    LEFT JOIN CMS_SERVICE s ON b.SERVICEID = s.SERVICEID
+    LEFT JOIN CMS_STATUS st ON b.STATUSID = st.STATUSID
+    WHERE b.CUSTOMERID = PCUSTOMERID
+      AND b.STATUSID != 33
+      AND b.SERVICEDATE >= PSTARTDATE
+      AND b.SERVICEDATE <= PENDDATE
+    ORDER BY b.SERVICEDATE DESC, b.BOOKID DESC;
+END$$
+
+
+-- ============================================================
+-- CMSREPORTGETBOOKINGITEMS — Itemized Breakdown for Settlement Slips
+-- ============================================================
+CREATE PROCEDURE CMSREPORTGETBOOKINGITEMS (
+    IN PBOOKIDS JSON
+)
+BEGIN
+    SELECT 
+        bi.BOOKID,
+        bi.BOOKITEMID,
+        COALESCE(mi.ITEMNAME, 'Dish Item') AS ITEMNAME,
+        mi.SHORTNAME,
+        mi.MENUCODE,
+        bi.QTY,
+        bi.RATE,
+        bi.AMOUNT,
+        can.CANTEENNAME,
+        can.CANTEENCODE
+    FROM JSON_TABLE(PBOOKIDS, '$[*]' COLUMNS (BOOKID INT PATH '$')) JT
+    JOIN CMS_BOOKITEM bi ON bi.BOOKID = JT.BOOKID
+    LEFT JOIN CMS_MENUITEM mi ON bi.MENUITEMID = mi.MENUITEMID
+    LEFT JOIN CMS_DAYMENU dm ON bi.DAYMENUID = dm.DAYMENUID
+    LEFT JOIN CMS_DAYSLOT ds ON dm.DAYSLOTID = ds.DAYSLOTID
+    LEFT JOIN CMS_CANTEEN can ON ds.CANTEENID = can.CANTEENID;
+END$$
+
+DELIMITER ;

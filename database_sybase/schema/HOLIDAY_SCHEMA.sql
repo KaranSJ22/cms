@@ -1,0 +1,55 @@
+/* ============================================================
+   FILE    : HOLIDAY_SCHEMA.sql
+   ENGINE  : SAP Sybase ASE 16.0 SP04+
+   MODULE  : Canteen Holiday Calendar
+   TABLES  : CMS_HOLIDAY
+   ORDER   : Execute EIGHTEENTH (after CANTEEN_SCHEMA.sql)
+   NOTES   :
+   - HOLIDAYDATE: DATETIME normalised to midnight (DATE if ODBC
+     driver supports it). Unique index enforces one entry per date.
+   - ISRECURRING TINYINT(1) → TINYINT.
+   - HOLIDAYTYPE defaults to 'NATIONAL'; CHECK constraint added
+     to guard against invalid type codes.
+   ============================================================ */
+
+USE CMS_DB
+GO
+
+IF OBJECT_ID('dbo.CMS_HOLIDAY') IS NOT NULL
+    DROP TABLE dbo.CMS_HOLIDAY
+GO
+
+CREATE TABLE dbo.CMS_HOLIDAY (
+    HOLIDAYID   INT          IDENTITY NOT NULL,
+    HOLIDAYDATE DATETIME     NOT NULL,
+    HOLIDAYNAME VARCHAR(100) NOT NULL,
+    HOLIDAYTYPE VARCHAR(20)  NOT NULL DEFAULT 'NATIONAL',
+    ISRECURRING TINYINT      NOT NULL DEFAULT 0,
+    STATUSID    INT          NOT NULL DEFAULT 10,
+    CREATEDBY   INT          NOT NULL,
+    CREATEDAT   DATETIME     NOT NULL DEFAULT GETDATE(),
+    UPDATEDAT   DATETIME     NULL,
+    PRIMARY KEY (HOLIDAYID),
+    CONSTRAINT CK_HOL_TYPE CHECK (HOLIDAYTYPE IN ('NATIONAL','REGIONAL','RESTRICTED','CANTEEN')),
+    CONSTRAINT CK_HOL_RECURRING CHECK (ISRECURRING IN (0, 1))
+)
+LOCK DATAROWS
+GO
+
+-- One holiday entry per date
+CREATE UNIQUE INDEX UQ_HOLIDAYDATE
+    ON dbo.CMS_HOLIDAY (HOLIDAYDATE)
+GO
+
+ALTER TABLE dbo.CMS_HOLIDAY
+    ADD CONSTRAINT FK_HOL_STATUS
+    FOREIGN KEY (STATUSID) REFERENCES dbo.CMS_STATUS(STATUSID)
+GO
+
+ALTER TABLE dbo.CMS_HOLIDAY
+    ADD CONSTRAINT FK_HOL_BY
+    FOREIGN KEY (CREATEDBY) REFERENCES dbo.CMS_USER(USERID)
+GO
+
+PRINT 'HOLIDAY_SCHEMA created successfully.'
+GO

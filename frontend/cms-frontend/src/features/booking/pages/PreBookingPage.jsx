@@ -270,7 +270,7 @@ export default function PreBookingPage() {
     <div className="max-w-[1550px] mx-auto pb-28 px-4 sm:px-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-[#0F172A] mb-2">Pre-Book Meals</h1>
-        <p className="text-slate-500">Plan ahead, reserve weekly passes, or update reservations to avoid the rush.</p>
+        {/* <p className="text-slate-500">Plan ahead, reserve weekly passes, or update reservations to avoid the rush.</p> */}
       </div>
 
       {/* Mode Switcher */}
@@ -286,9 +286,6 @@ export default function PreBookingPage() {
         >
           <SparklesIcon className="w-4 h-4 text-orange-400" />
           <span>Weekly Pass (7-Day)</span>
-          <span className="px-1.5 py-0.5 bg-orange-500 text-white text-[9px] font-extrabold rounded-md uppercase">
-            Recommended
-          </span>
         </button>
         <button
           type="button"
