@@ -22,6 +22,8 @@ export default function DayPlannerCard({
   onCancelMealClick,
   onEditMealClick,
   cancellingBookingId,
+  onToggleDescription,
+  activeDescriptionId,
 }) {
   const { dateStr, dayName, displayDate, isWeekend } = dayDate;
 
@@ -85,19 +87,19 @@ export default function DayPlannerCard({
       >
         {/* Row 1: Day Name, Weekend Chip & Display Date */}
         <div className="flex items-center justify-between gap-1">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="text-[11px] font-black uppercase tracking-wider truncate leading-tight">
-              {dayName}
-            </span>
+          <span className="text-xs font-black uppercase tracking-wider leading-tight shrink-0">
+            {dayName}
+          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
             {isWeekend && (
-              <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-amber-400/20 text-amber-300 border border-amber-400/30 shrink-0">
+              <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-amber-400/20 text-amber-300 border border-amber-400/30">
                 Weekend
               </span>
             )}
+            <span className="text-[11px] font-bold opacity-85">
+              {displayDate}
+            </span>
           </div>
-          <span className="text-[11px] font-bold opacity-80 shrink-0">
-            {displayDate}
-          </span>
         </div>
 
         {/* Row 2: Status Pill or Full-Width Day Active Toggle */}
@@ -335,6 +337,8 @@ export default function DayPlannerCard({
                         dateStr={dateStr}
                         onToggleItem={onToggleItem}
                         onUpdateQty={onUpdateQty}
+                        onToggleDescription={onToggleDescription}
+                        activeDescriptionId={activeDescriptionId}
                       />
                     ))}
 
@@ -353,6 +357,8 @@ export default function DayPlannerCard({
                               dateStr={dateStr}
                               onToggleItem={onToggleItem}
                               onUpdateQty={onUpdateQty}
+                              onToggleDescription={onToggleDescription}
+                              activeDescriptionId={activeDescriptionId}
                             />
                           ))}
                         </div>

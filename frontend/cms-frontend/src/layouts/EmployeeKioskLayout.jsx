@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { Outlet } from "react-router-dom";
+import { useKioskDragScroll } from "../features/kiosk/hooks/useKioskDragScroll";
 
 export default function EmployeeKioskLayout() {
+  const scrollRef = useKioskDragScroll();
   const [sessionActive, setSessionActive] = useState(false);
   const [secondsRemaining, setSecondsRemaining] = useState(45);
   const [exitTrigger, setExitTrigger] = useState(0);
@@ -48,18 +50,18 @@ export default function EmployeeKioskLayout() {
       className="h-screen w-screen overflow-hidden flex flex-col bg-slate-950 text-slate-100 select-none font-inter"
     >
       {/* ── Minimalist Lobby Kiosk Top Bar ── */}
-      <header className="h-16 bg-slate-900 border-b border-slate-800 px-4 md:px-8 flex items-center justify-between z-30 shrink-0">
-        <div className="flex items-center gap-3">
+      <header className="h-13 bg-slate-900 border-b border-slate-800 px-4 flex items-center justify-between z-30 shrink-0">
+        <div className="flex items-center gap-2.5">
           <img
             src="/assets/logo.png"
             alt="ISRO"
-            className="h-9 w-auto object-contain"
+            className="h-7 w-auto object-contain"
           />
           <div>
-            <span className="text-xs md:text-sm font-bold text-white uppercase tracking-wider font-grotesk block">
+            <span className="text-xs md:text-sm font-bold text-white uppercase tracking-wider font-grotesk block leading-tight">
               ISRO Self-Service Kiosk
             </span>
-            <span className="text-[0.65rem] text-slate-400 font-mono">
+            <span className="text-[10px] text-slate-400 font-mono block leading-none">
               Lobby Meal Reservation & Wallet Portal
             </span>
           </div>
@@ -87,7 +89,10 @@ export default function EmployeeKioskLayout() {
       </header>
 
       {/* ── Kiosk Main Viewport ── */}
-      <main className="flex-1 min-h-0 overflow-y-auto relative flex flex-col">
+      <main
+        ref={scrollRef}
+        className="flex-1 min-h-0 overflow-y-auto relative flex flex-col touch-pan-y overscroll-y-contain custom-touch-scroll kiosk-scroll-container select-none cursor-grab active:cursor-grabbing"
+      >
         <Outlet
           context={{
             sessionActive,

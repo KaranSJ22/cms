@@ -64,11 +64,12 @@ export default function BulkMenuCreatorPage() {
   return (
     <div className="space-y-5 animate-in fade-in duration-500">
       {/* Copy from Day Modal */}
-      {showCopyModal && weekDates.length === 7 && (
+      {showCopyModal && (
         <CopyDayModal
           activeDayIndex={activeDayIndex}
           weekDates={weekDates}
           publishedDays={publishedDays}
+          daySummary={daySummary}
           onCopy={copyFromDay}
           onClose={() => setShowCopyModal(false)}
         />

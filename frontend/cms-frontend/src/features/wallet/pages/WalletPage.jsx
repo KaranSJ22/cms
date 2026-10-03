@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useAuth } from "../../../hooks/useAuth";
 import { useWalletLookup } from "../hooks/useWalletLookup";
 import { useWithdrawals } from "../hooks/useWithdrawals";
 import WithdrawalsFilterTabs from "../components/withdrawals/WithdrawalsFilterTabs";
@@ -11,6 +12,7 @@ import WalletAccountCard from "../components/topup/WalletAccountCard";
 
 export default function WalletPage() {
   const [activeTab, setActiveTab] = useState("topup"); // 'topup' | 'withdrawals'
+  const { activeCanteen } = useAuth();
 
   const {
     lookupId,
@@ -152,6 +154,7 @@ export default function WalletPage() {
                   setTopupRemarks={setTopupRemarks}
                   topupSubmitting={topupSubmitting}
                   handleTopup={handleTopup}
+                  canteenName={activeCanteen?.CANTEENNAME}
                 />
 
                 {/* Recent Transactions Ledger */}

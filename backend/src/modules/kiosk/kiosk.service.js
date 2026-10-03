@@ -1,5 +1,6 @@
 import * as KioskRepository from "./kiosk.repository.js";
 import * as bookingService from "../booking/booking.service.js";
+import * as bookingRepository from "../booking/booking.repository.js";
 import { pool } from "../../db/connection.js";
 import { NotFoundError, BadRequestError, ForbiddenError } from "../../common/errors/appError.js";
 import { getTodayIST, getTomorrowIST, toMySQLDate } from "../../utils/dateTime.js";
@@ -57,14 +58,56 @@ export const scanSelfService = async (data) => {
   const customerId = customer.CUSTOMERID;
   const user = loginInfo.USER;
 
-  // Active bookings: Today and future
-  const today = getTodayIST();
-  const rawBookings = await KioskRepository.listBookings(customerId, data.PSERVICEID, today, null);
-  
-  // Filter for active/pending bookings (CRT = 30)
-  const upcomingBookings = (rawBookings || []).filter(
-    (b) => b.STATUSCODE === "CRT" || b.STATUSID === 30
-  );
+  // Last 10 bookings for kiosk: Active upcoming bookings nearest to current date first
+  let upcomingBookings = [];
+  try {
+    upcomingBookings = await KioskRepository.getKioskCustomerBookings(customerId, 10);
+  } catch (err) {
+    // Fallback to listBookingsHistory if direct query fails
+    try {
+      const rawHistory = await KioskRepository.listBookingsHistory(
+        customerId,
+        null,
+        null,
+        null,
+        1,
+        10
+      );
+      upcomingBookings = rawHistory || [];
+    } catch {
+      const rawBookings = await KioskRepository.listBookings(
+        customerId,
+        data.PSERVICEID || null,
+        null,
+        null,
+        data.PCANTEENID || null
+      );
+      upcomingBookings = (rawBookings || []).slice(0, 10);
+    }
+  }
+
+  // Ensure active upcoming bookings are strictly sorted nearest to current date first
+  const todayStr = getTodayIST();
+  upcomingBookings.sort((a, b) => {
+    const aDate = a.SERVICEDATE ? String(a.SERVICEDATE).slice(0, 10) : "";
+    const bDate = b.SERVICEDATE ? String(b.SERVICEDATE).slice(0, 10) : "";
+    const aActive = (a.STATUSCODE === "CRT" || a.STATUSID === 30) && aDate >= todayStr;
+    const bActive = (b.STATUSCODE === "CRT" || b.STATUSID === 30) && bDate >= todayStr;
+
+    // Active upcoming bookings come first
+    if (aActive && !bActive) return -1;
+    if (!aActive && bActive) return 1;
+
+    // If both are active upcoming, nearest date to today comes first (ASC)
+    if (aActive && bActive) {
+      if (aDate !== bDate) return aDate.localeCompare(bDate);
+      return Number(a.BOOKID) - Number(b.BOOKID);
+    }
+
+    // If both are past / inactive, most recent date comes first (DESC)
+    if (aDate !== bDate) return bDate.localeCompare(aDate);
+    return Number(b.BOOKID) - Number(a.BOOKID);
+  });
 
   // Business Rule: Wallet is displayed ONLY for Contract Employees and Visitors
   const isContractOrVisitor = ["CONTEMP", "CNT", "VIS", "VISITOR"].includes(customer.CTYPECODE);
@@ -93,17 +136,53 @@ export const scanSelfService = async (data) => {
 };
 
 /**
- * Gets next day menu published for a canteen where ISKIOSK = 1
+ * Gets tomorrow's available meal services for self-service kiosk (Breakfast, Lunch, etc.)
  */
-export const getNextDayKioskMenu = async (canteenId, serviceDate) => {
+export const getNextDayServices = async (canteenId) => {
+  const tomorrow = getTomorrowIST();
   const [rows] = await pool.query(
     `SELECT 
+        DS.SERVICEID,
+        S.SERVCODE,
+        S.SERVNAME,
+        DS.STARTTIME,
+        DS.ENDTIME,
+        COUNT(DM.DAYMENUID) AS TOTALITEMS
+     FROM CMS_DAYSLOT DS
+     JOIN CMS_SERVICE S ON S.SERVICEID = DS.SERVICEID
+     JOIN CMS_DAYMENU DM ON DM.DAYSLOTID = DS.DAYSLOTID AND DM.ISKIOSK = 1 AND DM.STATUSID = 10
+     WHERE DS.CANTEENID = ?
+       AND DS.SERVDATE = ?
+       AND DS.STATUSID = 10
+     GROUP BY DS.SERVICEID, S.SERVCODE, S.SERVNAME, DS.STARTTIME, DS.ENDTIME
+     ORDER BY DS.STARTTIME ASC`,
+    [Number(canteenId), tomorrow]
+  );
+
+  return {
+    targetDate: tomorrow,
+    services: rows.map((r) => ({
+      serviceId: r.SERVICEID,
+      serviceCode: r.SERVCODE,
+      serviceName: r.SERVNAME,
+      startTime: r.STARTTIME,
+      endTime: r.ENDTIME,
+      totalItems: Number(r.TOTALITEMS || 0),
+    })),
+  };
+};
+
+/**
+ * Gets next day menu published for a canteen where ISKIOSK = 1 (optionally filtered by serviceId)
+ */
+export const getNextDayKioskMenu = async (canteenId, serviceDate, serviceId = null) => {
+  let query = `SELECT 
         DM.DAYMENUID,
         DM.DAYSLOTID,
         DS.SERVICEID,
         S.SERVNAME,
-        S.STARTTIME,
-        S.ENDTIME,
+        DS.STARTTIME,
+        DS.ENDTIME,
         DM.MENUITEMID,
         MI.MENUCODE,
         MI.SHORTNAME,
@@ -131,10 +210,16 @@ export const getNextDayKioskMenu = async (canteenId, serviceDate) => {
      WHERE DS.CANTEENID = ?
        AND DS.SERVDATE = ?
        AND DM.ISKIOSK = 1
-       AND DM.STATUSID = 10
-     ORDER BY S.STARTTIME ASC, MI.ITEMNAME ASC`,
-    [serviceDate, canteenId, serviceDate]
-  );
+       AND DM.STATUSID = 10`;
+
+  const params = [serviceDate, Number(canteenId), serviceDate];
+  if (serviceId) {
+    query += ` AND DS.SERVICEID = ?`;
+    params.push(Number(serviceId));
+  }
+  query += ` ORDER BY DS.STARTTIME ASC, MI.ITEMNAME ASC`;
+
+  const [rows] = await pool.query(query, params);
   return rows;
 };
 
@@ -161,11 +246,11 @@ export const getBookingBasic = async (bookingId) => {
 };
 
 /**
- * Gets tomorrow's kiosk-enabled menu for self-service pre-booking
+ * Gets tomorrow's kiosk-enabled menu for self-service pre-booking (optionally for a specific serviceId)
  */
-export const getNextDayMenu = async (canteenId) => {
+export const getNextDayMenu = async (canteenId, serviceId = null) => {
   const tomorrow = getTomorrowIST();
-  const items = await getNextDayKioskMenu(canteenId, tomorrow);
+  const items = await getNextDayKioskMenu(canteenId, tomorrow, serviceId);
 
   // Group items by meal service
   const serviceMap = new Map();
@@ -216,6 +301,25 @@ export const bookNextDay = async (data, kiosk = null) => {
     );
   }
 
+  // Prevent duplicate bookings: Check if customer already has an active booking for this service & date
+  const [existingBookings] = await pool.query(
+    `SELECT B.BOOKID, B.BOOKNO 
+     FROM CMS_BOOKING B
+     JOIN CMS_STATUS ST ON ST.STATUSID = B.STATUSID
+     WHERE B.CUSTOMERID = ?
+       AND B.SERVICEID = ?
+       AND B.SERVICEDATE = ?
+       AND ST.STATUSCODE <> 'CAN'
+     LIMIT 1`,
+    [data.CUSTOMERID, data.SERVICEID, serviceDate]
+  );
+
+  if (existingBookings.length > 0) {
+    throw new BadRequestError(
+      `You already have an active booking (${existingBookings[0].BOOKNO}) for this meal service on ${serviceDate}. Duplicate bookings for the same service are not allowed.`
+    );
+  }
+
   const formattedItems = (data.ITEMS || []).map((item) => ({
     DAYMENUID: item.DAYMENUID,
     MENUITEMID: item.MENUITEMID,
@@ -240,6 +344,61 @@ export const bookNextDay = async (data, kiosk = null) => {
   );
 
   return bookingResult;
+};
+
+/**
+ * Retrieves detailed booking information including items for editing at kiosk
+ */
+export const getKioskBookingDetails = async (bookingId, customerId = null) => {
+  const bookingInfo = await bookingRepository.getBooking(Number(bookingId));
+  if (!bookingInfo || !bookingInfo.HEADER) {
+    throw new NotFoundError("Booking not found");
+  }
+
+  if (customerId && Number(bookingInfo.HEADER.CUSTOMERID) !== Number(customerId)) {
+    throw new ForbiddenError("You do not have permission to view this booking");
+  }
+
+  return {
+    booking: bookingInfo.HEADER,
+    items: bookingInfo.ITEMS || [],
+  };
+};
+
+/**
+ * Updates an active booking from Self-Service Kiosk before cutoff
+ */
+export const updateKioskBooking = async (data, kiosk = null) => {
+  const bookingId = Number(data.BOOKINGID);
+  const customerId = Number(data.CUSTOMERID);
+
+  const booking = await getBookingBasic(bookingId);
+  if (!booking) {
+    throw new NotFoundError("Booking not found");
+  }
+  if (booking.CUSTOMERID !== customerId) {
+    throw new ForbiddenError("You do not have permission to modify this booking");
+  }
+  if (booking.STATUSID !== 30) {
+    throw new BadRequestError("Only active/created bookings (CRT) can be edited");
+  }
+
+  // Resolve user id from customer record
+  const customerRow = await getCustomerUser(customerId);
+  const userId = customerRow?.USERID || 1;
+
+  const formattedItems = (data.ITEMS || []).map((item) => ({
+    DAYMENUID: Number(item.DAYMENUID || item.dayMenuId),
+    QTY: Number(item.QTY || item.qty),
+  }));
+
+  const result = await bookingRepository.updateBookingItem({
+    PBOOKINGID: bookingId,
+    PITEMSJSON: formattedItems,
+    PCHANGEDBY: userId,
+  });
+
+  return result;
 };
 
 /**

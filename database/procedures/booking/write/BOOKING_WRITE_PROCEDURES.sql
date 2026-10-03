@@ -108,18 +108,17 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Service is not active';
     END IF;
 
-    IF PBOOKTYPECODE = 'PB' THEN
+    IF PBOOKTYPECODE IN ('PB', 'KS') THEN
         SELECT COUNT(*) INTO VEXISTINGPB
         FROM CMS_BOOKING B
         JOIN CMS_STATUS ST ON ST.STATUSID = B.STATUSID
         WHERE B.CUSTOMERID = PCUSTOMERID
           AND B.SERVICEID = PSERVICEID
           AND B.SERVICEDATE = PSERVICEDATE
-          AND B.BOOKTYPEID = VBOOKTYPEID
           AND ST.STATUSCODE <> 'CAN'; -- 33 = CAN
 
         IF VEXISTINGPB > 0 THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'An active pre-booking already exists for this service and date; use the update operation instead';
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'An active booking already exists for this service and date; duplicate bookings are not allowed';
         END IF;
     END IF;
 
@@ -391,7 +390,7 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Booking not found';
     END IF;
 
-    IF VBOOKTYPECODE <> 'PB' THEN
+    IF VBOOKTYPECODE NOT IN ('PB', 'KS') THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only pre-bookings can be edited';
     END IF;
 
@@ -441,8 +440,8 @@ BEGIN
        OR DS_ST.STATUSCODE <> 'ACT'
        OR MI_ST.STATUSCODE <> 'ACT'
        OR CURRENT_TIMESTAMP > DM.CANCELUNTIL
-       OR DM.ISPREBOOK <> 1
-       OR JT.QTY > DM.MAXQTY;
+       OR (VBOOKTYPECODE = 'PB' AND (DM.ISPREBOOK <> 1 OR JT.QTY > DM.MAXQTY))
+       OR (VBOOKTYPECODE = 'KS' AND DM.ISKIOSK <> 1);
 
     IF VINVALIDCOUNT > 0 THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'One or more booking items are invalid, inactive, unavailable, or past cutoff';

@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { getActiveCanteens } from "../../dayslot/api/daySlotsApi";
+import { useAuth } from "../../../hooks/useAuth";
 
 export default function CanteenDateSelector({ onContextChange }) {
+  const { customer, user, activeCanteenId } = useAuth();
   const [canteens, setCanteens] = useState([]);
   const [selectedCanteen, setSelectedCanteen] = useState("");
   
@@ -19,9 +21,11 @@ export default function CanteenDateSelector({ onContextChange }) {
         const canteenData = await getActiveCanteens();
         setCanteens(canteenData || []);
         
-        // Auto-select first canteen if none selected
+        // Auto-select preferred canteen (active, default home canteen, or first available)
         if (canteenData && canteenData.length > 0 && !selectedCanteen) {
-          setSelectedCanteen(canteenData[0].CANTEENID);
+          const preferredId = activeCanteenId || customer?.DEFAULTCANTEENID || user?.DEFAULTCANTEENID;
+          const matched = preferredId ? canteenData.find((c) => c.CANTEENID === Number(preferredId)) : null;
+          setSelectedCanteen(matched ? matched.CANTEENID : canteenData[0].CANTEENID);
         }
       } catch (err) {
         console.error("Failed to load canteens", err);
@@ -29,7 +33,7 @@ export default function CanteenDateSelector({ onContextChange }) {
     }
     loadCanteens();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [activeCanteenId, customer?.DEFAULTCANTEENID, user?.DEFAULTCANTEENID]);
 
   // Trigger parent update whenever context changes
   useEffect(() => {

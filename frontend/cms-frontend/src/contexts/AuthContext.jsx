@@ -19,6 +19,11 @@ function getInitialAuthState() {
         const defaultC = cRoles.find(r => r.ISDEFAULT) || cRoles[0]
         activeCanteenId = defaultC.CANTEENID
         localStorage.setItem('cms_active_canteen_id', String(defaultC.CANTEENID))
+      } else if (savedCanteenId) {
+        activeCanteenId = Number(savedCanteenId)
+      } else if (parsed.CUSTOMER?.DEFAULTCANTEENID || parsed.USER?.DEFAULTCANTEENID) {
+        activeCanteenId = Number(parsed.CUSTOMER?.DEFAULTCANTEENID || parsed.USER?.DEFAULTCANTEENID)
+        localStorage.setItem('cms_active_canteen_id', String(activeCanteenId))
       }
 
       return {
@@ -116,6 +121,12 @@ export function AuthProvider({ children }) {
       const defaultC = cRoles.find(r => r.ISDEFAULT) || cRoles[0]
       setActiveCanteenIdState(defaultC.CANTEENID)
       localStorage.setItem('cms_active_canteen_id', String(defaultC.CANTEENID))
+    } else {
+      const defaultCanteen = customerData?.DEFAULTCANTEENID || userData?.DEFAULTCANTEENID
+      if (defaultCanteen) {
+        setActiveCanteenIdState(Number(defaultCanteen))
+        localStorage.setItem('cms_active_canteen_id', String(defaultCanteen))
+      }
     }
   }
 
@@ -153,7 +164,7 @@ export function AuthProvider({ children }) {
       user, 
       customer, 
       token, 
-      activeCanteenId: activeCanteenId || activeCanteen?.CANTEENID || null,
+      activeCanteenId: activeCanteenId || activeCanteen?.CANTEENID || customer?.DEFAULTCANTEENID || user?.DEFAULTCANTEENID || null,
       activeCanteen,
       setActiveCanteenId,
       loading, 

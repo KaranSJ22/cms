@@ -55,23 +55,35 @@ export default function DayConfigRow({
       <div className="flex flex-wrap gap-1.5 items-center">
         {flags.map(({ key, label }) => {
           const active = config[key] === 1;
+          const isBase = key === 'ISBASE';
           return (
             <button
               key={key}
               type="button"
               disabled={isReadOnly}
               onClick={() => onUpdateFlag(item.MENUITEMID, key, active ? 0 : 1)}
+              title={
+                isBase
+                  ? active
+                    ? 'Base dish for this service (click to unset)'
+                    : 'Click to designate as Base dish'
+                  : undefined
+              }
               className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border transition-all ${
                 isReadOnly
                   ? active
                     ? 'bg-slate-300 text-slate-800 border-slate-300 cursor-default'
                     : 'bg-transparent text-slate-400 border-slate-200 cursor-default'
                   : active
-                  ? 'bg-blue-600 text-white border-blue-600 cursor-pointer'
+                  ? isBase
+                    ? 'bg-amber-500 text-white border-amber-600 shadow-2xs font-bold cursor-pointer'
+                    : 'bg-blue-600 text-white border-blue-600 cursor-pointer'
+                  : isBase
+                  ? 'bg-white text-amber-700 border-amber-200 hover:border-amber-400 hover:bg-amber-50/50 cursor-pointer'
                   : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300 cursor-pointer'
               }`}
             >
-              {label}
+              {isBase && active ? '★ Base' : label}
             </button>
           );
         })}

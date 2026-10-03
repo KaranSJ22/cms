@@ -9,13 +9,21 @@ export default function RechargeForm({
   setTopupRemarks,
   topupSubmitting,
   handleTopup,
+  canteenName,
 }) {
   return (
     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-base font-black text-slate-900 font-grotesk">
-          Process Cash Top-Up
-        </h2>
+        <div>
+          <h2 className="text-base font-black text-slate-900 font-grotesk">
+            Process Cash Top-Up
+          </h2>
+          {canteenName && (
+            <p className="text-[0.68rem] text-slate-500 font-medium mt-0.5">
+              Depositing at: <span className="font-bold text-slate-700">{canteenName}</span>
+            </p>
+          )}
+        </div>
         <span className="px-2 py-0.5 rounded text-[0.65rem] font-bold bg-amber-50 text-amber-700 border border-amber-200">
           Min ₹100.00
         </span>

@@ -255,7 +255,7 @@ export const bulkCreateMenuForWeek = async ({
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             dMenuNo, daySlotId, item.MENUITEMID,
-            item.ISBASE ?? 1, item.ISSPECIAL ?? 0,
+            item.ISBASE ?? 0, item.ISSPECIAL ?? 0,
             item.ISPREBOOK ?? 1, item.ISKIOSK ?? 1,
             bookUntilVal, cancelUntilVal,
             item.AVAILQTY ?? null, item.MAXQTY ?? 1,

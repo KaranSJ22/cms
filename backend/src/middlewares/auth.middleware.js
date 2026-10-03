@@ -46,6 +46,7 @@ export const authenticate = (req, res, next) => {
       LOGINID: decoded.LOGINID,
       CUSTOMERID: decoded.CUSTOMERID || null,
       CTYPECODE: decoded.CTYPECODE || null,
+      DEFAULTCANTEENID: decoded.DEFAULTCANTEENID ? Number(decoded.DEFAULTCANTEENID) : null,
       SYSTEMROLES: asStringArray(decoded.SYSTEMROLES),
       CANTEENROLES: asCanteenRoles(decoded.CANTEENROLES),
     };

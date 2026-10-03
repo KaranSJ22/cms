@@ -9,7 +9,7 @@
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Authenticated user details
+ *         description: Authenticated user details including DEFAULTCANTEENID for applicable customer types
  *       401:
  *         description: Authentication token missing or invalid
  */

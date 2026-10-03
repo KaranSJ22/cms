@@ -24,8 +24,8 @@ const getReqCustomerType = (req) => {
   return req.user?.CTYPECODE ?? req.user?.CUSTOMER?.CTYPECODE ?? null;
 };
 
-// Canteen Staff (CNTMGR / CNTAST) or System Admin
-const canteenManagerOnly = [authorizeAnyCanteenRole("CNTMGR", "CNTAST")];
+// Canteen Staff (CNTMGR)
+const canteenManagerOnly = [authorizeAnyCanteenRole("CNTMGR")];
 
 // Guard: Canteen Manager OR the owning customer (Contract Employee / Visitor)
 const walletOwnerOrManager = [

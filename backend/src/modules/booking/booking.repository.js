@@ -25,15 +25,31 @@ export const listBookings = async ({
   PSTARTDATE = null,
   PENDDATE = null,
   PSTATUS = null,
+  PCANTEENID = null,
 }) => {
-  const [resultSets] = await pool.query("CALL CMSLISTBOOK(?, ?, ?, ?, ?)", [
-    PCUSTOMERID,
-    PSERVICEID,
-    PSTARTDATE,
-    PENDDATE,
-    PSTATUS,
-  ]);
-  return resultSets[0] || [];
+  try {
+    const [resultSets] = await pool.query("CALL CMSLISTBOOK(?, ?, ?, ?, ?, ?)", [
+      PCUSTOMERID,
+      PSERVICEID,
+      PSTARTDATE,
+      PENDDATE,
+      PSTATUS,
+      PCANTEENID,
+    ]);
+    return resultSets[0] || [];
+  } catch (err) {
+    if (err.code === "ER_SP_WRONG_NO_OF_ARGS" || err.errno === 1318) {
+      const [resultSets] = await pool.query("CALL CMSLISTBOOK(?, ?, ?, ?, ?)", [
+        PCUSTOMERID,
+        PSERVICEID,
+        PSTARTDATE,
+        PENDDATE,
+        PSTATUS,
+      ]);
+      return resultSets[0] || [];
+    }
+    throw err;
+  }
 };
 
 export const listBookingHistory = async ({

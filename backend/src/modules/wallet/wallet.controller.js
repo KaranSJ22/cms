@@ -1,5 +1,6 @@
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { sendSuccess } from "../../utils/apiResponse.js";
+import { BadRequestError } from "../../common/errors/appError.js";
 import { WalletService } from "./wallet.service.js";
 
 export class WalletController {
@@ -23,12 +24,35 @@ export class WalletController {
   });
 
   static topupWallet = asyncHandler(async (req, res) => {
-    const { customerId, amount, paymentMethod, refNo, remarks } = req.validated.body;
+    let { customerId, amount, paymentMethod, refNo, remarks, canteenId } = req.validated.body;
     const createdBy = req.user.USERID;
 
-    const data = await WalletService.topUpWallet(customerId, amount, paymentMethod, refNo, createdBy, remarks);
+    // Resolve canteenId from body, kiosk context, header, or user's canteen manager role
+    if (!canteenId) {
+      canteenId =
+        req.kiosk?.canteenId ||
+        (req.headers["x-canteen-id"] ? Number(req.headers["x-canteen-id"]) : null) ||
+        req.user?.CANTEENROLES?.find((r) => r.ROLECODE === "CNTMGR")?.CANTEENID ||
+        req.user?.CANTEENROLES?.[0]?.CANTEENID;
+    }
+
+    if (!canteenId) {
+      throw new BadRequestError("canteenId is required for wallet top-up");
+    }
+
+    const data = await WalletService.topUpWallet(
+      customerId,
+      amount,
+      paymentMethod,
+      refNo,
+      createdBy,
+      remarks,
+      Number(canteenId),
+      req.user
+    );
     return sendSuccess(res, data, "Wallet top-up successful");
   });
+
 
   static fetchWallet = asyncHandler(async (req, res) => {
     const { customerId } = req.validated.params;

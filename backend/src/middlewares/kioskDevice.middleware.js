@@ -10,7 +10,10 @@ const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
  * Extracts normalized client IP address using Express's trusted proxy configuration
  */
 export function getClientIp(req) {
-  let ip = req.ip || req.socket?.remoteAddress || "";
+  const forwarded = req.headers["x-forwarded-for"];
+  let ip = forwarded
+    ? String(forwarded).split(",")[0].trim()
+    : req.ip || req.socket?.remoteAddress || "";
   if (ip.startsWith("::ffff:")) {
     ip = ip.substring(7);
   }

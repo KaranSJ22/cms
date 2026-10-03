@@ -40,7 +40,7 @@ export function defaultCancelUntil(servDate, startTime) {
 export function makeDefaultItemConfig(menuItemId, servDate, startTime) {
   return {
     MENUITEMID: menuItemId,
-    ISBASE: 1,
+    ISBASE: 0,
     ISSPECIAL: 0,
     ISPREBOOK: 1,
     ISKIOSK: 1,
@@ -71,7 +71,7 @@ export function useBulkMenuPlanner() {
   // Context form
   const [canteenId, setCanteenId] = useState('');
   const [serviceId, setServiceId] = useState('');
-  const [startDate, setStartDate] = useState('');
+  const [startDate, setStartDate] = useState(() => getMonday());
   const [startTime, setStartTime] = useState('08:00');
   const [endTime, setEndTime] = useState('10:00');
 
@@ -233,7 +233,7 @@ export function useBulkMenuPlanner() {
                   workspaceItems.forEach((item) => {
                     dayMap[item.MENUITEMID] = {
                       MENUITEMID: item.MENUITEMID,
-                      ISBASE: item.ISBASE ?? 1,
+                      ISBASE: item.ISBASE ?? 0,
                       ISSPECIAL: item.ISSPECIAL ?? 0,
                       ISPREBOOK: item.ISPREBOOK ?? 1,
                       ISKIOSK: item.ISKIOSK ?? 1,
@@ -335,13 +335,24 @@ export function useBulkMenuPlanner() {
       if (publishedDays[activeDayIndex]) return;
       setWeekItems((prev) => {
         const copy = [...prev];
-        copy[activeDayIndex] = {
-          ...copy[activeDayIndex],
-          [menuItemId]: {
-            ...copy[activeDayIndex][menuItemId],
+        const dayMap = { ...copy[activeDayIndex] };
+
+        if (field === 'ISBASE' && value === 1) {
+          // Setting this dish as the Base item clears ISBASE on other dishes for this day slot
+          Object.keys(dayMap).forEach((id) => {
+            dayMap[id] = {
+              ...dayMap[id],
+              ISBASE: Number(id) === Number(menuItemId) ? 1 : 0,
+            };
+          });
+        } else {
+          dayMap[menuItemId] = {
+            ...dayMap[menuItemId],
             [field]: value,
-          },
-        };
+          };
+        }
+
+        copy[activeDayIndex] = dayMap;
         return copy;
       });
     },
@@ -367,15 +378,20 @@ export function useBulkMenuPlanner() {
   );
 
   const applyToAllDays = () => {
-    const source = weekItems[activeDayIndex];
-    setWeekItems((prev) =>
-      prev.map((currDay, i) => {
+    let appliedDaysCount = 0;
+    const sourceCount = Object.keys(weekItems[activeDayIndex] || {}).length;
+    if (sourceCount === 0) return;
+
+    setWeekItems((prev) => {
+      const source = prev[activeDayIndex] || {};
+      return prev.map((currDay, i) => {
         if (i === activeDayIndex) return currDay;
         if (publishedDays[i]) return currDay;
-        const targetDate = weekDates[i];
+        const targetDate = weekDates[i] || addDays(startDate || getMonday(), i);
         if (targetDate && holidayMap[targetDate] && !holidayOverrides[i]) {
           return currDay;
         }
+        appliedDaysCount++;
         const dayStart = startTime;
         const cloned = {};
         Object.entries(source).forEach(([menuItemId, cfg]) => {
@@ -392,19 +408,32 @@ export function useBulkMenuPlanner() {
           };
         });
         return cloned;
-      })
+      });
+    });
+    setSuccessToast(
+      `Applied ${DAY_FULL[activeDayIndex]}'s ${sourceCount} item${sourceCount > 1 ? 's' : ''} to remaining open days.`
     );
   };
 
   const copyFromDay = (sourceIndex) => {
     if (publishedDays[activeDayIndex]) return;
-    const source = weekItems[sourceIndex];
-    const targetDate = weekDates[activeDayIndex];
+    const source = weekItems[sourceIndex] || {};
+    const sourceCount = Object.keys(source).length;
+    if (sourceCount === 0) {
+      setShowCopyModal(false);
+      return;
+    }
+
+    const targetDate =
+      weekDates[activeDayIndex] ||
+      addDays(startDate || getMonday(), activeDayIndex);
     const dayStart = startTime;
+
     setWeekItems((prev) => {
+      const freshSource = prev[sourceIndex] || {};
       const copy = [...prev];
       const cloned = {};
-      Object.entries(source).forEach(([menuItemId, cfg]) => {
+      Object.entries(freshSource).forEach(([menuItemId, cfg]) => {
         cloned[menuItemId] = {
           ...cfg,
           BOOKUNTIL:
@@ -420,6 +449,10 @@ export function useBulkMenuPlanner() {
       copy[activeDayIndex] = cloned;
       return copy;
     });
+
+    setSuccessToast(
+      `Copied ${sourceCount} dish${sourceCount > 1 ? 'es' : ''} from ${DAY_FULL[sourceIndex]} to ${DAY_FULL[activeDayIndex]}.`
+    );
     setShowCopyModal(false);
   };
 
@@ -475,7 +508,7 @@ export function useBulkMenuPlanner() {
     reset();
     setCanteenId('');
     setServiceId('');
-    setStartDate('');
+    setStartDate(getMonday());
     setStartTime('08:00');
     setEndTime('10:00');
     setWeekItems(buildEmptyWeek());

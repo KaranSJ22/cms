@@ -37,14 +37,39 @@ export const requestLogger = pinoHttp({
     const clientIp = forwarded
       ? forwarded.split(",")[0].trim()
       : req.socket?.remoteAddress || req.ip || null;
+
+    const loginId =
+      req.user?.LOGINID ||
+      req.body?.PIDENTIFIER ||
+      req.body?.PLOGINID ||
+      req.body?.LOGINID ||
+      req.query?.loginId ||
+      req.params?.identifier ||
+      null;
+
+    const customerId =
+      req.user?.CUSTOMERID ||
+      req.body?.CUSTOMERID ||
+      req.body?.PCUSTOMERID ||
+      req.query?.customerId ||
+      req.params?.customerId ||
+      null;
+
+    const userId =
+      req.user?.USERID ||
+      req.body?.USERID ||
+      req.body?.PUSERID ||
+      null;
+
     return {
       CORRELATION_ID: req.id,
       CLIENT_IP: clientIp,
       KIOSK_ID: req.kiosk?.kioskId || null,
       DEVICE_CODE: req.kiosk?.deviceCode || null,
       CANTEEN_ID: req.kiosk?.canteenId || req.query?.canteenId || null,
-      USERID: req.user?.USERID || null,
-      LOGINID: req.user?.LOGINID || null,
+      USERID: userId,
+      CUSTOMER_ID: customerId,
+      LOGINID: loginId,
     };
   },
 });

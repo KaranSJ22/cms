@@ -23,6 +23,29 @@ body {
 ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
 
+/* Touch-friendly scrolling for Kiosk & 7-inch Touchscreens */
+.custom-touch-scroll,
+.overflow-y-auto,
+.overflow-y-scroll,
+main {
+  touch-action: pan-y !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior-y: contain;
+}
+
+/* Hide scrollbar completely on Kiosk screens for clean native-app feel */
+.kiosk-scroll-container,
+.custom-touch-scroll {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.kiosk-scroll-container::-webkit-scrollbar,
+.custom-touch-scroll::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
 /* Standard Date & Time inputs: ensure calendar/clock icon is always visible */
 input[type="date"],
 input[type="time"],

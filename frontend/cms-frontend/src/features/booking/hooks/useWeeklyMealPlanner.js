@@ -21,12 +21,19 @@ const DAY_NAMES = [
 export const MAX_WEEKS_AHEAD = 26;
 
 export function useWeeklyMealPlanner() {
-  const { customer, user } = useAuth();
+  const { customer, user, activeCanteenId } = useAuth();
 
   const [canteens, setCanteens] = useState([]);
   const [selectedCanteen, setSelectedCanteen] = useState('');
   const [services, setServices] = useState([]);
   const [selectedServiceId, setSelectedServiceId] = useState(null);
+  const [activeItemDescription, setActiveItemDescription] = useState(null);
+
+  const handleToggleDescription = useCallback((item) => {
+    setActiveItemDescription((prev) =>
+      prev?.DAYMENUID === item?.DAYMENUID ? null : item
+    );
+  }, []);
 
   // Default to Next Week if today is Thursday, Friday, or weekend
   const defaultWeekOffset = useMemo(() => {
@@ -94,7 +101,9 @@ export function useWeeklyMealPlanner() {
         ]);
         setCanteens(canteenData || []);
         if (canteenData && canteenData.length > 0) {
-          setSelectedCanteen((prev) => prev || canteenData[0].CANTEENID);
+          const preferredId = activeCanteenId || customer?.DEFAULTCANTEENID || user?.DEFAULTCANTEENID;
+          const matched = preferredId ? canteenData.find((c) => c.CANTEENID === Number(preferredId)) : null;
+          setSelectedCanteen((prev) => prev || (matched ? matched.CANTEENID : canteenData[0].CANTEENID));
         }
         const activeSrvs = (serviceData || []).filter(
           (s) => s.STATUSCODE === 'ACT' || !s.STATUSCODE
@@ -109,6 +118,21 @@ export function useWeeklyMealPlanner() {
     }
     loadInitialData();
   }, []);
+
+  // 1a. Ensure default canteen is selected reactively if not explicitly chosen by user
+  useEffect(() => {
+    if (canteens && canteens.length > 0) {
+      const preferredId = activeCanteenId || customer?.DEFAULTCANTEENID || user?.DEFAULTCANTEENID;
+      if (preferredId) {
+        const matched = canteens.find((c) => c.CANTEENID === Number(preferredId));
+        if (matched && (!selectedCanteen || !canteens.some((c) => c.CANTEENID === Number(selectedCanteen)))) {
+          setSelectedCanteen(matched.CANTEENID);
+        }
+      } else if (!selectedCanteen) {
+        setSelectedCanteen(canteens[0].CANTEENID);
+      }
+    }
+  }, [activeCanteenId, customer?.DEFAULTCANTEENID, user?.DEFAULTCANTEENID, canteens, selectedCanteen]);
 
   // 1b. Derive list of available services dynamically from services API and menuData
   const availableServices = useMemo(() => {
@@ -608,6 +632,9 @@ export function useWeeklyMealPlanner() {
     fetchMenu,
     handleConfirmWeeklyBooking,
     isPayrollDeducted,
+    activeItemDescription,
+    setActiveItemDescription,
+    handleToggleDescription,
   };
 }
 

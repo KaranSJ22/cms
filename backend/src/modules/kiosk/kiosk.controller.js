@@ -29,13 +29,28 @@ export const scanSelfServiceController = async (req, res, next) => {
 };
 
 /**
- * Tomorrow's kiosk-enabled menu
+ * Tomorrow's available meal services (Breakfast, Lunch, etc.)
+ */
+export const getNextDayServicesController = async (req, res, next) => {
+  try {
+    const effectiveCanteenId =
+      req.query.canteenId || req.kiosk?.canteenId || 1;
+    const result = await KioskService.getNextDayServices(effectiveCanteenId);
+    return sendSuccess(res, result, "Available meal services retrieved successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Tomorrow's kiosk-enabled menu (optionally filtered by serviceId)
  */
 export const getNextDayMenuController = async (req, res, next) => {
   try {
     const effectiveCanteenId =
       req.query.canteenId || req.kiosk?.canteenId || 1;
-    const result = await KioskService.getNextDayMenu(effectiveCanteenId);
+    const serviceId = req.query.serviceId ? Number(req.query.serviceId) : null;
+    const result = await KioskService.getNextDayMenu(effectiveCanteenId, serviceId);
     return sendSuccess(res, result, "Next day menu retrieved successfully");
   } catch (error) {
     next(error);
@@ -50,6 +65,33 @@ export const bookNextDayController = async (req, res, next) => {
     const payload = req.validated?.body || req.body;
     const result = await KioskService.bookNextDay(payload, req.kiosk);
     return sendSuccess(res, result, "Meal booked successfully for tomorrow", 201);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get booking details and items for editing at kiosk
+ */
+export const getKioskBookingDetailsController = async (req, res, next) => {
+  try {
+    const bookingId = Number(req.params.bookingId);
+    const customerId = req.query.customerId ? Number(req.query.customerId) : null;
+    const result = await KioskService.getKioskBookingDetails(bookingId, customerId);
+    return sendSuccess(res, result, "Booking details retrieved successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Update active booking from self-service kiosk before cutoff
+ */
+export const updateKioskBookingController = async (req, res, next) => {
+  try {
+    const payload = req.validated?.body || req.body;
+    const result = await KioskService.updateKioskBooking(payload, req.kiosk);
+    return sendSuccess(res, result, "Booking updated successfully");
   } catch (error) {
     next(error);
   }

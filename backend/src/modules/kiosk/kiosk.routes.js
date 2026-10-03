@@ -31,6 +31,14 @@ router.post(
   KioskController.scanSelfServiceController
 );
 
+// Fetch tomorrow's available meal services
+router.get(
+  "/self-service/services",
+  detectKiosk,
+  validate(validation.kioskNextDayServicesSchema),
+  KioskController.getNextDayServicesController
+);
+
 // Fetch tomorrow's published kiosk menu
 router.get(
   "/self-service/menu",
@@ -45,6 +53,21 @@ router.post(
   detectKiosk,
   validate(validation.kioskBookSchema),
   KioskController.bookNextDayController
+);
+
+// Get booking details and items for editing
+router.get(
+  "/self-service/booking/:bookingId",
+  detectKiosk,
+  KioskController.getKioskBookingDetailsController
+);
+
+// Update active booking from kiosk
+router.post(
+  "/self-service/update-booking",
+  detectKiosk,
+  validate(validation.kioskUpdateBookingSchema),
+  KioskController.updateKioskBookingController
 );
 
 // Cancel active booking from kiosk

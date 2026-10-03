@@ -8,9 +8,15 @@ export const kioskApi = {
 
   // Employee Self-Service Operations
   scanSelfService: (data) => axios.post(`${BASE_PATH}/self-service/scan`, data),
-  getNextDayMenu: (canteenId) =>
-    axios.get(`${BASE_PATH}/self-service/menu`, { params: { canteenId } }),
+  getNextDayServices: (canteenId) =>
+    axios.get(`${BASE_PATH}/self-service/services`, { params: { canteenId } }),
+  getNextDayMenu: (canteenId, serviceId) =>
+    axios.get(`${BASE_PATH}/self-service/menu`, { params: { canteenId, serviceId } }),
   bookNextDay: (data) => axios.post(`${BASE_PATH}/self-service/book`, data),
+  getBookingDetails: (bookingId, customerId) =>
+    axios.get(`${BASE_PATH}/self-service/booking/${bookingId}`, { params: { customerId } }),
+  updateBooking: (data) =>
+    axios.post(`${BASE_PATH}/self-service/update-booking`, data),
   cancelBooking: (data) => axios.post(`${BASE_PATH}/self-service/cancel`, data),
 
   // Staff Counter Operations

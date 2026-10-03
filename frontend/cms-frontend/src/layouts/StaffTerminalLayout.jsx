@@ -2,8 +2,10 @@ import { useState, useEffect } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { ArrowRightStartOnRectangleIcon, ComputerDesktopIcon } from "@heroicons/react/24/outline";
+import { useKioskDragScroll } from "../features/kiosk/hooks/useKioskDragScroll";
 
 export default function StaffTerminalLayout() {
+  const scrollRef = useKioskDragScroll();
   const { user, activeCanteen, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -91,7 +93,10 @@ export default function StaffTerminalLayout() {
       </header>
 
       {/* ── Main Viewport (No Sidebar) ── */}
-      <main className="flex-1 min-h-0 overflow-y-auto relative flex flex-col">
+      <main
+        ref={scrollRef}
+        className="flex-1 min-h-0 overflow-y-auto relative flex flex-col touch-pan-y overscroll-y-contain custom-touch-scroll kiosk-scroll-container select-none cursor-grab active:cursor-grabbing"
+      >
         <Outlet />
       </main>
     </div>

@@ -37,7 +37,11 @@ app.use(
       // Allow if origin is explicitly in allowed list or is any Vercel domain
       if (
         allowedOrigins.includes(origin) ||
-        /\.vercel\.app$/.test(origin)
+        /\.vercel\.app$/.test(origin) ||
+        (env.NODE_ENV === "development" &&
+          /^https?:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(
+            origin
+          ))
       ) {
         return callback(null, true);
       }
@@ -50,8 +54,10 @@ app.use(
       "Authorization",
       "X-Correlation-ID",
       "X-Request-ID",
+      "X-Canteen-ID",
+      "x-canteen-id",
     ],
-    exposedHeaders: ["X-Correlation-ID"],
+    exposedHeaders: ["X-Correlation-ID", "X-Canteen-ID"],
   })
 );
 

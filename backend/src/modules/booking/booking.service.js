@@ -1177,13 +1177,57 @@ export const serveBookingItem = async (bookingId, itemId, data, userId) => {
   });
 };
 
+// export const resolveBooking = async (identifier, canteenId = null, serviceId = null, kioskId = null, daySlotId = null) => {
+//   const booking = await bookingRepository.resolveBookingByIdentifier(identifier, canteenId, serviceId, kioskId, daySlotId);
+//   if (!booking) {
+//     throw new NotFoundError("No active booking found for this identifier");
+//   }
+//   return booking;
+// };
 export const resolveBooking = async (identifier, canteenId = null, serviceId = null, kioskId = null, daySlotId = null) => {
-  const booking = await bookingRepository.resolveBookingByIdentifier(identifier, canteenId, serviceId, kioskId, daySlotId);
-  if (!booking) {
+  let targetIdentifier = (identifier || "").trim();
+
+  // If identifier is a 10-digit phone number, resolve to CUSTOMERID first (Supports visitors without RFID)
+  const isPhoneNumber = /^[6-9]\d{9}$/.test(targetIdentifier);
+  if (isPhoneNumber) {
+    const [[matchedCustomer]] = await pool.query(
+      `SELECT c.CUSTOMERID 
+       FROM CMS_CUSTOMER c
+       LEFT JOIN CMS_VISITOR v ON v.CUSTOMERID = c.CUSTOMERID
+       LEFT JOIN CMS_USER u ON u.USERID = c.USERID
+       WHERE (v.VISMOBILE = ? OR u.MOBILENO = ?)
+         AND c.STATUSID = 10
+       LIMIT 1`,
+      [targetIdentifier, targetIdentifier]
+    );
+
+    if (matchedCustomer?.CUSTOMERID) {
+      targetIdentifier = String(matchedCustomer.CUSTOMERID);
+    }
+  }
+
+  let booking = null;
+  try {
+    booking = await bookingRepository.resolveBookingByIdentifier(
+      targetIdentifier,
+      canteenId,
+      serviceId,
+      kioskId,
+      daySlotId
+    );
+  } catch (err) {
+    // If original resolution failed with an employee error, give a friendly message
+    throw new NotFoundError(`No active booking found today for identifier: ${identifier}`);
+  }
+
+  if (!booking || !booking.HEADER) {
     throw new NotFoundError("No active booking found for this identifier");
   }
+
   return booking;
 };
+
+
 
 export const createWeeklyBookingBatch = async (data, user) => {
   const customerId = user?.CUSTOMERID || data.PCUSTOMERID;

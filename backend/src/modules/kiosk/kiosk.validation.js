@@ -8,9 +8,16 @@ export const scanSelfServiceSchema = z.object({
   }),
 });
 
+export const kioskNextDayServicesSchema = z.object({
+  query: z.object({
+    canteenId: z.coerce.number().int().positive().optional(),
+  }),
+});
+
 export const kioskNextDayMenuSchema = z.object({
   query: z.object({
     canteenId: z.coerce.number().int().positive().optional(),
+    serviceId: z.coerce.number().int().positive().optional(),
   }),
 });
 
@@ -28,7 +35,22 @@ export const kioskBookSchema = z.object({
     ).min(1, "At least one menu item is required"),
   }),
 });
-
+export const kioskUpdateBookingSchema = z.object({
+  body: z.object({
+    BOOKINGID: z.coerce.number().int().positive("Booking ID is required"),
+    CUSTOMERID: z.coerce.number().int().positive("Customer ID is required"),
+    ITEMS: z.array(
+      z.object({
+        DAYMENUID: z.coerce.number().int().positive().optional(),
+        dayMenuId: z.coerce.number().int().positive().optional(),
+        MENUITEMID: z.coerce.number().int().positive().optional(),
+        menuItemId: z.coerce.number().int().positive().optional(),
+        QTY: z.coerce.number().int().min(1).max(10).optional(),
+        qty: z.coerce.number().int().min(1).max(10).optional(),
+      })
+    ).min(1, "At least one item is required"),
+  }),
+});
 export const kioskCancelSchema = z.object({
   body: z.object({
     BOOKINGID: z.coerce.number().int().positive("Booking ID is required"),

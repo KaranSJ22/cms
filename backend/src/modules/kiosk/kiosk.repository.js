@@ -95,15 +95,125 @@ export const getLoginInfo = async (identifier) => {
 /**
  * Lists bookings for a customer within date ranges
  */
-export const listBookings = async (customerId, serviceId, startDate, endDate) => {
-  const [resultSets] = await pool.query("CALL CMSLISTBOOK(?, ?, ?, ?, ?)", [
-    customerId,
-    serviceId || null,
-    startDate || null,
-    endDate || null,
-    null, // status
-  ]);
-  return resultSets[0] || [];
+export const listBookings = async (
+  customerId,
+  serviceId = null,
+  startDate = null,
+  endDate = null,
+  canteenId = null
+) => {
+  try {
+    const [resultSets] = await pool.query("CALL CMSLISTBOOK(?, ?, ?, ?, ?, ?)", [
+      customerId,
+      serviceId || null,
+      startDate || null,
+      endDate || null,
+      null, // status
+      canteenId || null,
+    ]);
+    return resultSets[0] || [];
+  } catch (err) {
+    if (err.code === "ER_SP_WRONG_NO_OF_ARGS" || err.errno === 1318) {
+      const [resultSets] = await pool.query("CALL CMSLISTBOOK(?, ?, ?, ?, ?)", [
+        customerId,
+        serviceId || null,
+        startDate || null,
+        endDate || null,
+        null, // status
+      ]);
+      return resultSets[0] || [];
+    }
+    throw err;
+  }
+};
+
+/**
+ * Lists paginated booking history using CMSLISTBOOKHISTORY
+ */
+export const listBookingsHistory = async (
+  customerId,
+  startDate = null,
+  endDate = null,
+  statusCode = null,
+  page = 1,
+  pageSize = 10
+) => {
+  try {
+    const [resultSets] = await pool.query(
+      "CALL CMSLISTBOOKHISTORY(?, ?, ?, ?, ?, ?)",
+      [
+        customerId,
+        startDate || null,
+        endDate || null,
+        statusCode || null,
+        Number(page) || 1,
+        Number(pageSize) || 10,
+      ]
+    );
+    return resultSets[0] || [];
+  } catch (err) {
+    if (err.code === "ER_SP_WRONG_NO_OF_ARGS" || err.errno === 1318) {
+      const [resultSets] = await pool.query(
+        "CALL CMSLISTBOOKHISTORY(?, ?, ?, ?)",
+        [customerId, startDate || null, endDate || null, statusCode || null]
+      );
+      return (resultSets[0] || []).slice(0, Number(pageSize) || 10);
+    }
+    throw err;
+  }
+};
+
+/**
+ * Retrieves the last N bookings for self-service kiosk with active upcoming bookings nearest to current date first
+ */
+export const getKioskCustomerBookings = async (customerId, limit = 10) => {
+  const [rows] = await pool.query(
+    `SELECT
+        B.BOOKID,
+        B.BOOKNO,
+        BT.BOOKTYPECODE,
+        BK_CAN.CANTEENID,
+        BK_CAN.CANTEENNAME,
+        B.SERVICEID,
+        S.SERVNAME,
+        B.SERVICEDATE,
+        B.STATUSID,
+        ST.STATUSCODE AS STATUSCODE,
+        B.TOTALITEMS,
+        B.TOTALQTY,
+        B.TOTALAMOUNT,
+        B.BOOKEDON,
+        B.CANCELLEDON,
+        B.SERVEDON,
+        B.NOSHOWON
+    FROM CMS_BOOKING B
+    JOIN CMS_BOOKTYPE BT ON BT.BOOKTYPEID = B.BOOKTYPEID
+    JOIN CMS_SERVICE S ON S.SERVICEID = B.SERVICEID
+    JOIN CMS_STATUS ST ON ST.STATUSID = B.STATUSID
+    LEFT JOIN (
+        SELECT BI.BOOKID, DS.CANTEENID, C.CANTEENNAME
+        FROM CMS_BOOKITEM BI
+        JOIN CMS_DAYMENU DM ON DM.DAYMENUID = BI.DAYMENUID
+        JOIN CMS_DAYSLOT DS ON DS.DAYSLOTID = DM.DAYSLOTID
+        JOIN CMS_CANTEEN C ON C.CANTEENID = DS.CANTEENID
+        GROUP BY BI.BOOKID, DS.CANTEENID, C.CANTEENNAME
+    ) BK_CAN ON BK_CAN.BOOKID = B.BOOKID
+    WHERE B.CUSTOMERID = ?
+    ORDER BY 
+        CASE 
+            WHEN ST.STATUSCODE = 'CRT' AND B.SERVICEDATE >= CURDATE() THEN 0 
+            ELSE 1 
+        END ASC,
+        CASE 
+            WHEN ST.STATUSCODE = 'CRT' AND B.SERVICEDATE >= CURDATE() THEN B.SERVICEDATE 
+            ELSE NULL 
+        END ASC,
+        B.SERVICEDATE DESC,
+        B.BOOKID DESC
+    LIMIT ?`,
+    [Number(customerId), Number(limit)]
+  );
+  return rows || [];
 };
 
 /**

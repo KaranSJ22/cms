@@ -124,11 +124,13 @@ export default function DayConfigTable({
           {!isPublished && (
             <button
               type="button"
+              id="btn-copy-from-day"
               onClick={onCopyFromDayClick}
+              title="Copy dish items from another day"
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors cursor-pointer"
             >
               <svg
-                className="w-3.5 h-3.5"
+                className="w-3.5 h-3.5 text-slate-500"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"

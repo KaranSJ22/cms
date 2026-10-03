@@ -18,11 +18,14 @@ const generateLoginResponse = (user, CONSUMERROLES, CANTEENROLES) => {
     ISDEFAULT: Number(role.ISDEFAULT) === 1,
   }));
 
+  const defaultCanteenId = user.DEFAULTCANTEENID ? Number(user.DEFAULTCANTEENID) : null;
+
   const tokenPayload = {
     USERID: user.USERID,
     LOGINID: user.LOGINID, 
     CUSTOMERID: user.CUSTOMERID || null,
     CTYPECODE: user.CTYPECODE || null,
+    DEFAULTCANTEENID: defaultCanteenId,
     SYSTEMROLES: systemRoles,
     CANTEENROLES: canteenRoles,
   };
@@ -45,6 +48,7 @@ const generateLoginResponse = (user, CONSUMERROLES, CANTEENROLES) => {
       EMAIL: user.EMAIL,
       MOBILENO: user.MOBILENO,
       AUTHPROV: user.AUTHPROV,
+      DEFAULTCANTEENID: defaultCanteenId,
       SYSTEMROLES: systemRoles,
       CANTEENROLES: canteenRoles,
     },
@@ -54,6 +58,7 @@ const generateLoginResponse = (user, CONSUMERROLES, CANTEENROLES) => {
         CUSTOMERID: user.CUSTOMERID,
         CTYPECODE: user.CTYPECODE,
         DISPNAME: user.DISPNAME,
+        DEFAULTCANTEENID: defaultCanteenId,
       }
       : null,
   };

@@ -12,6 +12,7 @@ import OrderReviewDrawer from './weekly/OrderReviewDrawer';
 import CheckoutBottomBar from './weekly/CheckoutBottomBar';
 import CancelBookingModal from './weekly/CancelBookingModal';
 import EditBookingModal from './weekly/EditBookingModal';
+import TopLeftItemDescriptionCard from './weekly/TopLeftItemDescriptionCard';
 
 /**
  * 7-Day Weekly Meal Planner Workspace
@@ -57,10 +58,14 @@ export default function WeeklyMealPlanner() {
     fetchMenu,
     handleConfirmWeeklyBooking,
     isPayrollDeducted,
+    activeItemDescription,
+    setActiveItemDescription,
+    handleToggleDescription,
   } = useWeeklyMealPlanner();
 
   return (
     <div className="space-y-6">
+
       {/* ── TOP CONTROL TOOLBAR ─────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl shadow-xs border border-slate-200 p-5">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -94,7 +99,13 @@ export default function WeeklyMealPlanner() {
           </div>
         </div>
       </div>
-
+      {/* ── TOP-LEFT ITEM DESCRIPTION CARD (CLICK-TO-SHOW) ─────────────── */}
+      {activeItemDescription && (
+        <TopLeftItemDescriptionCard
+          item={activeItemDescription}
+          onClose={() => setActiveItemDescription(null)}
+        />
+      )}
       {/* Success Notification Banner */}
       {submitSuccess && (
         <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl flex items-start gap-3 shadow-xs animate-in fade-in">
@@ -128,7 +139,7 @@ export default function WeeklyMealPlanner() {
       )}
 
       {/* ── 100% FULL-WIDTH 7-DAY WORKSPACE GRID ───────────────────────── */}
-      <div className="w-full">
+      <div className="w-full overflow-x-auto pb-4">
         {loading ? (
           <div className="bg-white rounded-2xl border border-slate-200 p-16 flex flex-col items-center justify-center text-slate-500">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mb-3" />
@@ -147,7 +158,7 @@ export default function WeeklyMealPlanner() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3.5 lg:min-w-[1020px] xl:min-w-0">
             {weekDates.map((dayDate) => (
               <DayPlannerCard
                 key={dayDate.dateStr}
@@ -162,6 +173,8 @@ export default function WeeklyMealPlanner() {
                 onCancelMealClick={setCancelModalData}
                 onEditMealClick={setEditModalData}
                 cancellingBookingId={cancellingBookingId}
+                onToggleDescription={handleToggleDescription}
+                activeDescriptionId={activeItemDescription?.DAYMENUID}
               />
             ))}
           </div>

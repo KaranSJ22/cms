@@ -240,6 +240,7 @@ export const findCustomerByIdentifier = async (identifier) => {
         st.STATUSCODE,
         ce.CONTCODE,
         ce.VENDORNAME,
+        ce.DEFAULTCANTEENID,
         pe.EMPCODE,
         pe.DEPT,
         pe.DESIG,

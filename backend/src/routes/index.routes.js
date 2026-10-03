@@ -20,6 +20,7 @@ import holidayRoutes from "../modules/holidays/holiday.routes.js";
 import reportRoutes from "../modules/reports/report.routes.js";
 import kioskRoutes from "../modules/kiosk/kiosk.routes.js";
 import officialRoutes from "../modules/officialrequest/official.routes.js";
+import walkinRoutes from "../modules/walkin/walkin.routes.js";
 
 const router = express.Router();
 
@@ -39,6 +40,7 @@ router.use("/holidays", holidayRoutes);
 router.use("/reports", reportRoutes);
 router.use("/kiosk", kioskRoutes);
 router.use("/official-requests", officialRoutes);
+router.use("/walkin", walkinRoutes);
 
 router.get("/me", authenticate, (req, res) => {
   return res.status(200).json({

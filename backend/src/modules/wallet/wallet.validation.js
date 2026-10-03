@@ -18,6 +18,7 @@ export const walletValidation = {
   topupWallet: z.object({
     body: z.object({
       customerId: z.number().int().positive(),
+      canteenId: z.coerce.number().int().positive().optional(),
       amount: z.coerce.number().min(100, "Top-up amount must be at least 100"),
       paymentMethod: z.literal("CASH").default("CASH"),
       refNo: z.string().max(80).optional().nullable(),

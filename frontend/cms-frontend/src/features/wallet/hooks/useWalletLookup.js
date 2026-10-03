@@ -7,12 +7,14 @@ import {
   topupWallet,
 } from "../api/walletApi";
 import { formatINR } from "../../../utils/formatters";
+import { useAuth } from "../../../hooks/useAuth";
 
 /**
  * Custom hook to manage customer/employee wallet lookup,
  * initial wallet account creation, cash top-ups, and transaction history.
  */
 export function useWalletLookup() {
+  const { activeCanteenId, user } = useAuth();
   const [lookupId, setLookupId] = useState("");
   const [lookupResult, setLookupResult] = useState(null);
   const [customerWallet, setCustomerWallet] = useState(null);
@@ -153,9 +155,17 @@ export function useWalletLookup() {
     setTopupSuccess(null);
     setLookupError(null);
 
+    const resolvedCanteenId =
+      Number(activeCanteenId) ||
+      Number(user?.CANTEENROLES?.find((r) => r.ROLECODE === "CNTMGR")?.CANTEENID) ||
+      Number(user?.CANTEENROLES?.[0]?.CANTEENID) ||
+      Number(localStorage.getItem("cms_active_canteen_id")) ||
+      1;
+
     try {
       await topupWallet({
         customerId: customerWallet.CUSTOMERID,
+        canteenId: resolvedCanteenId,
         amount: amountNum,
         paymentMethod: "CASH",
         refNo: topupRefNo.trim() || undefined,
@@ -214,5 +224,6 @@ export function useWalletLookup() {
     handleLookupWallet,
     handleCreateWallet,
     handleTopup,
+    activeCanteenId,
   };
 }

@@ -3,14 +3,12 @@ import CanteenDateSelector from "../components/CanteenDateSelector";
 import PreBookItemCard from "../components/PreBookItemCard";
 import CartSummaryPanel from "../components/CartSummaryPanel";
 import WeeklyMealPlanner from "../components/WeeklyMealPlanner";
+import EditBookingModal from "../components/weekly/EditBookingModal";
 import { usePublishedMenu } from "../hooks/usePublishedMenu";
 import { useBookingCart } from "../hooks/useBookingCart";
 import {
   createBooking,
   getActiveBooking,
-  addBookingItem,
-  updateBookingItemQty,
-  cancelBookingItem,
   cancelBooking,
 } from "../api/bookingApi";
 import { useAuth } from "../../../hooks/useAuth";
@@ -31,8 +29,8 @@ export default function PreBookingPage() {
   const [currentContext, setCurrentContext] = useState(null);
   const [activeBookings, setActiveBookings] = useState({});
   const [activeBookingsLoading, setActiveBookingsLoading] = useState(false);
-  const [itemActionLoading, setItemActionLoading] = useState({});
   const [cancellingBookingId, setCancellingBookingId] = useState(null);
+  const [editModalData, setEditModalData] = useState(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
@@ -110,84 +108,26 @@ export default function PreBookingPage() {
   }, [currentContext, menuItems, loadActiveBookings]);
 
   // ---------------------------------------------------------------------------
-  // INCREMENTAL EDIT FLOW HANDLERS (for services with active bookings)
+  // BULK EDIT MODAL HANDLER (minimal API calls per booking)
   // ---------------------------------------------------------------------------
 
-  const handleIncrementalAdd = async (serviceId, item) => {
+  const handleOpenEditModal = (serviceId) => {
     const booking = activeBookings[serviceId];
     if (!booking) return;
 
-    const bookingId = booking.HEADER.BOOKID;
-    const activeItem = (booking.ITEMS || []).find(
-      (bi) => bi.DAYMENUID === item.DAYMENUID && (bi.STATUSCODE === "CRT" || bi.STATUSID === 30)
-    );
+    const group =
+      menuItems[serviceId] ||
+      Object.values(menuItems).find((g) => g.SERVICEID === serviceId);
 
-    setItemActionLoading((prev) => ({ ...prev, [item.DAYMENUID]: true }));
-    setSubmitError("");
-    setSuccessMessage("");
-
-    try {
-      if (activeItem) {
-        // Increment quantity
-        const newQty = activeItem.QTY + 1;
-        await updateBookingItemQty(bookingId, activeItem.BOOKITEMID, { QTY: newQty });
-        setSuccessMessage(`Updated quantity for ${item.ITEMNAME} (Qty: ${newQty})`);
-      } else {
-        // Add new item
-        await addBookingItem(bookingId, {
-          DAYMENUID: item.DAYMENUID,
-          QTY: 1,
-        });
-        setSuccessMessage(`Added ${item.ITEMNAME} to Booking #${booking.HEADER.BOOKNO}`);
-      }
-
-      // Refresh active bookings for this context
-      await loadActiveBookings(currentContext.canteenId, currentContext.serviceDate, menuItems);
-    } catch (err) {
-      console.error("Incremental add error:", err);
-      setSubmitError(err?.response?.data?.MESSAGE || "Failed to update booking item.");
-    } finally {
-      setItemActionLoading((prev) => ({ ...prev, [item.DAYMENUID]: false }));
-    }
-  };
-
-  const handleIncrementalRemove = async (serviceId, item) => {
-    const booking = activeBookings[serviceId];
-    if (!booking) return;
-
-    const bookingId = booking.HEADER.BOOKID;
-    const activeItem = (booking.ITEMS || []).find(
-      (bi) => bi.DAYMENUID === item.DAYMENUID && (bi.STATUSCODE === "CRT" || bi.STATUSID === 30)
-    );
-
-    if (!activeItem) return;
-
-    setItemActionLoading((prev) => ({ ...prev, [item.DAYMENUID]: true }));
-    setSubmitError("");
-    setSuccessMessage("");
-
-    try {
-      if (activeItem.QTY > 1) {
-        // Decrease quantity
-        const newQty = activeItem.QTY - 1;
-        await updateBookingItemQty(bookingId, activeItem.BOOKITEMID, { QTY: newQty });
-        setSuccessMessage(`Updated quantity for ${item.ITEMNAME} (Qty: ${newQty})`);
-      } else {
-        // Remove / Soft-cancel item
-        await cancelBookingItem(bookingId, activeItem.BOOKITEMID, {
-          PCANCELREASON: "Removed by customer in edit mode",
-        });
-        setSuccessMessage(`Removed ${item.ITEMNAME} from Booking #${booking.HEADER.BOOKNO}`);
-      }
-
-      // Refresh active bookings for this context
-      await loadActiveBookings(currentContext.canteenId, currentContext.serviceDate, menuItems);
-    } catch (err) {
-      console.error("Incremental remove error:", err);
-      setSubmitError(err?.response?.data?.MESSAGE || "Failed to modify booking item.");
-    } finally {
-      setItemActionLoading((prev) => ({ ...prev, [item.DAYMENUID]: false }));
-    }
+    setEditModalData({
+      bookingId: booking.HEADER.BOOKID,
+      bookingNo: booking.HEADER.BOOKNO,
+      serviceId,
+      servName: booking.HEADER.SERVNAME,
+      dateStr: currentContext.serviceDate,
+      displayDate: currentContext.serviceDate,
+      availableItems: group?.items || [],
+    });
   };
 
   const handleCancelWholeBooking = async (serviceId) => {
@@ -378,10 +318,14 @@ export default function PreBookingPage() {
                         </div>
                       ) : (
                         <div className="flex flex-wrap items-center gap-3">
-                          <div className="flex items-center gap-2 bg-amber-50 text-amber-900 px-3.5 py-1.5 rounded-xl border border-amber-200 text-xs font-bold shadow-xs">
-                            <PencilSquareIcon className="w-4 h-4 text-amber-600" />
-                            <span>Editing Active Booking #{activeBooking.HEADER.BOOKNO}</span>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditModal(group.SERVICEID)}
+                            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 px-3.5 py-1.5 rounded-xl border border-amber-400 text-xs font-bold shadow-xs cursor-pointer active:scale-95 transition-all"
+                          >
+                            <PencilSquareIcon className="w-4 h-4" />
+                            <span>Edit Dishes (Booking #{activeBooking.HEADER.BOOKNO})</span>
+                          </button>
                           <button
                             onClick={() => handleCancelWholeBooking(group.SERVICEID)}
                             disabled={cancellingBookingId === activeBooking.HEADER.BOOKID}
@@ -415,11 +359,11 @@ export default function PreBookingPage() {
                               key={item.DAYMENUID}
                               item={item}
                               cartItem={cartItemRepresentation}
-                              onAdd={() => handleIncrementalAdd(group.SERVICEID, item)}
-                              onRemove={() => handleIncrementalRemove(group.SERVICEID, item)}
+                              onAdd={() => handleOpenEditModal(group.SERVICEID)}
+                              onRemove={() => handleOpenEditModal(group.SERVICEID)}
                               isEditMode={!isReadOnly}
                               isReadOnly={isReadOnly}
-                              isLoading={itemActionLoading[item.DAYMENUID] || false}
+                              isLoading={false}
                             />
                           );
                         } else {
@@ -464,6 +408,18 @@ export default function PreBookingPage() {
       </div>
         </>
       )}
+
+      {/* Edit Pre-Booked Meal Modal (Bulk Edit per Booking) */}
+      <EditBookingModal
+        isOpen={Boolean(editModalData)}
+        onClose={() => setEditModalData(null)}
+        modalData={editModalData}
+        onBookingUpdated={() => {
+          if (currentContext?.canteenId && currentContext?.serviceDate) {
+            loadActiveBookings(currentContext.canteenId, currentContext.serviceDate, menuItems);
+          }
+        }}
+      />
     </div>
   );
 }
