@@ -316,11 +316,21 @@ def main():
             time.sleep(0.08)
 
         except Exception as ex:
-            print(f"[WARN] Error in read cycle: {ex}. Re-initializing RC522...")
+            print(f"[WARN] Error in read cycle: {ex}. Re-opening SPI interface...")
             try:
+                if spi:
+                    try:
+                        spi.close()
+                    except Exception:
+                        pass
+                spi = spidev.SpiDev()
+                spi.open(SPI_BUS, SPI_DEVICE)
+                spi.max_speed_hz = SPI_SPEED
+                spi.mode = 0
                 rc522_init()
-            except Exception:
-                pass
+                print("[OK] SPI interface re-initialized successfully")
+            except Exception as reinit_err:
+                print(f"[ERROR] SPI re-initialization failed: {reinit_err}")
             time.sleep(1.0)
 
     # Clean Exit

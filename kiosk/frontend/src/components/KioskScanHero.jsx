@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const KEYBOARD_ROWS = [
   ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-"],
@@ -16,6 +16,55 @@ export default function KioskScanHero({
   handleScan,
 }) {
   const [manualMode, setManualMode] = useState(false);
+  const bufferRef = useRef("");
+  const lastKeyTimeRef = useRef(0);
+
+  // Global RFID keystroke capture buffer and touch-refocus trap
+  useEffect(() => {
+    if (manualMode) return;
+
+    // Immediately focus on mount / mode switch
+    inputRef?.current?.focus();
+
+    const handleWindowKeyDown = (e) => {
+      if (manualMode) return;
+
+      const now = Date.now();
+      const isRapid = now - lastKeyTimeRef.current < 80;
+      lastKeyTimeRef.current = now;
+
+      if (e.key === "Enter") {
+        const buffered = bufferRef.current.trim();
+        bufferRef.current = "";
+        if (buffered.length >= 4) {
+          e.preventDefault();
+          handleScan(null, buffered.toUpperCase());
+        }
+      } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        // Accumulate rapid burst characters (alphanumeric and colon)
+        if (isRapid || bufferRef.current.length === 0) {
+          bufferRef.current += e.key;
+        } else {
+          bufferRef.current = e.key;
+        }
+      }
+    };
+
+    const handlePointerDown = () => {
+      // Re-focus input if touch happened outside
+      if (!manualMode && inputRef?.current && document.activeElement !== inputRef.current) {
+        setTimeout(() => inputRef.current?.focus(), 50);
+      }
+    };
+
+    window.addEventListener("keydown", handleWindowKeyDown);
+    window.addEventListener("pointerdown", handlePointerDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleWindowKeyDown);
+      window.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [manualMode, handleScan, inputRef]);
 
   const handleCharClick = (char) => {
     setIdentifier((prev) => (prev + char).toUpperCase());

@@ -62,6 +62,25 @@ export const getCustomerActiveBookings = (customerId, targetDate) => {
 };
 
 /**
+ * Retrieves recent declined/rejected bookings for a customer to alert them on card tap
+ */
+export const getRecentDeclinedBookings = (customerId, targetDate) => {
+  const db = getDb();
+  return db
+    .prepare(
+      `SELECT ob.offline_uuid, ob.token_no, ob.customer_id, ob.service_id, ob.serv_date,
+              ob.items_json, ob.total_amount, ob.sync_error, ob.created_at,
+              cds.service_name, cds.start_time, cds.end_time
+       FROM outbox_bookings ob
+       LEFT JOIN cached_day_slots cds ON cds.service_id = ob.service_id AND cds.serv_date = ob.serv_date
+       WHERE ob.customer_id = ? AND ob.serv_date >= ? AND ob.sync_status = 'REJECTED'
+       ORDER BY ob.created_at DESC
+       LIMIT 3`
+    )
+    .all(customerId, targetDate);
+};
+
+/**
  * Gets tomorrow's available meal service slots
  */
 export const getNextDaySlots = (servDate) => {

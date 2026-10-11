@@ -53,6 +53,22 @@ export const scanEmployee = (identifier) => {
     })),
   ];
 
+  // Retrieve recent declined bookings to alert employee
+  const declinedRows = KioskRepository.getRecentDeclinedBookings(
+    customer.customer_id,
+    today
+  );
+
+  const declinedBookings = declinedRows.map((r) => ({
+    bookId: r.offline_uuid,
+    serviceId: r.service_id,
+    serviceName: r.service_name || "Meal Service",
+    serviceDate: r.serv_date,
+    totalAmount: r.total_amount,
+    syncError: r.sync_error || "Declined by central server",
+    createdAt: r.created_at,
+  }));
+
   return {
     customer: {
       customerId: customer.customer_id,
@@ -65,6 +81,7 @@ export const scanEmployee = (identifier) => {
     },
     wallet,
     upcomingBookings,
+    declinedBookings,
   };
 };
 

@@ -80,7 +80,7 @@ export default function App() {
   // ------------------------------------------------------------
   // 2. Active Employee Session View
   // ------------------------------------------------------------
-  const { customer, wallet, upcomingBookings = [] } = employeeData;
+  const { customer, wallet, upcomingBookings = [], declinedBookings = [] } = employeeData;
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col justify-between">
@@ -123,13 +123,18 @@ export default function App() {
           <button
             type="button"
             onClick={() => setActiveTab("bookings")}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
               activeTab === "bookings"
                 ? "bg-slate-800 text-white shadow-md border border-slate-700"
                 : "text-slate-400 hover:text-white"
             }`}
           >
-            My Bookings ({upcomingBookings.length})
+            <span>My Bookings ({upcomingBookings.length})</span>
+            {declinedBookings.length > 0 && (
+              <span className="w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center animate-pulse">
+                !
+              </span>
+            )}
           </button>
 
           <button
@@ -164,6 +169,7 @@ export default function App() {
           {activeTab === "bookings" && (
             <TodayBookingsTab
               upcomingBookings={upcomingBookings}
+              declinedBookings={declinedBookings}
               handleCancelBooking={handleCancelBooking}
               cancellingId={cancellingId}
             />

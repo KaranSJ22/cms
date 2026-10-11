@@ -79,6 +79,7 @@ export const pullBootstrapPackage = async () => {
       wallets: data.wallets || [],
       daySlots: data.daySlots || [],
       menuItems: data.menuItems || [],
+      activeBookings: data.activeBookings || [],
     });
 
     const newLastModified =
@@ -91,6 +92,7 @@ export const pullBootstrapPackage = async () => {
         wallets: data.wallets?.length || 0,
         slots: data.daySlots?.length || 0,
         dishes: data.menuItems?.length || 0,
+        activeBookings: data.activeBookings?.length || 0,
       },
       "Downlink bootstrap sync completed successfully"
     );

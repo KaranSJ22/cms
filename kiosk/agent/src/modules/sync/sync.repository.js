@@ -49,17 +49,42 @@ export const applyItemizedResults = (results = []) => {
        WHERE offline_uuid = ?`
     );
 
+    const findBooking = db.prepare(
+      "SELECT customer_id, service_id, serv_date, total_amount, payment_method FROM outbox_bookings WHERE offline_uuid = ?"
+    );
+
+    const deleteActiveGuard = db.prepare(
+      "DELETE FROM cached_active_prebookings WHERE customer_id = ? AND service_id = ? AND serv_date = ?"
+    );
+
+    const refundWallet = db.prepare(
+      "UPDATE cached_wallets SET balance = balance + ? WHERE customer_id = ?"
+    );
+
     const now = new Date().toISOString();
 
     for (const item of results) {
       if (item.status === OUTBOX_STATUS.SYNCED) {
         updateSuccess.run(OUTBOX_STATUS.SYNCED, now, item.offlineUuid);
       } else if (item.status === OUTBOX_STATUS.REJECTED) {
-        updateRejected.run(
-          OUTBOX_STATUS.REJECTED,
-          item.message || item.errorCode || "Rejected by central server",
-          item.offlineUuid
-        );
+        const errorMsg = item.message || item.errorCode || "Rejected by central server";
+        updateRejected.run(OUTBOX_STATUS.REJECTED, errorMsg, item.offlineUuid);
+
+        // Retrieve booking details to clean up locks & local wallet state
+        const booking = findBooking.get(item.offlineUuid);
+        if (booking) {
+          // 1. Release active slot lock so user can try again
+          deleteActiveGuard.run(booking.customer_id, booking.service_id, booking.serv_date);
+
+          // 2. If rejected for reasons other than insufficient balance, refund local wallet view
+          const isInsufficientBal =
+            (item.errorCode || "").toUpperCase() === "INSUFFICIENT_WALLET_BALANCE" ||
+            errorMsg.toLowerCase().includes("insufficient");
+
+          if (booking.payment_method === "WALLET" && booking.total_amount > 0 && !isInsufficientBal) {
+            refundWallet.run(booking.total_amount, booking.customer_id);
+          }
+        }
       }
     }
   });
@@ -101,6 +126,7 @@ export const upsertDownlinkSnapshot = ({
   wallets = [],
   daySlots = [],
   menuItems = [],
+  activeBookings = [],
 }) => {
   return withTransaction((db) => {
     // 1. Customers
@@ -194,6 +220,24 @@ export const upsertDownlinkSnapshot = ({
         m.BOOKUNTIL || m.bookUntil || null
       );
     }
+
+    // 5. Active Pre-bookings from central (Web Portal & Other Kiosks)
+    const insertActive = db.prepare(
+      `INSERT INTO cached_active_prebookings (customer_id, service_id, serv_date, book_id, token_no)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(customer_id, service_id, serv_date) DO UPDATE SET
+         book_id = excluded.book_id,
+         token_no = excluded.token_no`
+    );
+    for (const b of activeBookings) {
+      insertActive.run(
+        b.CUSTOMERID || b.customerId,
+        b.SERVICEID || b.serviceId,
+        b.SERVDATE || b.servDate,
+        b.BOOKID || b.bookId || null,
+        b.TOKENNO || b.tokenNo || b.BOOKNO || b.bookNo || ""
+      );
+    }
   });
 };
 
@@ -225,5 +269,22 @@ export const setMeta = (key, value) => {
     ).run(key, String(value));
   } catch {
     // If system_meta table not initialized yet, silently ignore
+  }
+};
+
+/**
+ * Purges synced and cancelled outbox bookings older than the retention window
+ */
+export const purgeHistoricalOutbox = (retentionDays = 7) => {
+  const db = getDb();
+  try {
+    const result = db.prepare(
+      `DELETE FROM outbox_bookings
+       WHERE sync_status IN ('SYNCED', 'CANCELLED')
+         AND created_at < datetime('now', '-' || ? || ' days')`
+    ).run(retentionDays);
+    return result.changes;
+  } catch {
+    return 0;
   }
 };

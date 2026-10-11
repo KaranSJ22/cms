@@ -1,0 +1,2 @@
+# CMS Kiosk - Grant input group access to /dev/uinput for virtual keyboard injection
+KERNEL=="uinput", MODE="0660", GROUP="input"

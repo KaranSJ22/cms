@@ -83,6 +83,18 @@ export function useSelfServiceKiosk() {
     const cleanId = (overrideId !== null ? overrideId : identifier).trim();
     if (!cleanId || loading) return;
 
+    // Check if new badge is scanned while another session is open
+    const isCurrentCustomer =
+      employeeData?.customer &&
+      (cleanId.toUpperCase() === String(employeeData.customer.customerId).toUpperCase() ||
+        cleanId.toUpperCase() === String(employeeData.customer.loginId || "").toUpperCase() ||
+        cleanId.toUpperCase() === String(employeeData.customer.rfidUid || "").toUpperCase());
+
+    // If session is active and a different badge is tapped during an in-flight booking, guard against disruption
+    if (sessionActive && !isCurrentCustomer && bookingLoading) {
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -92,6 +104,13 @@ export function useSelfServiceKiosk() {
       setEmployeeData(payload);
       setSessionActive(true);
       setIdentifier("");
+      // Clear in-progress selections if switching to a new employee
+      if (!isCurrentCustomer) {
+        setSelectedItems({});
+        setSelectedService(null);
+        setServiceMenu(null);
+        setConfirmation(null);
+      }
       setActiveTab("bookings");
       loadNextDayServices();
     } catch (err) {

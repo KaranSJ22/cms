@@ -1,9 +1,11 @@
 import * as SyncService from "./sync.service.js";
+import { purgeHistoricalOutbox } from "./sync.repository.js";
 import { logger } from "../../utils/logger.js";
 import { env } from "../../config/env.js";
 
 let uplinkTimeoutHandle = null;
 let downlinkTimeoutHandle = null;
+let purgeIntervalHandle = null;
 let isUplinkRunning = false;
 let isDownlinkRunning = false;
 let isStopped = false;
@@ -11,6 +13,7 @@ let isStopped = false;
 const UPLINK_BASE_MS = env.SYNC_INTERVAL_MS || 15000;
 const DOWNLINK_BASE_MS = 300 * 1000; // 5 minutes
 const MAX_DOWNLINK_BACKOFF_MS = 600 * 1000; // 10 minutes max backoff
+const PURGE_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 let currentDownlinkIntervalMs = DOWNLINK_BASE_MS;
 
 /**
@@ -109,6 +112,21 @@ export const startSyncWorker = () => {
 
   // 3. Start recursive downlink runner (first scheduled run after 5 minutes)
   downlinkTimeoutHandle = setTimeout(runDownlinkCycle, DOWNLINK_BASE_MS);
+
+  // 4. Run historical outbox retention cleanup (prune synced > 7 days) and schedule daily
+  const runPurge = () => {
+    try {
+      const pruned = purgeHistoricalOutbox(7);
+      if (pruned > 0) {
+        logger.info({ pruned }, "Pruned historical synced/cancelled outbox records");
+      }
+    } catch (err) {
+      logger.warn({ err: err.message }, "Outbox historical purge caught error");
+    }
+  };
+
+  runPurge();
+  purgeIntervalHandle = setInterval(runPurge, PURGE_INTERVAL_MS);
 };
 
 export const stopSyncWorker = () => {
@@ -120,6 +138,10 @@ export const stopSyncWorker = () => {
   if (downlinkTimeoutHandle) {
     clearTimeout(downlinkTimeoutHandle);
     downlinkTimeoutHandle = null;
+  }
+  if (purgeIntervalHandle) {
+    clearInterval(purgeIntervalHandle);
+    purgeIntervalHandle = null;
   }
   logger.info("Background sync workers stopped");
 };

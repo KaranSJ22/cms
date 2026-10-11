@@ -216,8 +216,8 @@ BEGIN
         LIMIT 1;
     END IF;
 
-    -- 1. Direct formatted Booking Number (PB... / BK...)
-    IF UPPER(VIDENTIFIER) LIKE 'PB%' OR UPPER(VIDENTIFIER) LIKE 'BK%' THEN
+    -- 1. Direct formatted Booking Number (PB... / BK... / KS...)
+    IF UPPER(VIDENTIFIER) LIKE 'PB%' OR UPPER(VIDENTIFIER) LIKE 'BK%' OR UPPER(VIDENTIFIER) LIKE 'KS%' THEN
         SELECT B.BOOKID INTO VBOOKID
         FROM CMS_BOOKING B
         WHERE B.BOOKNO = VIDENTIFIER

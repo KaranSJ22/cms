@@ -636,6 +636,20 @@ export const getBootstrapPackage = async (canteenId = 1, since = null) => {
        AND DS.SERVDATE > ?
        AND DM.ISKIOSK = 1
        AND DM.STATUSID = 10`,
+  // 5. Active upcoming pre-bookings for tomorrow onwards at this canteen
+  const [activeBookings] = await pool.query(
+    `SELECT 
+        B.CUSTOMERID AS customerId,
+        B.SERVICEID AS serviceId,
+        DATE_FORMAT(B.SERVICEDATE, '%Y-%m-%d') AS servDate,
+        B.BOOKID AS bookId,
+        B.BOOKNO AS tokenNo
+     FROM CMS_BOOKING B
+     JOIN CMS_STATUS ST ON ST.STATUSID = B.STATUSID
+     JOIN CMS_DAYSLOT DS ON DS.SERVICEID = B.SERVICEID AND DS.SERVDATE = B.SERVICEDATE AND DS.CANTEENID = ?
+     WHERE B.SERVICEDATE > ?
+       AND ST.STATUSCODE <> 'CAN'
+       AND B.STATUSID = 10`,
     [effectiveCanteenId, today]
   );
 
@@ -648,6 +662,7 @@ export const getBootstrapPackage = async (canteenId = 1, since = null) => {
     wallets,
     daySlots,
     menuItems,
+    activeBookings,
   };
 };
 
