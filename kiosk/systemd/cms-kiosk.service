@@ -1,0 +1,26 @@
+[Unit]
+Description=CMS Kiosk Node Agent
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/kiosk/agent
+ExecStart=/usr/bin/node src/server.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cms-kiosk
+
+# Environment variables
+Environment=NODE_ENV=production
+Environment=PORT=5000
+
+# Process limits
+LimitNOFILE=65536
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

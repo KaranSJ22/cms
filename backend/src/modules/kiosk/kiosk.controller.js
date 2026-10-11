@@ -196,4 +196,37 @@ export const getTodaySlotsController = async (req, res, next) => {
   }
 };
 
+/**
+ * Master data bootstrap package snapshot for offline kiosk terminals
+ */
+export const bootstrapPackageController = async (req, res, next) => {
+  try {
+    const effectiveCanteenId = req.query.canteenId || req.kiosk?.canteenId || 1;
+    const since = req.query.since || req.headers["if-modified-since"] || null;
+    const result = await KioskService.getBootstrapPackage(effectiveCanteenId, since);
+    if (result.notModified) {
+      return res.status(304).end();
+    }
+    if (result.lastModified) {
+      res.setHeader("X-Last-Modified", result.lastModified);
+    }
+    return sendSuccess(res, result, "Bootstrap package retrieved successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Ingest offline outbox batch from kiosk terminal
+ */
+export const syncOfflineController = async (req, res, next) => {
+  try {
+    const payload = req.body;
+    const result = await KioskService.syncOfflineBatch(payload, req.kiosk);
+    return sendSuccess(res, result, "Offline sync batch processed successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
 

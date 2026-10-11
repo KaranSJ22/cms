@@ -1,0 +1,21 @@
+[Unit]
+Description=CMS Kiosk RC522 RFID Virtual Keyboard Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/pi/kiosk/drivers
+ExecStart=/usr/bin/python3 /home/pi/kiosk/drivers/rfid_daemon.py
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cms-rfid
+
+# Resource protection
+KillSignal=SIGTERM
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target

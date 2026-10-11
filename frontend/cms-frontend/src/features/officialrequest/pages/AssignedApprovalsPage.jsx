@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import {
   getAssignedApprovals,
   processApproverAction,
+  getOfficialBookingDetails,
 } from "../api/officialApi";
 import {
   CheckCircleIcon,
@@ -11,6 +12,8 @@ import {
   UserIcon,
   ExclamationCircleIcon,
   InboxIcon,
+  XMarkIcon,
+  EyeIcon,
 } from "@heroicons/react/24/outline";
 
 export default function AssignedApprovalsPage() {
@@ -20,6 +23,8 @@ export default function AssignedApprovalsPage() {
   const [rejectReason, setRejectReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const [selectedBooking, setSelectedBooking] = useState(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
 
   const loadRequests = async () => {
     try {
@@ -36,6 +41,18 @@ export default function AssignedApprovalsPage() {
   useEffect(() => {
     loadRequests();
   }, []);
+
+  const openDetails = async (bookingId) => {
+    try {
+      setDetailsLoading(true);
+      const details = await getOfficialBookingDetails(bookingId);
+      setSelectedBooking(details);
+    } catch (err) {
+      console.error("Failed to fetch booking details", err);
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
 
   const handleAction = async () => {
     if (!actionModal) return;
@@ -180,6 +197,14 @@ export default function AssignedApprovalsPage() {
 
                 <div className="flex items-center gap-2">
                   <button
+                    onClick={() => openDetails(r.OFFBOOKID)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl transition cursor-pointer"
+                  >
+                    <EyeIcon className="w-4 h-4" />
+                    <span>View Details</span>
+                  </button>
+
+                  <button
                     onClick={() =>
                       setActionModal({ booking: r, type: "APPROVE" })
                     }
@@ -265,6 +290,133 @@ export default function AssignedApprovalsPage() {
               >
                 {submitting ? "Processing..." : actionModal.type === "APPROVE" ? "Confirm Approval" : "Confirm Rejection"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Details Loading Overlay */}
+      {detailsLoading && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center">
+          <div className="w-10 h-10 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />
+        </div>
+      )}
+
+      {/* Booking Detail Modal */}
+      {selectedBooking && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 dark:border-slate-800 p-6 relative">
+            <button
+              onClick={() => setSelectedBooking(null)}
+              className="absolute top-5 right-5 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 cursor-pointer"
+            >
+              <XMarkIcon className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-sm font-black text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md">
+                {selectedBooking.BOOKNO}
+              </span>
+            </div>
+
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-1">
+              {selectedBooking.PURPOSE}
+            </h2>
+            <p className="text-xs text-orange-600 dark:text-orange-400 font-semibold mb-4">
+              {selectedBooking.CANTEENNAME} • {selectedBooking.SERVNAME} • {selectedBooking.COMBONAME}
+            </p>
+
+            {/* Event Specs Grid */}
+            <div className="grid grid-cols-2 gap-3.5 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/60 mb-5 text-xs">
+              <div>
+                <span className="text-slate-400 block mb-0.5">Event Date &amp; Time</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {new Date(selectedBooking.EVENTDATETIME).toLocaleString()}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block mb-0.5">Venue</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {selectedBooking.VENUE}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block mb-0.5">Quantity &amp; Headcount</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {selectedBooking.QUANTITY} servings ({selectedBooking.NOOFPEOPLE} attendees)
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block mb-0.5">Requested By</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {selectedBooking.REQUESTER_NAME || selectedBooking.BOOKEDBY_NAME} ({selectedBooking.REQUESTER_DESIG || "Officer"})
+                </span>
+              </div>
+            </div>
+
+            {/* Combo Menu Items */}
+            {selectedBooking.ITEMS && selectedBooking.ITEMS.length > 0 && (
+              <div className="mb-5">
+                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
+                  Combo Contents
+                </h4>
+                <div className="space-y-1.5">
+                  {selectedBooking.ITEMS.map((it) => (
+                    <div
+                      key={it.COMBOITEMID}
+                      className="text-xs flex justify-between items-center py-1.5 px-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-100 dark:border-slate-700/50"
+                    >
+                      <span className="text-slate-700 dark:text-slate-300">{it.MENUNAME}</span>
+                      <span className="text-slate-500 dark:text-slate-400 font-semibold">Qty: {it.QTY}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Audit History */}
+            {selectedBooking.HISTORY && selectedBooking.HISTORY.length > 0 && (
+              <div className="mb-5">
+                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2.5">
+                  Approval &amp; Action Audit Trail
+                </h4>
+                <div className="space-y-3">
+                  {selectedBooking.HISTORY.map((h, idx) => (
+                    <div key={idx} className="flex items-start gap-3 text-xs">
+                      <div className="w-2 h-2 rounded-full bg-orange-500 mt-1.5 flex-shrink-0" />
+                      <div className="flex-1 bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-bold text-slate-800 dark:text-slate-200">
+                            {h.ACTION} by {h.ACTIONBY_NAME} ({h.ACTIONROLE})
+                          </span>
+                          <span className="text-[11px] text-slate-400">
+                            {new Date(h.ACTIONAT).toLocaleString()}
+                          </span>
+                        </div>
+                        {h.REJREASON && (
+                          <p className="text-red-600 dark:text-red-400 text-xs font-medium mt-1">
+                            Reason: {h.REJREASON}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Amount Summary */}
+            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center">
+              <div>
+                <span className="text-xs text-slate-500 block">Calculated Official Total</span>
+                <span className="text-[11px] text-slate-400">
+                  ({selectedBooking.QUANTITY} servings × ₹{Number(selectedBooking.UNITPRICE || 0).toFixed(2)} Food Rate)
+                  {Number(selectedBooking.HANDLINGCHARGE || 0) > 0 && ` + ₹${Number(selectedBooking.HANDLINGCHARGE).toFixed(2)} Flat Handling`}
+                </span>
+              </div>
+              <span className="text-xl font-black text-slate-900 dark:text-white font-mono">
+                ₹{Number(selectedBooking.TOTALAMOUNT).toFixed(2)}
+              </span>
             </div>
           </div>
         </div>

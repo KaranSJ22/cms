@@ -524,4 +524,237 @@ export const getTodaySlots = async (canteenId) => {
   return rows;
 };
 
+/**
+ * Master data bootstrap package snapshot for offline kiosk terminals
+ */
+export const getBootstrapPackage = async (canteenId = 1, since = null) => {
+  const effectiveCanteenId = Number(canteenId) || 1;
+  const today = getTodayIST();
+
+  // 0. Compute maximum modification timestamp across relevant master tables
+  const [changeRows] = await pool.query(
+    `SELECT GREATEST(
+      COALESCE((SELECT MAX(COALESCE(UPDATEDAT, CREATEDAT)) FROM CMS_CUSTOMER WHERE STATUSID = 10), '1970-01-01 00:00:00'),
+      COALESCE((SELECT MAX(COALESCE(UPDATEDAT, CREATEDAT)) FROM CMS_DAYMENU WHERE STATUSID = 10), '1970-01-01 00:00:00'),
+      COALESCE((SELECT MAX(COALESCE(UPDATEDAT, CREATEDAT)) FROM CMS_DAYSLOT WHERE STATUSID = 10 AND CANTEENID = ?), '1970-01-01 00:00:00'),
+      COALESCE((SELECT MAX(COALESCE(UPDATEDAT, CREATEDAT)) FROM CMS_ACCKEY WHERE STATUSID = 10), '1970-01-01 00:00:00')
+    ) AS LAST_CHANGE`,
+    [effectiveCanteenId]
+  );
+
+  const rawLastChange = changeRows[0]?.LAST_CHANGE;
+  const lastChangeDate = rawLastChange ? new Date(rawLastChange) : null;
+  const lastModifiedIso = lastChangeDate && !isNaN(lastChangeDate.getTime()) 
+    ? lastChangeDate.toISOString() 
+    : new Date().toISOString();
+
+  // If client provided 'since' and master data has not changed since then, return 304 Not Modified
+  if (since && lastChangeDate && !isNaN(lastChangeDate.getTime())) {
+    const sinceDate = new Date(since);
+    if (!isNaN(sinceDate.getTime()) && lastChangeDate.getTime() <= sinceDate.getTime()) {
+      return {
+        notModified: true,
+        lastModified: lastModifiedIso,
+      };
+    }
+  }
+
+  // 1. Customers: active customers with RFID key or Login ID and real employee mapping
+  const [customers] = await pool.query(
+    `SELECT 
+        c.CUSTOMERID AS customerId,
+        COALESCE(ak.KEYVALUE, '') AS rfidUid,
+        COALESCE(pe.EMPCODE, ce.CONTCODE, oe.EMPCODE, u.LOGINID, CAST(c.CUSTOMERID AS CHAR)) AS loginId,
+        c.DISPNAME AS dispName,
+        c.CTYPECODE AS ctypeCode,
+        ct.CTYPENAME AS ctypeName
+     FROM CMS_CUSTOMER c
+     JOIN CMS_CUSTTYPE ct ON ct.CTYPECODE = c.CTYPECODE
+     LEFT JOIN CMS_USER u ON u.USERID = c.USERID
+     LEFT JOIN CMS_PERMEMP pe ON pe.CUSTOMERID = c.CUSTOMERID
+     LEFT JOIN CMS_CONTEMP ce ON ce.CUSTOMERID = c.CUSTOMERID
+     LEFT JOIN CMS_OCEEMP oe ON oe.CUSTOMERID = c.CUSTOMERID
+     LEFT JOIN CMS_ACCKEY ak ON ak.CUSTOMERID = c.CUSTOMERID AND ak.STATUSID = 10
+     WHERE c.STATUSID = 10`
+  );
+
+  // 2. Wallets for contract workers / visitors
+  const [wallets] = await pool.query(
+    `SELECT 
+        w.CUSTOMERID AS customerId,
+        w.BALANCE AS balance,
+        w.STATUSID AS statusId
+     FROM CMS_WALLET w
+     JOIN CMS_CUSTOMER c ON c.CUSTOMERID = w.CUSTOMERID
+     WHERE w.STATUSID = 10`
+  );
+
+  // 3. Day Slots strictly for upcoming dates (SERVDATE > CURDATE())
+  const [daySlots] = await pool.query(
+    `SELECT 
+        DS.DAYSLOTID AS daySlotId,
+        DS.SERVICEID AS serviceId,
+        S.SERVNAME AS serviceName,
+        DATE_FORMAT(DS.SERVDATE, '%Y-%m-%d') AS servDate,
+        DS.STARTTIME AS startTime,
+        DS.ENDTIME AS endTime
+     FROM CMS_DAYSLOT DS
+     JOIN CMS_SERVICE S ON S.SERVICEID = DS.SERVICEID
+     WHERE DS.CANTEENID = ?
+       AND DS.SERVDATE > ?
+       AND DS.STATUSID = 10
+     ORDER BY DS.SERVDATE ASC, DS.STARTTIME ASC`,
+    [effectiveCanteenId, today]
+  );
+
+  // 4. Kiosk-enabled Menu Items for upcoming slots
+  const [menuItems] = await pool.query(
+    `SELECT 
+        DM.DAYMENUID AS dayMenuId,
+        DM.DAYSLOTID AS daySlotId,
+        DM.MENUITEMID AS menuItemId,
+        MI.ITEMNAME AS itemName,
+        COALESCE(
+          (SELECT IPD.PRICE 
+           FROM CMS_ITEMPRICE IP
+           JOIN CMS_ITEMPRICEDT IPD ON IPD.ITEMPRICEID = IP.ITEMPRICEID
+           WHERE IP.MENUITEMID = MI.MENUITEMID 
+             AND IP.STATUSID = 10 
+             AND IP.EFFFROM <= DS.SERVDATE
+           ORDER BY IP.EFFFROM DESC 
+           LIMIT 1),
+          0.00
+        ) AS rate,
+        DM.ISBASE AS isBase,
+        DM.ISSPECIAL AS isSpecial,
+        DM.MAXQTY AS maxQty,
+        DM.BOOKUNTIL AS bookUntil
+     FROM CMS_DAYMENU DM
+     JOIN CMS_DAYSLOT DS ON DS.DAYSLOTID = DM.DAYSLOTID
+     JOIN CMS_MENUITEM MI ON MI.MENUITEMID = DM.MENUITEMID
+     WHERE DS.CANTEENID = ?
+       AND DS.SERVDATE > ?
+       AND DM.ISKIOSK = 1
+       AND DM.STATUSID = 10`,
+    [effectiveCanteenId, today]
+  );
+
+  return {
+    notModified: false,
+    lastModified: lastModifiedIso,
+    canteenId: effectiveCanteenId,
+    syncedAt: new Date().toISOString(),
+    customers,
+    wallets,
+    daySlots,
+    menuItems,
+  };
+};
+
+/**
+ * Ingests a batch of offline pre-bookings enqueued by a kiosk outbox
+ */
+export const syncOfflineBatch = async ({ kioskCode, batchId, items = [] }, kiosk = null) => {
+  const results = [];
+
+  for (const item of items) {
+    const {
+      offlineUuid,
+      tokenNo,
+      customerId,
+      serviceId,
+      servDate,
+      items: orderItems,
+      totalAmount,
+      paymentMethod,
+    } = item;
+
+    try {
+      // 1. Primary Idempotency Check: check if offlineUuid was already recorded in REMARKS
+      let existingBooking = null;
+      if (offlineUuid) {
+        const [byUuid] = await pool.query(
+          `SELECT B.BOOKID, B.BOOKNO 
+           FROM CMS_BOOKING B
+           WHERE B.REMARKS LIKE CONCAT('%', ?, '%')
+           LIMIT 1`,
+          [offlineUuid]
+        );
+        if (byUuid.length > 0) {
+          existingBooking = byUuid[0];
+        }
+      }
+
+      // Secondary check: check if already booked for this customer + service + date
+      if (!existingBooking) {
+        const [byCust] = await pool.query(
+          `SELECT B.BOOKID, B.BOOKNO 
+           FROM CMS_BOOKING B
+           JOIN CMS_STATUS ST ON ST.STATUSID = B.STATUSID
+           WHERE B.CUSTOMERID = ? 
+             AND B.SERVICEID = ? 
+             AND B.SERVICEDATE = ? 
+             AND ST.STATUSCODE <> 'CAN'
+           LIMIT 1`,
+          [customerId, serviceId, toMySQLDate(servDate)]
+        );
+        if (byCust.length > 0) {
+          existingBooking = byCust[0];
+        }
+      }
+
+      if (existingBooking) {
+        results.push({
+          offlineUuid,
+          status: "SYNCED",
+          bookId: existingBooking.BOOKID,
+          bookNo: existingBooking.BOOKNO,
+          message: "Already processed previously (Idempotent)",
+        });
+        continue;
+      }
+
+      // 2. Format items for booking creation
+      const formattedItems = (orderItems || []).map((i) => ({
+        DAYMENUID: i.dayMenuId || i.DAYMENUID,
+        MENUITEMID: i.menuItemId || i.MENUITEMID,
+        QTY: i.quantity || i.qty || i.QTY || 1,
+      }));
+
+      const customerRow = await getCustomerUser(customerId);
+      const userId = customerRow?.USERID || 1;
+
+      const created = await bookingService.createBooking(
+        {
+          PBOOKTYPECODE: "KS",
+          PSERVICEID: serviceId,
+          PSERVICEDATE: toMySQLDate(servDate),
+          PCUSTOMERID: customerId,
+          PITEMSJSON: formattedItems,
+          PKIOSKID: kiosk?.kioskId || null,
+          PREMARKS: `OFFLINE_SYNC [${kioskCode || "K1"}:${offlineUuid || ""}]`,
+        },
+        { USERID: userId, CUSTOMERID: customerId }
+      );
+
+      results.push({
+        offlineUuid,
+        status: "SYNCED",
+        bookId: created.BOOKID,
+        bookNo: created.BOOKNO,
+        message: "Offline booking synchronized successfully",
+      });
+    } catch (err) {
+      results.push({
+        offlineUuid,
+        status: "REJECTED",
+        errorCode: err.code || "SYNC_ERROR",
+        message: err.message || "Failed to sync offline booking",
+      });
+    }
+  }
+
+  return { results };
+};
+
 

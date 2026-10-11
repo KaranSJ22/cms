@@ -141,12 +141,12 @@ export default function OfficialBookingForm({ onSuccess, initialData = null }) {
 
   const formattedEventDate = eventDateTime
     ? new Date(eventDateTime).toLocaleString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
     : null;
 
   const handleSubmit = async (e) => {
@@ -308,11 +308,10 @@ export default function OfficialBookingForm({ onSuccess, initialData = null }) {
                         <div
                           key={combo.OFFCOMBOID}
                           onClick={() => setSelectedComboId(combo.OFFCOMBOID)}
-                          className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex flex-col justify-between ${
-                            isSelected
-                              ? "border-orange-500 bg-orange-50/50 shadow-sm ring-1 ring-orange-500/20"
-                              : "border-slate-200 hover:border-slate-300 bg-white"
-                          }`}
+                          className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex flex-col justify-between ${isSelected
+                            ? "border-orange-500 bg-orange-50/50 shadow-sm ring-1 ring-orange-500/20"
+                            : "border-slate-200 hover:border-slate-300 bg-white"
+                            }`}
                         >
                           <div>
                             <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -345,11 +344,10 @@ export default function OfficialBookingForm({ onSuccess, initialData = null }) {
                               {handlingVal > 0 ? `+ ₹${handlingVal.toFixed(2)} flat handling` : "No handling fee"}
                             </span>
                             <span
-                              className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] transition ${
-                                isSelected
-                                  ? "bg-orange-500 text-white"
-                                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                              }`}
+                              className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] transition ${isSelected
+                                ? "bg-orange-500 text-white"
+                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                }`}
                             >
                               {isSelected ? "Selected ✓" : "Choose"}
                             </span>
@@ -478,6 +476,7 @@ export default function OfficialBookingForm({ onSuccess, initialData = null }) {
                   min="1"
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
+                  onWheel={(e) => e.target.blur()}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition text-sm font-bold"
                   required
                 />
@@ -493,6 +492,7 @@ export default function OfficialBookingForm({ onSuccess, initialData = null }) {
                   min="1"
                   value={noOfPeople}
                   onChange={(e) => setNoOfPeople(e.target.value)}
+                  onWheel={(e) => e.target.blur()}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition text-sm font-bold"
                   required
                 />
@@ -542,13 +542,12 @@ export default function OfficialBookingForm({ onSuccess, initialData = null }) {
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label
-                  className={`flex items-center justify-center gap-2 p-3 rounded-xl border-2 transition ${
-                    activeService?.REQAPPRLVL === "L2"
-                      ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-60"
-                      : apprLvl === "L1"
+                  className={`flex items-center justify-center gap-2 p-3 rounded-xl border-2 transition ${activeService?.REQAPPRLVL === "L2"
+                    ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-60"
+                    : apprLvl === "L1"
                       ? "border-orange-500 bg-orange-50/50 text-orange-600 font-bold cursor-pointer ring-1 ring-orange-500/20"
                       : "border-slate-200 text-slate-700 bg-white hover:border-slate-300 cursor-pointer"
-                  }`}
+                    }`}
                 >
                   <input
                     type="radio"
@@ -568,11 +567,10 @@ export default function OfficialBookingForm({ onSuccess, initialData = null }) {
                 </label>
 
                 <label
-                  className={`flex items-center justify-center gap-2 p-3 rounded-xl border-2 cursor-pointer transition ${
-                    apprLvl === "L2"
-                      ? "border-orange-500 bg-orange-50/50 text-orange-600 font-bold ring-1 ring-orange-500/20"
-                      : "border-slate-200 text-slate-700 bg-white hover:border-slate-300"
-                  }`}
+                  className={`flex items-center justify-center gap-2 p-3 rounded-xl border-2 cursor-pointer transition ${apprLvl === "L2"
+                    ? "border-orange-500 bg-orange-50/50 text-orange-600 font-bold ring-1 ring-orange-500/20"
+                    : "border-slate-200 text-slate-700 bg-white hover:border-slate-300"
+                    }`}
                 >
                   <input
                     type="radio"

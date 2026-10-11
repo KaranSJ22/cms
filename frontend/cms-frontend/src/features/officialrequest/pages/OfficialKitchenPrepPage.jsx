@@ -130,6 +130,69 @@ export default function OfficialKitchenPrepPage() {
     });
   }, [confirmedOrders, searchQuery]);
 
+  // Pivot DISHES[].ORDERS[] into a booking-centric grouped structure for Tab 1,
+  // enriching with confirmed booking metadata (Official Service name, Combo name, etc.)
+  const groupedByBooking = useMemo(() => {
+    const dishes = summaryData?.DISHES || [];
+    const bookingMap = new Map();
+
+    // Fast lookup map for booking metadata (SERVNAME, COMBONAME, etc.) from confirmedOrders
+    const confirmedMap = new Map(
+      (confirmedOrders || []).map((o) => [o.OFFBOOKID, o])
+    );
+
+    for (const dish of dishes) {
+      for (const order of (dish.ORDERS || [])) {
+        if (!bookingMap.has(order.OFFBOOKID)) {
+          const meta = confirmedMap.get(order.OFFBOOKID) || {};
+          bookingMap.set(order.OFFBOOKID, {
+            OFFBOOKID: order.OFFBOOKID,
+            BOOKNO: order.BOOKNO || meta.BOOKNO,
+            PURPOSE: order.PURPOSE || meta.PURPOSE,
+            VENUE: order.VENUE || meta.VENUE,
+            EVENTDATETIME: order.EVENTDATETIME || meta.EVENTDATETIME,
+            BOOKING_SERVINGS: order.BOOKING_SERVINGS || meta.QUANTITY,
+            REQUESTER_NAME: order.REQUESTER_NAME || meta.REQUESTER_NAME || meta.REQ_NAME,
+            REQUESTER_PHONE: order.REQUESTER_PHONE || meta.REQUESTER_PHONE || meta.REQ_PHONE,
+            REQUESTER_EMPCODE: order.REQUESTER_EMPCODE || meta.REQUESTER_EMPCODE,
+            REQUESTER_DEPT: order.REQUESTER_DEPT || meta.REQUESTER_DEPT || meta.DEPTNAME,
+            REQUESTER_DESIG: order.REQUESTER_DESIG || meta.REQUESTER_DESIG,
+            SERVNAME: meta.SERVNAME || "Official Service",
+            COMBONAME: meta.COMBONAME || "Standard Package",
+            items: [],
+          });
+        }
+        bookingMap.get(order.OFFBOOKID).items.push({
+          MENUITEMID: dish.MENUITEMID,
+          ITEMNAME: dish.ITEMNAME,
+          CATNAME: dish.CATNAME,
+          CATCODE: dish.CATCODE,
+          COMBO_ITEM_QTY: order.COMBO_ITEM_QTY,
+          PREP_QTY: order.PREP_QTY,
+        });
+      }
+    }
+
+    return Array.from(bookingMap.values()).sort(
+      (a, b) => new Date(a.EVENTDATETIME) - new Date(b.EVENTDATETIME)
+    );
+  }, [summaryData, confirmedOrders]);
+
+  const filteredGroupedByBooking = useMemo(() => {
+    if (!searchQuery) return groupedByBooking;
+    const q = searchQuery.toLowerCase();
+    return groupedByBooking.filter(
+      (b) =>
+        b.BOOKNO?.toLowerCase().includes(q) ||
+        b.PURPOSE?.toLowerCase().includes(q) ||
+        b.VENUE?.toLowerCase().includes(q) ||
+        b.SERVNAME?.toLowerCase().includes(q) ||
+        b.COMBONAME?.toLowerCase().includes(q) ||
+        (b.REQUESTER_NAME || "").toLowerCase().includes(q) ||
+        b.items.some((it) => it.ITEMNAME?.toLowerCase().includes(q))
+    );
+  }, [groupedByBooking, searchQuery]);
+
   const totalDishesCount = summaryData?.DISHES?.length || 0;
   const selectedCanteenObj = canteens.find(
     (c) => c.CANTEENID === Number(selectedCanteenId)
@@ -284,6 +347,9 @@ export default function OfficialKitchenPrepPage() {
               setSearchQuery={setSearchQuery}
               filteredDishes={filteredDishes}
               totalDishesCount={totalDishesCount}
+              filteredGroupedByBooking={filteredGroupedByBooking}
+              formatEventTime={formatEventTime}
+              formatEventDate={formatEventDate}
             />
           )}
 

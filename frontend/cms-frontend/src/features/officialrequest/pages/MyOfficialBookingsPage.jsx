@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   getMyOfficialBookings,
   getOfficialBookingDetails,
   resubmitOfficialBooking,
 } from "../api/officialApi";
-import OfficialBookingForm from "../components/OfficialBookingForm";
 import {
   PlusIcon,
   XMarkIcon,
@@ -18,9 +18,9 @@ import {
 } from "@heroicons/react/24/outline";
 
 export default function MyOfficialBookingsPage() {
+  const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [resubmitBooking, setResubmitBooking] = useState(null);
   const [activeTab, setActiveTab] = useState("ALL");
@@ -112,7 +112,7 @@ export default function MyOfficialBookingsPage() {
         </div>
 
         <button
-          onClick={() => setShowCreateModal(true)}
+          onClick={() => navigate("/official-booking")}
           className="inline-flex items-center gap-2 px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-semibold text-sm rounded-xl shadow-md shadow-orange-500/20 transition cursor-pointer self-start sm:self-auto"
         >
           <PlusIcon className="w-4 h-4" />
@@ -231,31 +231,7 @@ export default function MyOfficialBookingsPage() {
         </div>
       )}
 
-      {/* New Request Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 dark:border-slate-800 p-6 relative">
-            <button
-              onClick={() => setShowCreateModal(false)}
-              className="absolute top-5 right-5 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 cursor-pointer"
-            >
-              <XMarkIcon className="w-5 h-5" />
-            </button>
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
-              Create Official Catering Request
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-6">
-              Only permanent employees are authorized to book official catering for meetings and events.
-            </p>
-            <OfficialBookingForm
-              onSuccess={() => {
-                setShowCreateModal(false);
-                loadBookings();
-              }}
-            />
-          </div>
-        </div>
-      )}
+
 
       {/* Details & Audit Trail Modal */}
       {selectedBooking && (

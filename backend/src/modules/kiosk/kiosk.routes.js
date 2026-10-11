@@ -134,4 +134,21 @@ router.get(
   KioskController.getTodaySlotsController
 );
 
+// ------------------------------------------------------------
+// 5. Offline Edge Synchronization (Downlink & Uplink)
+// ------------------------------------------------------------
+// Master data bootstrap pull for offline kiosk local cache
+router.get(
+  "/bootstrap-package",
+  detectKiosk,
+  KioskController.bootstrapPackageController
+);
+
+// Ingest offline pre-bookings outbox batch
+router.post(
+  "/sync-offline",
+  detectKiosk,
+  KioskController.syncOfflineController
+);
+
 export default router;
