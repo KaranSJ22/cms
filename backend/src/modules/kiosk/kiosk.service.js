@@ -636,6 +636,8 @@ export const getBootstrapPackage = async (canteenId = 1, since = null) => {
        AND DS.SERVDATE > ?
        AND DM.ISKIOSK = 1
        AND DM.STATUSID = 10`,
+    [effectiveCanteenId, today]
+  );
   // 5. Active upcoming pre-bookings for tomorrow onwards at this canteen
   const [activeBookings] = await pool.query(
     `SELECT 

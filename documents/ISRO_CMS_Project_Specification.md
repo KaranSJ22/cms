@@ -1135,7 +1135,7 @@ Booking
   ↓
 Serving Window Ends
   ↓
-Not Collected
+Not Collected till EOD
   ↓
 No-Show
 ```

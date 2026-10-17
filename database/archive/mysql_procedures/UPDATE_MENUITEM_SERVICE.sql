@@ -1,1 +1,0 @@
--- Deprecated: Direct changes are in MENUITEM_PRICE_SCHEMA.sql and MENUITEM_PRICE_PROCEDURES.sql
