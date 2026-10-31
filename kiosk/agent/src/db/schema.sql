@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS cached_wallets (
 -- 3. Upcoming Published Service Slots (Tomorrow & Future Dates)
 CREATE TABLE IF NOT EXISTS cached_day_slots (
     day_slot_id INTEGER PRIMARY KEY,
+    canteen_id INTEGER NOT NULL DEFAULT 1,
     service_id INTEGER NOT NULL,
     service_name TEXT NOT NULL,
     serv_date TEXT NOT NULL,       -- 'YYYY-MM-DD'
@@ -33,6 +34,7 @@ CREATE TABLE IF NOT EXISTS cached_day_slots (
     end_time TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_slots_date ON cached_day_slots(serv_date);
+CREATE INDEX IF NOT EXISTS ix_slots_canteen ON cached_day_slots(canteen_id);
 
 -- 4. Kiosk-Enabled Dishes for Pre-booking
 CREATE TABLE IF NOT EXISTS cached_menu_items (
@@ -87,3 +89,48 @@ CREATE TABLE IF NOT EXISTS system_meta (
     meta_value TEXT,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 9. Today's Canteen Serving Manifest (Downlinked from Central)
+CREATE TABLE IF NOT EXISTS cached_today_bookings (
+    book_id INTEGER PRIMARY KEY,
+    book_no TEXT NOT NULL,
+    customer_id INTEGER NOT NULL,
+    login_id TEXT NOT NULL,
+    rfid_uid TEXT,
+    disp_name TEXT NOT NULL,
+    ctype_code TEXT NOT NULL,            -- 'PRM', 'CNT', 'VIS'
+    service_id INTEGER NOT NULL,
+    day_slot_id INTEGER NOT NULL,
+    slot_name TEXT NOT NULL,
+    status_code TEXT DEFAULT 'CRT',      -- 'CRT' (Created) or 'SRV' (Served)
+    served_by INTEGER,
+    served_on TEXT,
+    total_amount REAL DEFAULT 0.00
+);
+CREATE INDEX IF NOT EXISTS ix_srv_rfid ON cached_today_bookings(rfid_uid);
+CREATE INDEX IF NOT EXISTS ix_srv_login ON cached_today_bookings(login_id);
+
+-- 10. Line Items for Today's Bookings
+CREATE TABLE IF NOT EXISTS cached_today_bookitems (
+    book_item_id INTEGER PRIMARY KEY,
+    book_id INTEGER NOT NULL,
+    menu_item_id INTEGER NOT NULL,
+    item_name TEXT NOT NULL,
+    qty INTEGER NOT NULL DEFAULT 1,
+    rate REAL NOT NULL DEFAULT 0.00,
+    FOREIGN KEY(book_id) REFERENCES cached_today_bookings(book_id)
+);
+
+-- 11. Outbox Queue for Serving Events (Push to Central when Online)
+CREATE TABLE IF NOT EXISTS outbox_serving_events (
+    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_uuid TEXT NOT NULL UNIQUE,     -- UUIDv4 for idempotency
+    event_type TEXT NOT NULL,            -- 'SERVE', 'CANCEL', 'WALKIN_SERVE'
+    payload_json TEXT NOT NULL,          -- Full event payload
+    created_at TEXT NOT NULL,
+    sync_status TEXT DEFAULT 'PENDING',  -- 'PENDING', 'SYNCING', 'SYNCED', 'ERROR'
+    synced_at TEXT,
+    error_message TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_outbox_srv_status ON outbox_serving_events(sync_status);
+

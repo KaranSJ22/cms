@@ -4,9 +4,10 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
-WorkingDirectory=/home/pi/kiosk/drivers
-ExecStart=/usr/bin/python3 /home/pi/kiosk/drivers/rfid_daemon.py
+User=canteenmitra
+SupplementaryGroups=input spi gpio
+WorkingDirectory=/home/canteenmitra/Project/kiosk/drivers
+ExecStart=/home/canteenmitra/Project/venv/bin/python3 /home/canteenmitra/Project/kiosk/drivers/rfid_daemon.py
 Restart=always
 RestartSec=3
 StandardOutput=journal

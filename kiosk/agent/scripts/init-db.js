@@ -59,6 +59,18 @@ export const initializeDatabase = () => {
     // Table doesn't exist yet, schema.sql will create it
   }
 
+  // If upgrading existing database, ensure cached_day_slots has canteen_id column
+  try {
+    const slotCols = db.prepare("PRAGMA table_info(cached_day_slots);").all().map((c) => c.name);
+    if (slotCols.length > 0 && !slotCols.includes("canteen_id")) {
+      logger.info("Migrating cached_day_slots schema: adding canteen_id column...");
+      db.exec("ALTER TABLE cached_day_slots ADD COLUMN canteen_id INTEGER NOT NULL DEFAULT 1;");
+      db.exec("CREATE INDEX IF NOT EXISTS ix_slots_canteen ON cached_day_slots(canteen_id);");
+    }
+  } catch {
+    // Table doesn't exist yet, schema.sql will create it
+  }
+
   db.exec(schemaSql);
 
   const tables = db

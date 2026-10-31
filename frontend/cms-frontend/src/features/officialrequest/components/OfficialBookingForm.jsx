@@ -328,7 +328,7 @@ export default function OfficialBookingForm({ onSuccess, initialData = null }) {
                               <div className="flex flex-wrap gap-1 mb-3">
                                 {combo.ITEMS.map((dish) => (
                                   <span
-                                    key={dish.COMBOITEMID || dish.MENUITEMID}
+                                    key={dish.OFFCOMBDTID || dish.COMBOITEMID || dish.MENUITEMID}
                                     className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200"
                                   >
                                     <span>{dish.MENUNAME || dish.ITEMNAME}</span>
@@ -386,7 +386,7 @@ export default function OfficialBookingForm({ onSuccess, initialData = null }) {
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                           {activeCombo.ITEMS.map((dish) => (
                             <div
-                              key={dish.COMBOITEMID || dish.MENUITEMID}
+                              key={dish.OFFCOMBDTID || dish.COMBOITEMID || dish.MENUITEMID}
                               className="p-2.5 rounded-lg bg-white border border-slate-200 flex items-center justify-between shadow-2xs"
                             >
                               <div className="min-w-0 pr-2">

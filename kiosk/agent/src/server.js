@@ -14,9 +14,10 @@ try {
   process.exit(1);
 }
 
-// 2. Start HTTP Server (Bound strictly to localhost loopback)
-const server = app.listen(env.PORT, "127.0.0.1", () => {
-  logger.info(`CMS Kiosk Agent running on http://127.0.0.1:${env.PORT} [Kiosk: ${env.KIOSK_CODE}]`);
+// 2. Start HTTP Server
+const host = env.HOST || "0.0.0.0";
+const server = app.listen(env.PORT, host, () => {
+  logger.info(`CMS Kiosk Agent running on http://${host}:${env.PORT} [Kiosk: ${env.KIOSK_CODE}]`);
 });
 
 server.on("error", (err) => {

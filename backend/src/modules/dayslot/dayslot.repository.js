@@ -85,6 +85,7 @@ export const getDaySlotById = async (DAYSLOTID) => {
 export const createDaySlot = async ({
   CANTEENID,
   SERVICEID,
+  SERVICEDATE,
   SERVDATE,
   STARTTIME,
   ENDTIME,
@@ -92,7 +93,7 @@ export const createDaySlot = async ({
 }) => {
   const [resultSets] = await pool.execute(
     "CALL CMSADDSLOT(?, ?, ?, ?, ?, ?)",
-    [CANTEENID, SERVICEID, SERVDATE, STARTTIME, ENDTIME, CREATEDBY]
+    [CANTEENID, SERVICEID, SERVICEDATE || SERVDATE, STARTTIME, ENDTIME, CREATEDBY]
   );
 
   const rows = resultSets[0];

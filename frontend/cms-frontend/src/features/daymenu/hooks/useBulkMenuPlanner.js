@@ -243,11 +243,19 @@ export function useBulkMenuPlanner() {
                       CANCELUNTIL: item.CANCELUNTIL ?? '',
                     };
                   });
+                  const isApproved = slot.APPRSTATUSID === 22 || slot.APPRSTATUSCODE === 'APR';
+                  const isPending = slot.APPRSTATUSID === 21 || slot.APPRSTATUSCODE === 'PEN';
+                  const isDraft = slot.APPRSTATUSID === 20 || slot.APPRSTATUSCODE === 'DRF';
+
                   loadedWeekItems[dayIdx] = dayMap;
                   loadedPublishedDays[dayIdx] = {
                     daySlotId: slot.DAYSLOTID,
                     slotNo: slot.SLOTNO,
-                    isPublished: true,
+                    apprStatusId: slot.APPRSTATUSID,
+                    apprStatusCode: slot.APPRSTATUSCODE,
+                    isPublished: isApproved,
+                    isPending: isPending,
+                    isDraft: isDraft,
                     itemCount: workspaceItems.length,
                   };
                 }
@@ -298,7 +306,7 @@ export function useBulkMenuPlanner() {
 
   const addItem = useCallback(
     (menuItem) => {
-      if (publishedDays[activeDayIndex]) return;
+      if (publishedDays[activeDayIndex]?.isPublished) return;
       const servDate = weekDates[activeDayIndex] || startDate;
       setWeekItems((prev) => {
         const copy = [...prev];
@@ -318,7 +326,7 @@ export function useBulkMenuPlanner() {
 
   const removeItem = useCallback(
     (menuItemId) => {
-      if (publishedDays[activeDayIndex]) return;
+      if (publishedDays[activeDayIndex]?.isPublished) return;
       setWeekItems((prev) => {
         const copy = [...prev];
         const dayMap = { ...copy[activeDayIndex] };
@@ -332,7 +340,7 @@ export function useBulkMenuPlanner() {
 
   const updateFlag = useCallback(
     (menuItemId, field, value) => {
-      if (publishedDays[activeDayIndex]) return;
+      if (publishedDays[activeDayIndex]?.isPublished) return;
       setWeekItems((prev) => {
         const copy = [...prev];
         const dayMap = { ...copy[activeDayIndex] };
@@ -361,7 +369,7 @@ export function useBulkMenuPlanner() {
 
   const updateQty = useCallback(
     (menuItemId, field, value) => {
-      if (publishedDays[activeDayIndex]) return;
+      if (publishedDays[activeDayIndex]?.isPublished) return;
       setWeekItems((prev) => {
         const copy = [...prev];
         copy[activeDayIndex] = {
@@ -386,7 +394,7 @@ export function useBulkMenuPlanner() {
       const source = prev[activeDayIndex] || {};
       return prev.map((currDay, i) => {
         if (i === activeDayIndex) return currDay;
-        if (publishedDays[i]) return currDay;
+        if (publishedDays[i]?.isPublished) return currDay;
         const targetDate = weekDates[i] || addDays(startDate || getMonday(), i);
         if (targetDate && holidayMap[targetDate] && !holidayOverrides[i]) {
           return currDay;
@@ -416,7 +424,7 @@ export function useBulkMenuPlanner() {
   };
 
   const copyFromDay = (sourceIndex) => {
-    if (publishedDays[activeDayIndex]) return;
+    if (publishedDays[activeDayIndex]?.isPublished) return;
     const source = weekItems[sourceIndex] || {};
     const sourceCount = Object.keys(source).length;
     if (sourceCount === 0) {
@@ -457,7 +465,7 @@ export function useBulkMenuPlanner() {
   };
 
   const clearDay = () => {
-    if (publishedDays[activeDayIndex]) return;
+    if (publishedDays[activeDayIndex]?.isPublished) return;
     setWeekItems((prev) => {
       const copy = [...prev];
       copy[activeDayIndex] = {};
@@ -465,11 +473,34 @@ export function useBulkMenuPlanner() {
     });
   };
 
-  const handleSubmit = async () => {
+  const isManager = useMemo(() => {
+    if (!user) return false;
+    const isSysAdmin =
+      (user.SYSTEMROLES || []).includes('SYSADM') ||
+      (user.SYSTEMROLES || []).includes('ADMIN') ||
+      user.LOGINID === 'admin' ||
+      user.USERID === 1;
+    if (isSysAdmin) return true;
+    if (!canteenId) return false;
+    return (user.CANTEENROLES || []).some(
+      (r) => String(r.CANTEENID) === String(canteenId) && r.ROLECODE === 'CNTMGR'
+    );
+  }, [user, canteenId]);
+
+  const isAssistant = useMemo(() => {
+    if (!user || !canteenId) return false;
+    return (user.CANTEENROLES || []).some(
+      (r) => String(r.CANTEENID) === String(canteenId) && r.ROLECODE === 'CNTAST'
+    );
+  }, [user, canteenId]);
+
+  const handleSubmit = async (action) => {
     if (!canteenId || !serviceId || !startDate || !startTime || !endTime) {
       alert('Please fill in all context fields.');
       return;
     }
+
+    const effectiveAction = action || (isManager ? 'PUBLISH' : 'SUBMIT');
 
     const days = weekItems.map((dayMap, idx) => {
       const targetDate = weekDates[idx] || startDate;
@@ -492,12 +523,20 @@ export function useBulkMenuPlanner() {
       STARTDATE: startDate,
       STARTTIME: startTime,
       ENDTIME: endTime,
+      ACTION: effectiveAction,
       DAYS: days,
     });
 
     if (res) {
+      const actionLabel =
+        effectiveAction === 'DRAFT'
+          ? 'saved as draft'
+          : effectiveAction === 'SUBMIT'
+          ? 'submitted for manager approval'
+          : 'published successfully';
+
       setSuccessToast(
-        `Bulk menu operation complete! Scheduled week from ${weekDates[0]} to ${weekDates[6]}.`
+        `Bulk menu ${actionLabel}! Scheduled week from ${weekDates[0]} to ${weekDates[6]}.`
       );
       setReloadCounter((c) => c + 1);
       reset();
@@ -518,14 +557,16 @@ export function useBulkMenuPlanner() {
   };
 
   const totalConfiguredDays = daySummary.filter((n) => n > 0).length;
-  const totalPublishedDays = Object.keys(publishedDays).length;
+  const totalPublishedDays = Object.values(publishedDays).filter((d) => d?.isPublished).length;
+  const totalPendingDays = Object.values(publishedDays).filter((d) => d?.isPending).length;
+  const totalDraftDays = Object.values(publishedDays).filter((d) => d?.isDraft).length;
   const isReady =
     canteenId &&
     serviceId &&
     startDate &&
     startTime &&
     endTime &&
-    (totalConfiguredDays > 0 || totalPublishedDays > 0);
+    (totalConfiguredDays > 0 || totalPublishedDays > 0 || totalPendingDays > 0 || totalDraftDays > 0);
 
   return {
     canteens,
@@ -567,6 +608,10 @@ export function useBulkMenuPlanner() {
     daySummary,
     totalConfiguredDays,
     totalPublishedDays,
+    totalPendingDays,
+    totalDraftDays,
+    isManager,
+    isAssistant,
     isReady,
     addItem,
     removeItem,

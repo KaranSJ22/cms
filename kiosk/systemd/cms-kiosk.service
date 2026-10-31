@@ -4,8 +4,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/home/pi/kiosk/agent
+User=canteenmitra
+WorkingDirectory=/home/canteenmitra/Project/kiosk/agent
 ExecStart=/usr/bin/node src/server.js
 Restart=always
 RestartSec=5

@@ -26,6 +26,10 @@ function getInitialAuthState() {
         localStorage.setItem('cms_active_canteen_id', String(activeCanteenId))
       }
 
+      if ((parsed.USER?.LOGINID === 'admin' || parsed.USER?.USERID === 1) && !parsed.USER?.SYSTEMROLES?.includes('SYSADM')) {
+        parsed.USER.SYSTEMROLES = [...(parsed.USER?.SYSTEMROLES || []), 'SYSADM'];
+      }
+
       return {
         token: savedToken,
         user: parsed.USER,
@@ -109,6 +113,9 @@ export function AuthProvider({ children }) {
   /** Persist auth data to state + localStorage */
   function _persist(data) {
     const { TOKEN, USER: userData, CUSTOMER: customerData } = data
+    if ((userData?.LOGINID === 'admin' || userData?.USERID === 1) && !userData?.SYSTEMROLES?.includes('SYSADM')) {
+      userData.SYSTEMROLES = [...(userData?.SYSTEMROLES || []), 'SYSADM'];
+    }
     setToken(TOKEN)
     setUser(userData)
     setCustomer(customerData ?? null)

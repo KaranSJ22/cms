@@ -419,9 +419,9 @@ This document maps all database stored procedures with their required parameters
 ### `CMSLISTAUTONO`
 *No parameters required.*
 
-## CONSUMERROLE_PROCEDURES.sql
+## USERROLE_PROCEDURES.sql (Formerly CONSUMERROLE_PROCEDURES.sql)
 
-### `CMSASSIGNCONSROL`
+### `CMSASSIGNUSERROLE` (Alias: `CMSASSIGNCONSROL`)
 | Direction | Parameter Name | Data Type |
 |-----------|----------------|-----------|
 | `IN` | `PUSERID` | `INT` |
@@ -430,13 +430,13 @@ This document maps all database stored procedures with their required parameters
 | `IN` | `PVALIDFROM` | `DATETIME` |
 | `IN` | `PVALIDUNTIL` | `DATETIME` |
 
-### `CMSREMOVECONSROL`
+### `CMSREMOVEUSERROLE` (Alias: `CMSREMOVECONSROL`)
 | Direction | Parameter Name | Data Type |
 |-----------|----------------|-----------|
 | `IN` | `PUSERID` | `INT` |
 | `IN` | `PROLEID` | `INT` |
 
-### `CMSLISTCONSROL`
+### `CMSLISTUSERROL` (Alias: `CMSLISTCONSROL`)
 | Direction | Parameter Name | Data Type |
 |-----------|----------------|-----------|
 | `IN` | `PUSERID` | `INT` |

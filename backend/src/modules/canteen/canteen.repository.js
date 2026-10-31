@@ -5,23 +5,52 @@ export const getCanteens = async ({ CENTERID = null } = {}) => {
   return resultSets[0] || [];
 };
 
-/**
- * Resolves the CANTEENID associated with a given operational resource
- * (DAYSLOT, DAYMENU, or BOOKING) via stored procedures.
- */
-export const getResourceCanteenId = async (resourceType, id) => {
-  if (!id) return null;
+export const getCanteenById = async (CANTEENID) => {
+  const [resultSets] = await pool.execute("CALL CMSGETCANTEEN(?)", [CANTEENID]);
+  return resultSets[0]?.[0] || null;
+};
 
-  let spName = "";
-  if (resourceType === "DAYSLOT") {
-    spName = "CMSGETCANTEENBYSLOT";
-  } else if (resourceType === "DAYMENU") {
-    spName = "CMSGETCANTEENBYDAYMENU";
-  } else if (resourceType === "BOOKING") {
-    spName = "CMSGETCANTEENBYBOOKING";
-  }
+export const createCanteen = async ({
+  CENTERID,
+  CANTEENCODE,
+  CANTEENNAME,
+  LOCATION = null,
+  USERID,
+}) => {
+  const [resultSets] = await pool.execute(
+    "CALL CMSADDCANTEEN(?, ?, ?, ?, ?)",
+    [CENTERID, CANTEENCODE, CANTEENNAME, LOCATION, USERID]
+  );
+  return resultSets[0]?.[0] || null;
+};
 
-  if (!spName) return null;
-  const [resultSets] = await pool.execute(`CALL ${spName}(?)`, [id]);
-  return resultSets[0]?.[0]?.CANTEENID || null;
+export const updateCanteen = async ({
+  CANTEENID,
+  CANTEENNAME,
+  LOCATION = null,
+  STATUSCODE = "ACT",
+}) => {
+  const [resultSets] = await pool.execute(
+    "CALL CMSUPDCANTEEN(?, ?, ?, ?)",
+    [CANTEENID, CANTEENNAME, LOCATION, STATUSCODE]
+  );
+  return resultSets[0]?.[0] || null;
+};
+
+export const deactivateCanteen = async (CANTEENID) => {
+  const [resultSets] = await pool.execute("CALL CMSDEACTCANTEEN(?)", [CANTEENID]);
+  return resultSets[0]?.[0] || null;
+};
+
+export const listCenters = async () => {
+  const [resultSets] = await pool.execute("CALL CMSLISTCENTER()");
+  return resultSets[0] || [];
+};
+
+export const createCenter = async ({ CENTERCODE, CENTERNAME, LOCATION = null }) => {
+  const [resultSets] = await pool.execute(
+    "CALL CMSADDCENTER(?, ?, ?)",
+    [CENTERCODE, CENTERNAME, LOCATION]
+  );
+  return resultSets[0]?.[0] || null;
 };

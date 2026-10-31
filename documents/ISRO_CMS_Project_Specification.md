@@ -163,7 +163,7 @@ Current CMS roles:
 | Canteen Staff        | `CTNSTF` | Serving operations                                              |
 
 
-Consumer role assignments are maintained through `CMS_CONSUMERROLE`. Consumer role codes must come from the current database definition; do not invent role codes.
+Consumer and user role assignments are maintained through `CMS_USERROLE` (with `CMS_CONSUMERROLE` provided as a backward-compatibility view). Consumer role codes must come from the current database definition; do not invent role codes.
 
 ### `SYSADM`
 
@@ -280,18 +280,21 @@ CMS_PERMEMP
 CMS_CONTEMP
 CMS_OCEEMP
 CMS_VISITOR
-CMS_CONSUMERROLE
+CMS_USERROLE          (Compatibility View: CMS_CONSUMERROLE)
 CMS_CANTEENROLE
 CMS_ACCKEY
 ```
 
-### Common
+### Common & System
 
 ```text
 CMS_CENTER
 CMS_CANTEEN
 CMS_AUTONOS
 CMS_STATUS
+CMS_SCREEN
+CMS_SCRNROLE          (Compatibility View: CMS_ROLESCN)
+CMS_KIOSK             (Compatibility View: CMS_KIOSK_DEVICE)
 ```
 
 ### Menu and Service
@@ -301,7 +304,7 @@ CMS_SERVICE
 CMS_DAYSLOT
 CMS_MENUITEM
 CMS_ITEMPRICE
-CMS_ITEMPRICEDT
+CMS_ITMPRICDT         (Compatibility View: CMS_ITEMPRICEDT)
 CMS_DAYMENU
 CMS_MENUHIST
 CMS_SERVHIST
@@ -316,7 +319,16 @@ CMS_BOOKTYPE
 CMS_BOOKING
 CMS_BOOKITEM
 CMS_BOOKHIST
+CMS_BOOKITMHST        (Compatibility View: CMS_BOOKITMHS)
 CMS_PBACTIVE
+```
+
+### Official Booking & Approvals
+
+```text
+CMS_OFFREQ
+CMS_OFFCOMBDT         (Compatibility View: CMS_OFFCOMBO_ITEM)
+CMS_OFFAPPR
 ```
 
 ### Wallet
@@ -421,7 +433,7 @@ Relevant structures:
 ```text
 CMS_MENUITEM
 CMS_ITEMPRICE
-CMS_ITEMPRICEDT
+CMS_ITMPRICDT         (Compatibility View: CMS_ITEMPRICEDT)
 ```
 
 Pricing is:

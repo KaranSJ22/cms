@@ -41,8 +41,8 @@ export function UsersTable({ users, loading, error }) {
               <td className="px-4 py-3">{user.EMAIL || '-'}</td>
               <td className="px-4 py-3">{user.MOBILENO || '-'}</td>
               <td className="px-4 py-3">
-                <span className={`px-2 py-0.5 rounded text-[0.65rem] font-bold tracking-wide uppercase ${
-                  user.AUTHPROV === 'SSO' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'
+                <span className={`px-2 py-0.5 rounded text-[0.65rem] font-bold tracking-wide uppercase border ${
+                  user.AUTHPROV === 'SSO' ? 'bg-slate-100 text-slate-800 border-slate-300' : 'bg-slate-50 text-slate-600 border-slate-200'
                 }`}>
                   {user.AUTHPROV}
                 </span>

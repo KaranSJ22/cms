@@ -58,9 +58,9 @@ export default function PreBookItemCard({
           </div>
         </div>
         
-        {item.ITEMDESCR && (
+        {(item.DESCR || item.ITEMDESCR) && (
           <p className="text-slate-500 text-sm mb-4 line-clamp-2 flex-1">
-            {item.ITEMDESCR}
+            {item.DESCR || item.ITEMDESCR}
           </p>
         )}
         

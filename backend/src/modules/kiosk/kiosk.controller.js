@@ -1,5 +1,8 @@
 import { sendSuccess } from "../../utils/apiResponse.js";
 import { getClientIp } from "../../middlewares/kioskDevice.middleware.js";
+import { ForbiddenError, BadRequestError, NotFoundError, UnauthorizedError } from "../../common/errors/appError.js";
+import * as authService from "../auth/auth.service.js";
+import { WalkinService } from "../walkin/walkin.service.js";
 import * as KioskService from "./kiosk.service.js";
 
 /**
@@ -172,6 +175,21 @@ export const serveBookingController = async (req, res, next) => {
 };
 
 /**
+ * Cancels active booking at serving counter by staff with attribution and automatic refund
+ */
+export const cancelCounterBookingController = async (req, res, next) => {
+  try {
+    const { bookingId, cancelReason } = req.body;
+    const userId = req.user?.USERID || 1;
+    const reason = cancelReason || `Cancelled at Serving Counter by Staff [User #${userId}]`;
+    const result = await KioskService.cancelCounterBooking(bookingId, userId, reason);
+    return sendSuccess(res, result, "Booking cancelled and refunded successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Returns all active canteens for terminal selection
  */
 export const getActiveCanteensController = async (req, res, next) => {
@@ -228,5 +246,227 @@ export const syncOfflineController = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Ingest offline serving events batch from kiosk terminal
+ */
+export const syncServingEventsController = async (req, res, next) => {
+  try {
+    const payload = req.body;
+    const result = await KioskService.syncServingEventsBatch(payload, req.kiosk);
+    return sendSuccess(res, result, "Offline serving events sync batch processed successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Staff Shift Login for Serving Counter (Supports RFID badge tap or LoginID/Password)
+ */
+export const counterLoginController = async (req, res, next) => {
+  try {
+    const { loginId, password, rfidUid } = req.body;
+    const cleanId = (loginId || "").trim();
+    const cleanRfid = (rfidUid || "").trim();
+
+    let authResult;
+    if (cleanRfid && !password) {
+      // 1. Centralized RFID Tap Login via authService
+      authResult = await authService.rfidLoginUser({ rfidUid: cleanRfid });
+    } else if (cleanId && password) {
+      // 2. Centralized Username & Password Login via authService
+      authResult = await authService.loginUser({ LOGINID: cleanId, PASSWORD: password });
+    } else {
+      throw new BadRequestError("Staff Login ID with password or RFID badge tap is required");
+    }
+
+    const ALLOWED_STAFF_ROLES = ["CNTSTF", "CNTMGR", "CTNMNG", "CNTAST", "CTNAST", "SYSADM"];
+    const systemRoles = authResult.USER?.SYSTEMROLES || [];
+    const canteenRoles = authResult.USER?.CANTEENROLES || [];
+    const isSystemAdmin = systemRoles.includes("SYSADM");
+    const hasCanteenRole = canteenRoles.some((cr) => ALLOWED_STAFF_ROLES.includes(cr.ROLECODE));
+
+    if (!isSystemAdmin && !hasCanteenRole) {
+      throw new ForbiddenError(
+        "Access denied. You do not have an active Canteen Staff, Manager, or Assistant assignment."
+      );
+    }
+
+    return sendSuccess(
+      res,
+      {
+        token: authResult.TOKEN,
+        user: {
+          userId: authResult.USER.USERID,
+          loginId: authResult.USER.LOGINID,
+          fullName: authResult.USER.FULLNAME,
+          email: authResult.USER.EMAIL,
+          canteenRoles: canteenRoles.map((cr) => ({
+            canteenId: cr.CANTEENID,
+            canteenName: cr.CANTEENNAME,
+            canteenCode: cr.CANTEENCODE,
+            roleCode: cr.ROLECODE,
+            roleName: cr.ROLENAME,
+            isDefault: Boolean(cr.ISDEFAULT),
+          })),
+        },
+      },
+      "Staff shift login successful"
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Customer lookup for on-spot walk-in food
+ */
+export const counterWalkinCustomerController = async (req, res, next) => {
+  try {
+    const query = req.query.query || req.query.identifier || "";
+    if (!query) {
+      throw new BadRequestError("Query parameter is required");
+    }
+
+    let customer = await WalkinService.employeeLookup(query);
+    if (!customer) {
+      const visitors = await WalkinService.visitorLookup(query);
+      if (visitors && visitors.length > 0) {
+        customer = visitors[0];
+      }
+    }
+
+    if (!customer) {
+      throw new NotFoundError(`Customer "${query}" not found`);
+    }
+
+    return sendSuccess(
+      res,
+      {
+        customerId: customer.CUSTOMERID,
+        dispName: customer.DISPNAME || customer.VISNAME || "Customer",
+        loginId: customer.LOGINID || customer.EMPCODE || customer.CONTCODE || query,
+        ctypeCode: customer.CTYPECODE || "PRM",
+        ctypeName: customer.CTYPENAME || "Employee",
+        walletId: customer.WALLETID || null,
+        walletBalance: Number(customer.WALLETBALANCE || 0),
+        isLiveOnline: true,
+      },
+      "Walk-in customer resolved successfully"
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get surplus walk-in menu for today's active slot
+ */
+export const counterWalkinMenuController = async (req, res, next) => {
+  try {
+    const canteenId = Number(req.query.canteenId) || 1;
+    const ctypeCode = req.query.ctypeCode || "PRM";
+
+    const items = await WalkinService.getActiveMenu(canteenId, ctypeCode);
+    const mapped = (items || []).map((it) => ({
+      dayMenuId: it.DAYMENUID,
+      daySlotId: it.DAYSLOTID,
+      serviceId: it.SERVICEID,
+      serviceName: it.SERVNAME || "Meal",
+      menuItemId: it.MENUITEMID,
+      itemName: it.ITEMNAME,
+      shortName: it.SHORTNAME,
+      price: Number(it.PRICE || 0),
+      isBase: Boolean(it.ISBASE),
+      isSpecial: Boolean(it.ISSPECIAL),
+    }));
+
+    return sendSuccess(res, mapped, "Walk-in menu retrieved successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Direct atomic walk-in food dispensing
+ */
+export const counterWalkinServeController = async (req, res, next) => {
+  try {
+    const { customerId, canteenId, serviceId, items } = req.body;
+    const staffUserId = req.user?.USERID || 1;
+
+    const result = await WalkinService.serveWalkin(
+      {
+        customerId: Number(customerId),
+        canteenId: Number(canteenId || 1),
+        serviceId: Number(serviceId),
+        items: (items || []).map((i) => ({
+          dayMenuId: Number(i.dayMenuId),
+          qty: Number(i.qty || 1),
+        })),
+      },
+      staffUserId
+    );
+
+    return sendSuccess(res, result, "Walk-in meal dispensed and served successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ============================================================
+// Hardware Kiosk Fleet Management (SYSADM)
+// ============================================================
+
+export const listKioskDevicesController = async (req, res, next) => {
+  try {
+    const canteenId = req.query.canteenId ? Number(req.query.canteenId) : null;
+    const devices = await KioskService.listKioskDevices(canteenId);
+    return sendSuccess(res, devices, "Kiosk devices retrieved successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const registerKioskDeviceController = async (req, res, next) => {
+  try {
+    const result = await KioskService.registerKioskDevice(req.body, req.user.USERID);
+    return sendSuccess(res, result, "Kiosk device registered successfully", 201);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getKioskDeviceDetailsController = async (req, res, next) => {
+  try {
+    const kioskId = Number(req.params.id);
+    const device = await KioskService.getKioskDeviceDetails(kioskId);
+    return sendSuccess(res, device, "Kiosk device details retrieved successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateKioskDeviceStatusController = async (req, res, next) => {
+  try {
+    const kioskId = Number(req.params.id);
+    const { STATUSID } = req.body;
+    const device = await KioskService.updateKioskDeviceStatus(kioskId, STATUSID, req.user.USERID);
+    return sendSuccess(res, device, "Kiosk device status updated successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getKioskFleetTelemetryController = async (req, res, next) => {
+  try {
+    const telemetry = await KioskService.getKioskFleetTelemetry();
+    return sendSuccess(res, telemetry, "Kiosk fleet telemetry retrieved successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
+
 
 

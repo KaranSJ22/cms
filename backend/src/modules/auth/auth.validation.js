@@ -19,3 +19,9 @@ export const ssoLoginSchema = z.object({
       message: "SSO token is required",
     }),
 });
+
+export const rfidLoginSchema = z.object({
+  body: z.object({
+    rfidUid: z.string().trim().min(1).max(100),
+  }),
+});

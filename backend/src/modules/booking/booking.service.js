@@ -34,7 +34,7 @@ async function adjustBookingWalletLedger(conn, {
   const [[cust]] = await conn.query(
     `SELECT C.CUSTOMERID, CT.CTYPECODE
      FROM CMS_CUSTOMER C
-     JOIN CMS_CUSTOMERTYPE CT ON CT.CTYPEID = C.CTYPEID
+     JOIN CMS_CUSTTYPE CT ON CT.CTYPEID = C.CTYPEID
      WHERE C.CUSTOMERID = ?`,
     [customerId]
   );
@@ -131,13 +131,13 @@ async function recordBookingHistory(conn, bookingId, changedBy, changeReason) {
     `INSERT INTO CMS_BOOKHIST (
        BOOKID, BOOKNO, BOOKTYPEID, CUSTOMERID, SERVICEID, SERVICEDATE,
        STATUSID, BOOKSEQNO, TOTALITEMS, TOTALQTY, TOTALAMOUNT,
-       BOOKEDBY, BOOKEDON, CANCELLEDBY, CANCELLEDON, SERVEDBY, SERVEDON, NOSHOWON,
+       BOOKEDBY, BOOKEDAT, CANCELLEDBY, CANCELLEDAT, SERVEDBY, SERVEDAT, NOSHOWAT,
        REMARKS, CREATEDBY, CREATEDAT, UPDATEDBY, UPDATEDAT, CHANGEDBY, CHGREASON
      )
      SELECT 
        BOOKID, BOOKNO, BOOKTYPEID, CUSTOMERID, SERVICEID, SERVICEDATE,
        STATUSID, BOOKSEQNO, TOTALITEMS, TOTALQTY, TOTALAMOUNT,
-       BOOKEDBY, BOOKEDON, CANCELLEDBY, CANCELLEDON, SERVEDBY, SERVEDON, NOSHOWON,
+       BOOKEDBY, BOOKEDAT, CANCELLEDBY, CANCELLEDAT, SERVEDBY, SERVEDAT, NOSHOWAT,
        REMARKS, CREATEDBY, CREATEDAT, UPDATEDBY, UPDATEDAT, ?, ?
      FROM CMS_BOOKING
      WHERE BOOKID = ?`,
@@ -147,7 +147,7 @@ async function recordBookingHistory(conn, bookingId, changedBy, changeReason) {
   const bookHistId = histResult.insertId;
 
   await conn.query(
-    `INSERT INTO CMS_BOOKITMHS (
+    `INSERT INTO CMS_BOOKITMHST (
        BOOKHISTID, BOOKITEMID, DAYMENUID, MENUITEMID, QTY, RATE, AMOUNT, REMARKS, STATUSID
      )
      SELECT ?, BOOKITEMID, DAYMENUID, MENUITEMID, QTY, RATE, AMOUNT, REMARKS, STATUSID
@@ -171,10 +171,10 @@ export const getActiveBookingForContext = async ({
   const [headers] = await pool.query(
     `SELECT 
        B.BOOKID, B.BOOKNO, B.BOOKTYPEID, BT.BOOKTYPECODE, BT.BOOKTYPENAME,
-       B.CUSTOMERID, C.CTYPECODE, C.DISPNAME AS CUSTOMERNAME,
+       B.CUSTOMERID, CT.CTYPECODE, C.DISPNAME AS CUSTOMERNAME,
        B.SERVICEID, S.SERVNAME, B.SERVICEDATE,
        B.STATUSID, ST.STATUSCODE, B.TOTALITEMS, B.TOTALQTY, B.TOTALAMOUNT,
-       B.BOOKEDBY, B.BOOKEDON, B.REMARKS,
+       B.BOOKEDBY, B.BOOKEDAT, B.BOOKEDAT AS BOOKEDON, B.REMARKS,
        DS.CANTEENID, CAN.CANTEENNAME,
        MIN(DM.BOOKUNTIL) AS MIN_BOOKUNTIL,
        MAX(DM.BOOKUNTIL) AS MAX_BOOKUNTIL
@@ -182,6 +182,7 @@ export const getActiveBookingForContext = async ({
      JOIN CMS_BOOKTYPE BT ON BT.BOOKTYPEID = B.BOOKTYPEID
      JOIN CMS_STATUS ST ON ST.STATUSID = B.STATUSID
      JOIN CMS_CUSTOMER C ON C.CUSTOMERID = B.CUSTOMERID
+     JOIN CMS_CUSTTYPE CT ON CT.CTYPEID = C.CTYPEID
      JOIN CMS_SERVICE S ON S.SERVICEID = B.SERVICEID
      JOIN CMS_BOOKITEM BI ON BI.BOOKID = B.BOOKID
      JOIN CMS_DAYMENU DM ON DM.DAYMENUID = BI.DAYMENUID
@@ -192,7 +193,7 @@ export const getActiveBookingForContext = async ({
        AND B.SERVICEID = ?
        AND B.SERVICEDATE = ?
        AND ST.STATUSCODE = 'CRT'
-     GROUP BY B.BOOKID, BT.BOOKTYPECODE, BT.BOOKTYPENAME, C.CTYPECODE, C.DISPNAME, S.SERVNAME, ST.STATUSCODE, DS.CANTEENID, CAN.CANTEENNAME
+     GROUP BY B.BOOKID, BT.BOOKTYPECODE, BT.BOOKTYPENAME, CT.CTYPECODE, C.DISPNAME, S.SERVNAME, ST.STATUSCODE, DS.CANTEENID, CAN.CANTEENNAME
      LIMIT 1`,
     [customerId, canteenId, serviceId, serviceDate]
   );
@@ -266,7 +267,7 @@ export const addBookingItemIncremental = async ({
 
     // 2. Lock and validate DayMenu item
     const [[dayMenu]] = await conn.query(
-      `SELECT DM.*, MI.ITEMNAME, DS.SERVICEID, DS.SERVDATE, DS.CANTEENID,
+      `SELECT DM.*, MI.ITEMNAME, DS.SERVICEID, DS.SERVICEDATE AS SERVDATE, DS.SERVICEDATE, DS.CANTEENID,
               DM_ST.STATUSCODE AS DM_STATUS, DS_ST.STATUSCODE AS DS_STATUS, DS_AST.STATUSCODE AS DS_APPRSTATUS
        FROM CMS_DAYMENU DM
        JOIN CMS_DAYSLOT DS ON DS.DAYSLOTID = DM.DAYSLOTID
@@ -286,7 +287,8 @@ export const addBookingItemIncremental = async ({
       throw new BadRequestError("This item is not available for pre-booking");
     }
 
-    const dmDateStr = toMySQLDate(dayMenu.SERVDATE);
+    const dmDate = dayMenu.SERVICEDATE || dayMenu.SERVDATE;
+    const dmDateStr = toMySQLDate(dmDate);
     const bkDateStr = toMySQLDate(booking.SERVICEDATE);
     if (dayMenu.SERVICEID !== booking.SERVICEID || dmDateStr !== bkDateStr) {
       throw new BadRequestError("Item does not match the service and date of this booking");
@@ -325,12 +327,13 @@ export const addBookingItemIncremental = async ({
       `SELECT d.PRICE
        FROM CMS_ITEMPRICE p
        JOIN CMS_STATUS IP_ST ON IP_ST.STATUSID = p.STATUSID
-       JOIN CMS_ITEMPRICEDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+       JOIN CMS_ITMPRICDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+       JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = d.CTYPEID
        WHERE p.MENUITEMID = ?
-         AND (d.CTYPECODE = ? OR d.CTYPECODE = 'VIS')
+         AND (ct.CTYPECODE = ? OR ct.CTYPECODE = 'VIS')
          AND p.EFFFROM <= ?
          AND IP_ST.STATUSCODE = 'ACT'
-       ORDER BY p.EFFFROM DESC, CASE WHEN d.CTYPECODE = ? THEN 1 ELSE 2 END
+       ORDER BY p.EFFFROM DESC, CASE WHEN ct.CTYPECODE = ? THEN 1 ELSE 2 END
        LIMIT 1`,
       [dayMenu.MENUITEMID, ctypeCode, booking.SERVICEDATE, ctypeCode]
     );
@@ -678,7 +681,7 @@ export const cancelBookingItemIncremental = async ({
       await conn.query(
         `UPDATE CMS_BOOKING
          SET STATUSID = 33, TOTALITEMS = 0, TOTALQTY = 0, TOTALAMOUNT = 0,
-             CANCELLEDBY = ?, CANCELLEDON = CURRENT_TIMESTAMP,
+             CANCELLEDBY = ?, CANCELLEDAT = CURRENT_TIMESTAMP,
              REMARKS = COALESCE(?, REMARKS), UPDATEDBY = ?, UPDATEDAT = CURRENT_TIMESTAMP
          WHERE BOOKID = ?`,
         [userId, cancelReason || "All items cancelled", userId, bookingId]
@@ -733,7 +736,8 @@ export const getWeeklyPublishedMenuRaw = async ({ canteenId, startDate, endDate,
         S.SERVICEID,
         S.SERVCODE,
         S.SERVNAME,
-        DATE_FORMAT(DS.SERVDATE, '%Y-%m-%d') AS SERVDATE,
+        DATE_FORMAT(DS.SERVICEDATE, '%Y-%m-%d') AS SERVDATE,
+        DATE_FORMAT(DS.SERVICEDATE, '%Y-%m-%d') AS SERVICEDATE,
         DS.STARTTIME,
         DS.ENDTIME,
         DM.DAYMENUID,
@@ -742,7 +746,8 @@ export const getWeeklyPublishedMenuRaw = async ({ canteenId, startDate, endDate,
         MI.MENUCODE,
         MI.SHORTNAME,
         MI.ITEMNAME,
-        MI.ITEMDESCR,
+        MI.DESCR AS ITEMDESCR,
+        MI.DESCR,
         DM.ISBASE,
         DM.ISSPECIAL,
         DM.ISPREBOOK,
@@ -754,15 +759,16 @@ export const getWeeklyPublishedMenuRaw = async ({ canteenId, startDate, endDate,
         (
             SELECT IPD.PRICE
             FROM   CMS_ITEMPRICE IP
-            JOIN   CMS_ITEMPRICEDT IPD ON IPD.ITEMPRICEID = IP.ITEMPRICEID
+            JOIN   CMS_ITMPRICDT IPD ON IPD.ITEMPRICEID = IP.ITEMPRICEID
+            JOIN   CMS_CUSTTYPE CT ON CT.CTYPEID = IPD.CTYPEID
             JOIN   CMS_STATUS IPST ON IPST.STATUSID = IP.STATUSID
             WHERE  IP.MENUITEMID  = MI.MENUITEMID
-              AND  IP.EFFFROM    <= DS.SERVDATE
+              AND  IP.EFFFROM    <= DS.SERVICEDATE
               AND  IPST.STATUSCODE = 'ACT'
-              AND  (IPD.CTYPECODE = ? OR IPD.CTYPECODE = 'VIS')
+              AND  (CT.CTYPECODE = ? OR CT.CTYPECODE = 'VIS')
             ORDER BY 
               IP.EFFFROM DESC,
-              CASE WHEN IPD.CTYPECODE = ? THEN 1 ELSE 2 END
+              CASE WHEN CT.CTYPECODE = ? THEN 1 ELSE 2 END
             LIMIT 1
         ) AS DISPLAYPRICE
     FROM CMS_DAYMENU DM
@@ -776,15 +782,15 @@ export const getWeeklyPublishedMenuRaw = async ({ canteenId, startDate, endDate,
     JOIN CMS_STATUS S_ST ON S_ST.STATUSID = S.STATUSID
     JOIN CMS_STATUS MI_ST ON MI_ST.STATUSID = MI.STATUSID
     WHERE DS.CANTEENID  = ?
-      AND DS.SERVDATE  >= ?
-      AND DS.SERVDATE  <= ?
+      AND DS.SERVICEDATE >= ?
+      AND DS.SERVICEDATE <= ?
       AND DS_AST.STATUSCODE = 'APR'
       AND DM_ST.STATUSCODE  = 'ACT'
       AND DS_ST.STATUSCODE  = 'ACT'
       AND S_ST.STATUSCODE   = 'ACT'
       AND MI_ST.STATUSCODE  = 'ACT'
       AND DM.ISPREBOOK      = 1
-    ORDER BY DS.SERVDATE, DS.STARTTIME, S.SERVNAME, DM.ISBASE DESC, MI.ITEMNAME
+    ORDER BY DS.SERVICEDATE, DS.STARTTIME, S.SERVNAME, DM.ISBASE DESC, MI.ITEMNAME
   `;
 
   const holidayQuery = `
@@ -1195,7 +1201,7 @@ export const resolveBooking = async (identifier, canteenId = null, serviceId = n
        FROM CMS_CUSTOMER c
        LEFT JOIN CMS_VISITOR v ON v.CUSTOMERID = c.CUSTOMERID
        LEFT JOIN CMS_USER u ON u.USERID = c.USERID
-       WHERE (v.VISMOBILE = ? OR u.MOBILENO = ?)
+       WHERE (v.MOBILENO = ? OR u.MOBILENO = ?)
          AND c.STATUSID = 10
        LIMIT 1`,
       [targetIdentifier, targetIdentifier]

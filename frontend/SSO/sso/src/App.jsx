@@ -225,7 +225,7 @@ export default function App() {
                 </h2>
               </div>
               <p style={{ fontSize: '0.75rem', color: '#94A3B8', lineHeight: '1.4' }}>
-                Authenticate with your official ISRO Login ID. Upon successful authorization, an encrypted 5-minute security assertion will launch the Canteen Management System.
+                Authenticate with your official ISRO Login ID. Upon successful authorization, an encrypted 5-minute security assertion will launch the Canteen Mitra.
               </p>
             </div>
 

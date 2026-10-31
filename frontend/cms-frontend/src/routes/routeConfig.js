@@ -7,10 +7,11 @@
  */
 
 export const ADMIN_NAV = [
-  { key: 'identity', label: 'Identity & Access', category: 'admin', icon: 'IdentificationIcon' },
+  { key: 'kiosk-devices', label: 'Kiosk Terminal Fleet', category: 'admin', icon: 'ComputerDesktopIcon' },
+  { key: 'canteen-facilities', label: 'Canteen Facilities', category: 'admin', icon: 'BuildingOffice2Icon' },
+  { key: 'identity', label: 'Role & Access Governance', category: 'admin', icon: 'ShieldCheckIcon' },
   { key: 'level-mappings', label: 'Approver Levels', category: 'admin', icon: 'ShieldCheckIcon' },
   { key: 'holidays', label: 'Canteen Holidays', category: 'admin', icon: 'CalendarDaysIcon' },
-  { key: 'reports/payroll', label: 'Monthly Payroll', category: 'admin', icon: 'DocumentChartBarIcon' },
 ]
 
 export const CANTEEN_MANAGER_NAV = [
@@ -32,7 +33,6 @@ export const CANTEEN_MANAGER_NAV = [
 
   // Terminals & Kiosks
   { key: 'kiosk/serving-terminal', label: 'Serving Terminal', category: 'terminals', icon: 'ComputerDesktopIcon' },
-  { key: 'kiosk/self-service', label: 'Self-Service Kiosk', category: 'terminals', icon: 'DeviceTabletIcon' },
 
   // Finance & Admin
   { key: 'pricing', label: 'Pricing', category: 'finance', icon: 'CurrencyRupeeIcon' },
@@ -162,7 +162,7 @@ export function getNavTabs(perms, user, customer, badges = {}) {
 
 /** Default landing tab key for a given role */
 export function getDefaultTab(perms) {
-  if (perms.isAdmin && !perms.isCanteenWorker) return 'identity'
+  if (perms.isAdmin && !perms.isCanteenWorker) return 'kiosk-devices'
   if (perms.isCanteenWorker) return 'dashboard'
   return 'home'
 }

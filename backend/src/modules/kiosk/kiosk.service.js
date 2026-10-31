@@ -1,6 +1,7 @@
 import * as KioskRepository from "./kiosk.repository.js";
 import * as bookingService from "../booking/booking.service.js";
 import * as bookingRepository from "../booking/booking.repository.js";
+import { WalkinService } from "../walkin/walkin.service.js";
 import { pool } from "../../db/connection.js";
 import { NotFoundError, BadRequestError, ForbiddenError } from "../../common/errors/appError.js";
 import { getTodayIST, getTomorrowIST, toMySQLDate } from "../../utils/dateTime.js";
@@ -152,7 +153,7 @@ export const getNextDayServices = async (canteenId) => {
      JOIN CMS_SERVICE S ON S.SERVICEID = DS.SERVICEID
      JOIN CMS_DAYMENU DM ON DM.DAYSLOTID = DS.DAYSLOTID AND DM.ISKIOSK = 1 AND DM.STATUSID = 10
      WHERE DS.CANTEENID = ?
-       AND DS.SERVDATE = ?
+        AND DS.SERVICEDATE = ?
        AND DS.STATUSID = 10
      GROUP BY DS.SERVICEID, S.SERVCODE, S.SERVNAME, DS.STARTTIME, DS.ENDTIME
      ORDER BY DS.STARTTIME ASC`,
@@ -187,11 +188,12 @@ export const getNextDayKioskMenu = async (canteenId, serviceDate, serviceId = nu
         MI.MENUCODE,
         MI.SHORTNAME,
         MI.ITEMNAME,
-        MI.ITEMDESCR AS ITEMDESC,
+        MI.DESCR AS ITEMDESC,
+        MI.DESCR AS ITEMDESCR,
         COALESCE(
           (SELECT IPD.PRICE 
            FROM CMS_ITEMPRICE IP
-           JOIN CMS_ITEMPRICEDT IPD ON IPD.ITEMPRICEID = IP.ITEMPRICEID
+           JOIN CMS_ITMPRICDT IPD ON IPD.ITEMPRICEID = IP.ITEMPRICEID
            WHERE IP.MENUITEMID = MI.MENUITEMID 
              AND IP.STATUSID = 10 
              AND IP.EFFFROM <= ?
@@ -208,7 +210,7 @@ export const getNextDayKioskMenu = async (canteenId, serviceDate, serviceId = nu
      JOIN CMS_SERVICE S ON S.SERVICEID = DS.SERVICEID
      JOIN CMS_MENUITEM MI ON MI.MENUITEMID = DM.MENUITEMID
      WHERE DS.CANTEENID = ?
-       AND DS.SERVDATE = ?
+       AND DS.SERVICEDATE = ?
        AND DM.ISKIOSK = 1
        AND DM.STATUSID = 10`;
 
@@ -301,7 +303,43 @@ export const bookNextDay = async (data, kiosk = null) => {
     );
   }
 
-  // Prevent duplicate bookings: Check if customer already has an active booking for this service & date
+  const offlineUuid = data.OFFLINEUUID || data.offlineUuid || null;
+  const kioskCode = data.KIOSKCODE || data.kioskCode || kiosk?.deviceCode || "KIOSK";
+
+  // 1. Idempotency Guard: Check if booking with this offlineUuid already exists
+  if (offlineUuid) {
+    const [existingByUuid] = await pool.query(
+      `SELECT B.BOOKID, B.BOOKNO, B.SERVICEID, B.SERVICEDATE, B.TOTALAMOUNT
+       FROM CMS_BOOKING B
+       WHERE B.REMARKS LIKE CONCAT('%', ?, '%')
+       LIMIT 1`,
+      [offlineUuid]
+    );
+
+    if (existingByUuid.length > 0) {
+      const match = existingByUuid[0];
+      const [[walletRow]] = await pool.query(
+        `SELECT W.BALANCE 
+         FROM CMS_WALLET W 
+         JOIN CMS_STATUS ST ON ST.STATUSID = W.STATUSID 
+         WHERE W.CUSTOMERID = ? AND ST.STATUSCODE = 'ACT' 
+         LIMIT 1`,
+        [data.CUSTOMERID]
+      );
+
+      return {
+        bookId: match.BOOKID,
+        bookNo: match.BOOKNO,
+        serviceId: match.SERVICEID,
+        serviceDate: match.SERVICEDATE ? String(match.SERVICEDATE).slice(0, 10) : serviceDate,
+        totalAmount: Number(match.TOTALAMOUNT || 0),
+        walletBalance: walletRow ? Number(walletRow.BALANCE) : null,
+        isOfflineRecord: false,
+      };
+    }
+  }
+
+  // 2. Prevent duplicate bookings: Check if customer already has an active booking for this service & date
   const [existingBookings] = await pool.query(
     `SELECT B.BOOKID, B.BOOKNO 
      FROM CMS_BOOKING B
@@ -321,14 +359,18 @@ export const bookNextDay = async (data, kiosk = null) => {
   }
 
   const formattedItems = (data.ITEMS || []).map((item) => ({
-    DAYMENUID: item.DAYMENUID,
-    MENUITEMID: item.MENUITEMID,
-    QTY: item.QTY,
+    DAYMENUID: item.DAYMENUID || item.dayMenuId,
+    MENUITEMID: item.MENUITEMID || item.menuItemId,
+    QTY: item.QTY || item.qty,
   }));
 
   // Resolve user id from customer record
   const customerRow = await getCustomerUser(data.CUSTOMERID);
   const userId = customerRow?.USERID || 1; // Fallback to system admin if customer has no user account
+
+  const remarks = offlineUuid
+    ? `KIOSK_ONLINE [${kioskCode}:${offlineUuid}]`
+    : `Booked via Self-Service Kiosk [${kioskCode}]`;
 
   const bookingResult = await bookingService.createBooking(
     {
@@ -338,12 +380,45 @@ export const bookNextDay = async (data, kiosk = null) => {
       PCUSTOMERID: data.CUSTOMERID,
       PITEMSJSON: formattedItems,
       PKIOSKID: kiosk?.kioskId || null,
-      PREMARKS: `Booked via Self-Service Kiosk [${kiosk?.deviceCode || "UNKNOWN"}]`,
+      PREMARKS: remarks,
     },
     { USERID: userId, CUSTOMERID: data.CUSTOMERID }
   );
 
-  return bookingResult;
+  const createdRow = bookingResult?.[0]?.[0] || bookingResult?.[0] || bookingResult;
+  const bookId = createdRow?.BOOKID || createdRow?.bookId;
+  let bookNo = createdRow?.BOOKNO || createdRow?.bookNo;
+  let totalAmount = 0;
+
+  if (bookId) {
+    const [[saved]] = await pool.query(
+      `SELECT BOOKID, BOOKNO, TOTALAMOUNT FROM CMS_BOOKING WHERE BOOKID = ?`,
+      [bookId]
+    );
+    if (saved) {
+      bookNo = saved.BOOKNO;
+      totalAmount = Number(saved.TOTALAMOUNT || 0);
+    }
+  }
+
+  const [[walletRow]] = await pool.query(
+    `SELECT W.BALANCE 
+     FROM CMS_WALLET W 
+     JOIN CMS_STATUS ST ON ST.STATUSID = W.STATUSID 
+     WHERE W.CUSTOMERID = ? AND ST.STATUSCODE = 'ACT' 
+     LIMIT 1`,
+    [data.CUSTOMERID]
+  );
+
+  return {
+    bookId,
+    bookNo,
+    serviceId: data.SERVICEID,
+    serviceDate,
+    totalAmount,
+    walletBalance: walletRow ? Number(walletRow.BALANCE) : null,
+    isOfflineRecord: false,
+  };
 };
 
 /**
@@ -435,6 +510,25 @@ export const cancelKioskBooking = async (data, kiosk = null) => {
 };
 
 /**
+ * Cancels active booking at serving counter by staff with attribution and automatic refund
+ */
+export const cancelCounterBooking = async (bookingId, userId, reason = "Cancelled at Serving Counter") => {
+  const booking = await getBookingBasic(Number(bookingId));
+  if (!booking) {
+    throw new NotFoundError("Booking not found");
+  }
+  if (booking.STATUSID === 32) {
+    throw new BadRequestError("Cannot cancel an already served booking");
+  }
+  if (booking.STATUSID === 33) {
+    throw new BadRequestError("Booking is already cancelled");
+  }
+
+  return await KioskRepository.cancelBooking(Number(bookingId), Number(userId), reason);
+};
+
+
+/**
  * Record heartbeat
  */
 export const recordHeartbeat = async (kioskId, clientIp) => {
@@ -505,7 +599,8 @@ export const getTodaySlots = async (canteenId) => {
         S.SERVCODE,
         S.SERVNAME,
         DS.CANTEENID,
-        DS.SERVDATE,
+        DS.SERVICEDATE AS SERVDATE,
+        DS.SERVICEDATE,
         DS.STARTTIME,
         DS.ENDTIME,
         DS.STATUSID,
@@ -516,7 +611,7 @@ export const getTodaySlots = async (canteenId) => {
      FROM CMS_DAYSLOT DS
      JOIN CMS_SERVICE S ON S.SERVICEID = DS.SERVICEID
      WHERE DS.CANTEENID = ?
-       AND DS.SERVDATE = CURDATE()
+       AND DS.SERVICEDATE = CURDATE()
        AND DS.STATUSID = 10
      ORDER BY DS.STARTTIME ASC`,
     [Number(canteenId)]
@@ -566,10 +661,10 @@ export const getBootstrapPackage = async (canteenId = 1, since = null) => {
         COALESCE(ak.KEYVALUE, '') AS rfidUid,
         COALESCE(pe.EMPCODE, ce.CONTCODE, oe.EMPCODE, u.LOGINID, CAST(c.CUSTOMERID AS CHAR)) AS loginId,
         c.DISPNAME AS dispName,
-        c.CTYPECODE AS ctypeCode,
+        ct.CTYPECODE AS ctypeCode,
         ct.CTYPENAME AS ctypeName
      FROM CMS_CUSTOMER c
-     JOIN CMS_CUSTTYPE ct ON ct.CTYPECODE = c.CTYPECODE
+     JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = c.CTYPEID
      LEFT JOIN CMS_USER u ON u.USERID = c.USERID
      LEFT JOIN CMS_PERMEMP pe ON pe.CUSTOMERID = c.CUSTOMERID
      LEFT JOIN CMS_CONTEMP ce ON ce.CUSTOMERID = c.CUSTOMERID
@@ -589,21 +684,22 @@ export const getBootstrapPackage = async (canteenId = 1, since = null) => {
      WHERE w.STATUSID = 10`
   );
 
-  // 3. Day Slots strictly for upcoming dates (SERVDATE > CURDATE())
+  // 3. Day Slots strictly for upcoming dates (SERVICEDATE > CURDATE())
   const [daySlots] = await pool.query(
     `SELECT 
         DS.DAYSLOTID AS daySlotId,
+        DS.CANTEENID AS canteenId,
         DS.SERVICEID AS serviceId,
         S.SERVNAME AS serviceName,
-        DATE_FORMAT(DS.SERVDATE, '%Y-%m-%d') AS servDate,
+        DATE_FORMAT(DS.SERVICEDATE, '%Y-%m-%d') AS servDate,
         DS.STARTTIME AS startTime,
         DS.ENDTIME AS endTime
      FROM CMS_DAYSLOT DS
      JOIN CMS_SERVICE S ON S.SERVICEID = DS.SERVICEID
      WHERE DS.CANTEENID = ?
-       AND DS.SERVDATE > ?
+       AND DS.SERVICEDATE > ?
        AND DS.STATUSID = 10
-     ORDER BY DS.SERVDATE ASC, DS.STARTTIME ASC`,
+     ORDER BY DS.SERVICEDATE ASC, DS.STARTTIME ASC`,
     [effectiveCanteenId, today]
   );
 
@@ -617,10 +713,10 @@ export const getBootstrapPackage = async (canteenId = 1, since = null) => {
         COALESCE(
           (SELECT IPD.PRICE 
            FROM CMS_ITEMPRICE IP
-           JOIN CMS_ITEMPRICEDT IPD ON IPD.ITEMPRICEID = IP.ITEMPRICEID
+           JOIN CMS_ITMPRICDT IPD ON IPD.ITEMPRICEID = IP.ITEMPRICEID
            WHERE IP.MENUITEMID = MI.MENUITEMID 
              AND IP.STATUSID = 10 
-             AND IP.EFFFROM <= DS.SERVDATE
+             AND IP.EFFFROM <= DS.SERVICEDATE
            ORDER BY IP.EFFFROM DESC 
            LIMIT 1),
           0.00
@@ -633,7 +729,8 @@ export const getBootstrapPackage = async (canteenId = 1, since = null) => {
      JOIN CMS_DAYSLOT DS ON DS.DAYSLOTID = DM.DAYSLOTID
      JOIN CMS_MENUITEM MI ON MI.MENUITEMID = DM.MENUITEMID
      WHERE DS.CANTEENID = ?
-       AND DS.SERVDATE > ?
+       AND DS.SERVICEDATE > ?
+       AND DS.STATUSID = 10
        AND DM.ISKIOSK = 1
        AND DM.STATUSID = 10`,
     [effectiveCanteenId, today]
@@ -648,10 +745,61 @@ export const getBootstrapPackage = async (canteenId = 1, since = null) => {
         B.BOOKNO AS tokenNo
      FROM CMS_BOOKING B
      JOIN CMS_STATUS ST ON ST.STATUSID = B.STATUSID
-     JOIN CMS_DAYSLOT DS ON DS.SERVICEID = B.SERVICEID AND DS.SERVDATE = B.SERVICEDATE AND DS.CANTEENID = ?
+     JOIN CMS_DAYSLOT DS ON DS.SERVICEID = B.SERVICEID AND DS.SERVICEDATE = B.SERVICEDATE AND DS.CANTEENID = ?
      WHERE B.SERVICEDATE > ?
        AND ST.STATUSCODE <> 'CAN'
        AND B.STATUSID = 10`,
+    [effectiveCanteenId, today]
+  );
+
+  // 6. Serving Manifest for Today strictly for this canteen (for offline counter operations)
+  const [todayBookings] = await pool.query(
+    `SELECT 
+        B.BOOKID AS bookId,
+        B.BOOKNO AS bookNo,
+        B.CUSTOMERID AS customerId,
+        COALESCE(PE.EMPCODE, CE.CONTCODE, OE.EMPCODE, U.LOGINID, CAST(B.CUSTOMERID AS CHAR)) AS loginId,
+        COALESCE((SELECT AK.KEYVALUE FROM CMS_ACCKEY AK WHERE AK.CUSTOMERID = C.CUSTOMERID AND AK.STATUSID = 10 ORDER BY AK.ACCKEYID DESC LIMIT 1), '') AS rfidUid,
+        C.DISPNAME AS dispName,
+        CT.CTYPECODE AS ctypeCode,
+        B.SERVICEID AS serviceId,
+        DS.DAYSLOTID AS daySlotId,
+        S.SERVNAME AS slotName,
+        ST.STATUSCODE AS statusCode,
+        B.SERVEDBY AS servedBy,
+        B.SERVEDAT AS servedOn,
+        B.TOTALAMOUNT AS totalAmount
+     FROM CMS_BOOKING B
+     JOIN CMS_STATUS ST ON ST.STATUSID = B.STATUSID
+     JOIN CMS_CUSTOMER C ON C.CUSTOMERID = B.CUSTOMERID
+     JOIN CMS_CUSTTYPE CT ON CT.CTYPEID = C.CTYPEID
+     LEFT JOIN CMS_USER U ON U.USERID = C.USERID
+     LEFT JOIN CMS_PERMEMP PE ON PE.CUSTOMERID = C.CUSTOMERID
+     LEFT JOIN CMS_CONTEMP CE ON CE.CUSTOMERID = C.CUSTOMERID
+     LEFT JOIN CMS_OCEEMP OE ON OE.CUSTOMERID = C.CUSTOMERID
+     JOIN CMS_DAYSLOT DS ON DS.SERVICEID = B.SERVICEID AND DS.SERVICEDATE = B.SERVICEDATE AND DS.CANTEENID = ?
+     JOIN CMS_SERVICE S ON S.SERVICEID = DS.SERVICEID
+     WHERE B.SERVICEDATE = ?
+       AND ST.STATUSCODE IN ('CRT', 'SRV')
+     ORDER BY B.BOOKID DESC`,
+    [effectiveCanteenId, today]
+  );
+
+  const [todayBookItems] = await pool.query(
+    `SELECT 
+        BI.BOOKITEMID AS bookItemId,
+        BI.BOOKID AS bookId,
+        BI.MENUITEMID AS menuItemId,
+        MI.ITEMNAME AS itemName,
+        BI.QTY AS qty,
+        BI.RATE AS rate
+     FROM CMS_BOOKITEM BI
+     JOIN CMS_BOOKING B ON B.BOOKID = BI.BOOKID
+     JOIN CMS_STATUS ST ON ST.STATUSID = B.STATUSID
+     JOIN CMS_MENUITEM MI ON MI.MENUITEMID = BI.MENUITEMID
+     JOIN CMS_DAYSLOT DS ON DS.SERVICEID = B.SERVICEID AND DS.SERVICEDATE = B.SERVICEDATE AND DS.CANTEENID = ?
+     WHERE B.SERVICEDATE = ?
+       AND ST.STATUSCODE IN ('CRT', 'SRV')`,
     [effectiveCanteenId, today]
   );
 
@@ -665,6 +813,8 @@ export const getBootstrapPackage = async (canteenId = 1, since = null) => {
     daySlots,
     menuItems,
     activeBookings,
+    todayBookings,
+    todayBookItems,
   };
 };
 
@@ -773,5 +923,200 @@ export const syncOfflineBatch = async ({ kioskCode, batchId, items = [] }, kiosk
 
   return { results };
 };
+
+/**
+ * Ingests a batch of offline serving events (SERVE and WALKIN_SERVE) from a kiosk outbox
+ */
+export const syncServingEventsBatch = async ({ kioskCode, batchId, events = [] }, kiosk = null) => {
+  const results = [];
+
+  for (const event of events) {
+    const { eventUuid, eventType, payload = {} } = event;
+
+    try {
+      if (eventType === "SERVE") {
+        const { bookingId, kioskId, servedBy, servedOn } = payload;
+        const effectiveKioskId = kioskId || kiosk?.kioskId || null;
+        const effectiveUserId = servedBy || 1;
+
+        // Check if booking is already marked as served in central
+        const [existing] = await pool.query(
+          `SELECT B.BOOKID, ST.STATUSCODE 
+           FROM CMS_BOOKING B
+           JOIN CMS_STATUS ST ON ST.STATUSID = B.STATUSID
+           WHERE B.BOOKID = ?
+           LIMIT 1`,
+          [bookingId]
+        );
+
+        if (existing.length > 0 && existing[0].STATUSCODE === "SRV") {
+          results.push({
+            eventUuid,
+            status: "SYNCED",
+            message: "Booking already marked as served (Idempotent)",
+          });
+          continue;
+        }
+
+        if (existing.length === 0) {
+          results.push({
+            eventUuid,
+            status: "REJECTED",
+            message: `Booking #${bookingId} not found in central database`,
+          });
+          continue;
+        }
+
+        // Call standard kiosk serve procedure
+        await KioskRepository.serveKioskBooking(bookingId, effectiveUserId, effectiveKioskId);
+
+        results.push({
+          eventUuid,
+          status: "SYNCED",
+          message: "Serving event synchronized successfully",
+        });
+      } else if (eventType === "WALKIN_SERVE") {
+        const { offlineUuid, customerId, canteenId, serviceId, items = [], staffUserId } = payload;
+        const targetUuid = offlineUuid || eventUuid;
+
+        // Idempotency check via REMARKS
+        const [existingWalkin] = await pool.query(
+          `SELECT BOOKID, BOOKNO FROM CMS_BOOKING WHERE REMARKS LIKE CONCAT('%', ?, '%') LIMIT 1`,
+          [targetUuid]
+        );
+
+        if (existingWalkin.length > 0) {
+          results.push({
+            eventUuid,
+            status: "SYNCED",
+            bookId: existingWalkin[0].BOOKID,
+            bookNo: existingWalkin[0].BOOKNO,
+            message: "Walk-in already processed (Idempotent)",
+          });
+          continue;
+        }
+
+        const effectiveUserId = staffUserId || 1;
+        const result = await WalkinService.serveWalkin(
+          {
+            customerId: Number(customerId),
+            canteenId: Number(canteenId || kiosk?.canteenId || 1),
+            serviceId: Number(serviceId),
+            items: items.map((i) => ({
+              dayMenuId: Number(i.dayMenuId),
+              qty: Number(i.qty || 1),
+            })),
+            remarks: `OFFLINE_WALKIN [${kioskCode || "K1"}:${targetUuid}]`,
+          },
+          effectiveUserId
+        );
+
+        results.push({
+          eventUuid,
+          status: "SYNCED",
+          bookId: result.bookId,
+          bookNo: result.bookNo,
+          message: "Walk-in serving synchronized successfully",
+        });
+      } else {
+        results.push({
+          eventUuid,
+          status: "REJECTED",
+          message: `Unknown event type: ${eventType}`,
+        });
+      }
+    } catch (err) {
+      results.push({
+        eventUuid,
+        status: "REJECTED",
+        errorCode: err.code || "SYNC_ERROR",
+        message: err.message || "Failed to process serving event",
+      });
+    }
+  }
+
+  return { results };
+};
+
+// ============================================================
+// Hardware Kiosk Fleet Management (SYSADM)
+// ============================================================
+
+export const listKioskDevices = async (canteenId = null) => {
+  const devices = await KioskRepository.listKioskDevices(canteenId || null);
+  return devices;
+};
+
+export const registerKioskDevice = async (deviceData, userId) => {
+  const result = await KioskRepository.registerKioskDevice({
+    ...deviceData,
+    USERID: userId,
+  });
+  return result;
+};
+
+export const getKioskDeviceDetails = async (kioskId) => {
+  const devices = await KioskRepository.listKioskDevices(null);
+  const found = devices.find((d) => Number(d.KIOSKID) === Number(kioskId));
+  if (!found) {
+    throw new NotFoundError(`Kiosk device with ID ${kioskId} not found`);
+  }
+  return found;
+};
+
+export const updateKioskDeviceStatus = async (kioskId, statusId, userId) => {
+  // to be converted to stored procedure later
+  const [result] = await pool.query(
+    `UPDATE CMS_KIOSK SET STATUSID = ?, UPDATEDBY = ?, UPDATEDAT = CURRENT_TIMESTAMP WHERE KIOSKID = ?`,
+    [statusId, userId, kioskId]
+  );
+  if (result.affectedRows === 0) {
+    throw new NotFoundError(`Kiosk device with ID ${kioskId} not found`);
+  }
+  return getKioskDeviceDetails(kioskId);
+};
+
+export const getKioskFleetTelemetry = async () => {
+  const devices = await KioskRepository.listKioskDevices(null);
+  const now = Date.now();
+
+  let onlineCount = 0;
+  let staleCount = 0;
+  let offlineCount = 0;
+
+  const enriched = devices.map((d) => {
+    let health = "OFFLINE";
+    if (d.LASTHEARTBEATAT) {
+      const diffMs = now - new Date(d.LASTHEARTBEATAT).getTime();
+      const diffMins = diffMs / (1000 * 60);
+      if (diffMins <= 5) {
+        health = "ONLINE";
+        onlineCount++;
+      } else if (diffMins <= 30) {
+        health = "STALE";
+        staleCount++;
+      } else {
+        health = "OFFLINE";
+        offlineCount++;
+      }
+    } else {
+      offlineCount++;
+    }
+
+    return {
+      ...d,
+      HEALTH_STATUS: health,
+    };
+  });
+
+  return {
+    TOTAL_DEVICES: devices.length,
+    ONLINE: onlineCount,
+    STALE: staleCount,
+    OFFLINE: offlineCount,
+    DEVICES: enriched,
+  };
+};
+
 
 

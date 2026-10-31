@@ -1,25 +1,18 @@
 import React from "react";
 import {
   CurrencyRupeeIcon,
-  SparklesIcon,
-  ArrowPathIcon,
   InformationCircleIcon,
+  CheckCircleIcon,
 } from "@heroicons/react/24/outline";
 
 export function ComboCostCalculator({
   grossTotal = 0,
   handlingCharge = 0,
   onHandlingChange,
-  comboPrice = 0,
-  onComboPriceChange,
-  onSyncSuggested,
 }) {
   const safeGross = Number(grossTotal) || 0;
   const safeHandling = Number(handlingCharge) || 0;
-  const suggestedNet = safeGross;
-  const safeComboPrice = Number(comboPrice) || 0;
-  const markupDiff = safeComboPrice - safeGross;
-  const markupPercent = safeGross > 0 ? ((markupDiff / safeGross) * 100).toFixed(1) : 0;
+  const totalRate = safeGross + safeHandling;
 
   return (
     <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-4 shadow-xs space-y-4">
@@ -30,28 +23,18 @@ export function ComboCostCalculator({
           </span>
           <div>
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white font-grotesk">
-              Costing & Price Breakdown
+              Costing &amp; Price Breakdown
             </h4>
             <p className="text-[10px] text-slate-500 dark:text-slate-400">
               Live calculation of food portion cost and delivery/handling overhead
             </p>
           </div>
         </div>
-
-        <button
-          type="button"
-          onClick={onSyncSuggested}
-          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40 hover:bg-orange-100 dark:hover:bg-orange-900/50 border border-orange-200 dark:border-orange-800/50 transition-colors cursor-pointer"
-          title="Auto-fill Package Unit Rate with Food Portion Total"
-        >
-          <ArrowPathIcon className="w-3 h-3" />
-          Sync Price
-        </button>
       </div>
 
       {/* Breakdown Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-        {/* 1. Gross Food Rate */}
+        {/* 1. Gross Food Rate (Derived from items) */}
         <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-xl">
           <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-0.5">
             Gross Food Rate (Items Total)
@@ -60,14 +43,14 @@ export function ComboCostCalculator({
             ₹{safeGross.toFixed(2)}
           </div>
           <span className="text-[10px] text-slate-400">
-            Unit food rate (multiplied by quantity on booking)
+            Auto-calculated from selected items (billed per attendee)
           </span>
         </div>
 
         {/* 2. Flat Handling / Service Overhead */}
         <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-xl">
           <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-0.5">
-            Flat Handling & Service Fee (₹)
+            Flat Handling &amp; Service Fee (₹)
           </label>
           <div className="relative">
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">
@@ -84,7 +67,7 @@ export function ComboCostCalculator({
             />
           </div>
           <span className="text-[10px] text-slate-400">
-            One-time flat delivery & setup fee per booking
+            One-time flat delivery &amp; setup fee per booking
           </span>
         </div>
       </div>
@@ -99,68 +82,37 @@ export function ComboCostCalculator({
         </div>
       </div>
 
-      {/* Suggested Net vs Final Price */}
-      <div className="p-3.5 bg-linear-to-r from-orange-500/10 via-amber-500/10 to-orange-500/5 border border-orange-200/80 dark:border-orange-900/40 rounded-xl space-y-3">
+      {/* Package Rate Summary Card */}
+      <div className="p-3.5 bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/5 border border-orange-200/80 dark:border-orange-900/40 rounded-xl">
         <div className="flex items-center justify-between text-xs">
-          <span className="font-semibold text-slate-700 dark:text-slate-300">
-            Suggested Package Unit Rate (Food Portion):
+          <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+            <CheckCircleIcon className="w-4 h-4 text-emerald-500" />
+            Package Unit Food Rate:
           </span>
-          <span className="text-sm font-black text-slate-900 dark:text-white font-mono">
-            ₹{safeGross.toFixed(2)} <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400">/ package</span>
-          </span>
-        </div>
-
-        <div className="pt-2 border-t border-orange-200/60 dark:border-orange-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <label className="block text-xs font-bold text-slate-900 dark:text-white">
-              Package Unit Price (₹ / pkg) <span className="text-rose-500">*</span>
-            </label>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400">
-              Per-package food price billed when booked (e.g. ₹{safeGross.toFixed(2)})
-            </p>
-          </div>
-
-          <div className="w-full sm:w-44 relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">
-              ₹
+          <span className="text-base font-black text-orange-600 dark:text-orange-400 font-mono">
+            ₹{safeGross.toFixed(2)}{" "}
+            <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400">
+              / package
             </span>
-            <input
-              type="number"
-              step="0.5"
-              min="0"
-              placeholder="0.00"
-              value={comboPrice === 0 ? "" : comboPrice}
-              onChange={(e) => onComboPriceChange(e.target.value)}
-              className="w-full pl-7 pr-3 py-1.5 text-base font-black text-right text-orange-600 dark:text-orange-400 bg-white dark:bg-slate-900 border border-orange-300 dark:border-orange-700 rounded-lg outline-none focus:ring-2 focus:ring-orange-500"
-              required
-            />
-          </div>
+          </span>
         </div>
 
-        {/* Dynamic Margin Indicator */}
-        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-1">
+        <div className="text-[11px] text-slate-500 dark:text-slate-400 pt-1.5 mt-1.5 border-t border-orange-200/60 dark:border-orange-800/40 flex justify-between items-center">
           <span>
             {safeGross > 0 ? (
               <>
-                Package Rate: <strong className="text-slate-700 dark:text-slate-300">₹{safeComboPrice.toFixed(2)}/pkg</strong>
+                Package Rate: <strong className="text-slate-700 dark:text-slate-300">₹{safeGross.toFixed(2)}/pkg</strong>
                 {safeHandling > 0 && (
-                  <> + Flat Handling: <strong className="text-slate-700 dark:text-slate-300">₹{safeHandling.toFixed(2)} on total order</strong></>
+                  <> + Flat Handling: <strong className="text-slate-700 dark:text-slate-300">₹{safeHandling.toFixed(2)} on total booking</strong></>
                 )}
               </>
             ) : (
               "Add items to calculate food portion costs"
             )}
           </span>
-
-          {safeGross > 0 && safeComboPrice !== safeGross && (
-            <span
-              className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                markupDiff >= 0
-                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
-                  : "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
-              }`}
-            >
-              {markupDiff >= 0 ? `+${markupPercent}% Markup` : `${markupPercent}% Discount`}
+          {safeGross > 0 && (
+            <span className="font-mono font-semibold text-slate-700 dark:text-slate-300 text-xs">
+              Base Combo: ₹{totalRate.toFixed(2)}
             </span>
           )}
         </div>

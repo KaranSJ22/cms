@@ -13,7 +13,7 @@ export default function CopyDayModal({
 }) {
   const options = Array.from({ length: 7 }, (_, i) => {
     const date = weekDates[i] || '';
-    const isPublished = Boolean(publishedDays[i]);
+    const isPublished = Boolean(publishedDays[i]?.isPublished);
     const count = daySummary[i] || 0;
     return { i, date, count, isPublished };
   }).filter(({ i }) => i !== activeDayIndex);

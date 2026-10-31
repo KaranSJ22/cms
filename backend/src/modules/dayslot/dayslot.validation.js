@@ -23,11 +23,15 @@ export const createDaySlotSchema = z.object({
     .object({
       CANTEENID: z.coerce.number().int().positive(),
       SERVICEID: z.coerce.number().int().positive(),
-      SERVDATE: dateSchema,
+      SERVICEDATE: dateSchema.optional(),
+      SERVDATE: dateSchema.optional(),
       STARTTIME: timeSchema,
       ENDTIME: timeSchema,
     })
-    ,
+    .refine((data) => data.SERVICEDATE || data.SERVDATE, {
+      message: "SERVICEDATE or SERVDATE is required",
+      path: ["SERVICEDATE"],
+    }),
 });
 
 export const updateDaySlotSchema = z.object({
@@ -59,6 +63,10 @@ export const listDaySlotsSchema = z.object({
     DATETO: dateSchema.optional(),
     dateTo: dateSchema.optional(),
     servingDate: dateSchema.optional(),
+    PAGE: z.coerce.number().int().positive().optional(),
+    page: z.coerce.number().int().positive().optional(),
+    PAGESIZE: z.coerce.number().int().positive().optional(),
+    pageSize: z.coerce.number().int().positive().optional(),
   }),
 });
 

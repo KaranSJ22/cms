@@ -87,7 +87,7 @@ export default function SsoCallbackPage() {
                 Authentication Successful
               </h2>
               <p className="text-xs text-slate-400 mt-1.5">
-                Launching Canteen Management System...
+                Launching Canteen Mitra ...
               </p>
             </div>
           </div>

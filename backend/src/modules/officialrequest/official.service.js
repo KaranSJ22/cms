@@ -91,7 +91,8 @@ export const listServicesByCanteen = async (canteenId, statusId = null) => {
       `
       SELECT 
         oci.OFFCOMBOID,
-        oci.COMBOITEMID,
+        oci.OFFCOMBDTID,
+        oci.OFFCOMBDTID AS COMBOITEMID,
         oci.MENUITEMID,
         mi.ITEMNAME AS MENUNAME,
         mi.ITEMNAME,
@@ -101,14 +102,15 @@ export const listServicesByCanteen = async (canteenId, statusId = null) => {
         COALESCE(
           (SELECT d.PRICE 
            FROM CMS_ITEMPRICE p
-           JOIN CMS_ITEMPRICEDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+           JOIN CMS_ITMPRICDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+           JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = d.CTYPEID
            WHERE p.MENUITEMID = mi.MENUITEMID 
-             AND d.CTYPECODE = 'OFF'
+             AND ct.CTYPECODE = 'OFF'
              AND p.STATUSID = 10
            ORDER BY p.EFFFROM DESC LIMIT 1), 
           0.00
         ) AS OFFPRICE
-      FROM CMS_OFFCOMBO_ITEM oci
+      FROM CMS_OFFCOMBDT oci
       JOIN CMS_MENUITEM mi ON mi.MENUITEMID = oci.MENUITEMID
       LEFT JOIN CMS_SERVICE s ON s.SERVICEID = mi.SERVICEID
       WHERE oci.OFFCOMBOID IN (?)
@@ -198,7 +200,8 @@ export const getServiceDetails = async (serviceId) => {
       `
       SELECT 
         oci.OFFCOMBOID,
-        oci.COMBOITEMID,
+        oci.OFFCOMBDTID,
+        oci.OFFCOMBDTID AS COMBOITEMID,
         oci.MENUITEMID,
         mi.ITEMNAME AS MENUNAME,
         mi.ITEMNAME,
@@ -208,14 +211,15 @@ export const getServiceDetails = async (serviceId) => {
         COALESCE(
           (SELECT d.PRICE 
            FROM CMS_ITEMPRICE p
-           JOIN CMS_ITEMPRICEDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+           JOIN CMS_ITMPRICDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+           JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = d.CTYPEID
            WHERE p.MENUITEMID = mi.MENUITEMID 
-             AND d.CTYPECODE = 'OFF'
+             AND ct.CTYPECODE = 'OFF'
              AND p.STATUSID = 10
            ORDER BY p.EFFFROM DESC LIMIT 1), 
           0.00
         ) AS OFFPRICE
-      FROM CMS_OFFCOMBO_ITEM oci
+      FROM CMS_OFFCOMBDT oci
       JOIN CMS_MENUITEM mi ON mi.MENUITEMID = oci.MENUITEMID
       LEFT JOIN CMS_SERVICE s ON s.SERVICEID = mi.SERVICEID
       WHERE oci.OFFCOMBOID IN (?)
@@ -303,9 +307,10 @@ export const createCombo = async (comboData, userId) => {
 
   return await withTransaction(async (conn) => {
     // 1. Insert combo header
-    const grossVal = GROSSPRICE !== undefined ? GROSSPRICE : COMBOPRICE;
-    const handlingVal = HANDLINGCHARGE !== undefined ? HANDLINGCHARGE : 0.0;
-    const comboPriceVal = COMBOPRICE !== undefined ? COMBOPRICE : grossVal;
+    // Constraint CK_OC_COMBOPRICE strictly enforces: COMBOPRICE = GROSSPRICE + HANDLINGCHARGE
+    const grossVal = Number(GROSSPRICE !== undefined ? GROSSPRICE : (COMBOPRICE || 0));
+    const handlingVal = Number(HANDLINGCHARGE !== undefined ? HANDLINGCHARGE : 0.0);
+    const comboPriceVal = Number((grossVal + handlingVal).toFixed(2));
 
     const [comboRes] = await conn.query(
       `
@@ -321,7 +326,7 @@ export const createCombo = async (comboData, userId) => {
     if (ITEMS && ITEMS.length > 0) {
       const itemValues = ITEMS.map((it) => [comboId, it.MENUITEMID, it.QTY || 1]);
       await conn.query(
-        `INSERT INTO CMS_OFFCOMBO_ITEM (OFFCOMBOID, MENUITEMID, QTY) VALUES ?`,
+        `INSERT INTO CMS_OFFCOMBDT (OFFCOMBOID, MENUITEMID, QTY) VALUES ?`,
         [itemValues]
       );
     }
@@ -332,6 +337,21 @@ export const createCombo = async (comboData, userId) => {
 
 export const updateCombo = async (comboId, updateData, userId) => {
   return await withTransaction(async (conn) => {
+    // If gross price, handling charge or combo price are being modified, ensure CK_OC_COMBOPRICE constraint is satisfied
+    if (updateData.GROSSPRICE !== undefined || updateData.HANDLINGCHARGE !== undefined || updateData.COMBOPRICE !== undefined) {
+      const [existing] = await conn.query(
+        `SELECT GROSSPRICE, HANDLINGCHARGE, COMBOPRICE FROM CMS_OFFCOMBO WHERE OFFCOMBOID = ?`,
+        [comboId]
+      );
+      if (existing.length > 0) {
+        const gross = updateData.GROSSPRICE !== undefined ? Number(updateData.GROSSPRICE) : Number(existing[0].GROSSPRICE || 0);
+        const handling = updateData.HANDLINGCHARGE !== undefined ? Number(updateData.HANDLINGCHARGE) : Number(existing[0].HANDLINGCHARGE || 0);
+        updateData.GROSSPRICE = gross;
+        updateData.HANDLINGCHARGE = handling;
+        updateData.COMBOPRICE = Number((gross + handling).toFixed(2));
+      }
+    }
+
     const fields = [];
     const params = [];
 
@@ -372,11 +392,11 @@ export const updateCombo = async (comboId, updateData, userId) => {
     }
 
     if (updateData.ITEMS && Array.isArray(updateData.ITEMS)) {
-      await conn.query(`DELETE FROM CMS_OFFCOMBO_ITEM WHERE OFFCOMBOID = ?`, [comboId]);
+      await conn.query(`DELETE FROM CMS_OFFCOMBDT WHERE OFFCOMBOID = ?`, [comboId]);
       if (updateData.ITEMS.length > 0) {
         const itemValues = updateData.ITEMS.map((it) => [comboId, it.MENUITEMID, it.QTY || 1]);
         await conn.query(
-          `INSERT INTO CMS_OFFCOMBO_ITEM (OFFCOMBOID, MENUITEMID, QTY) VALUES ?`,
+          `INSERT INTO CMS_OFFCOMBDT (OFFCOMBOID, MENUITEMID, QTY) VALUES ?`,
           [itemValues]
         );
       }
@@ -402,7 +422,7 @@ export const deleteCombo = async (comboId, userId) => {
       );
     } else {
       // Hard delete combo items and combo
-      await conn.query(`DELETE FROM CMS_OFFCOMBO_ITEM WHERE OFFCOMBOID = ?`, [comboId]);
+      await conn.query(`DELETE FROM CMS_OFFCOMBDT WHERE OFFCOMBOID = ?`, [comboId]);
       await conn.query(`DELETE FROM CMS_OFFCOMBO WHERE OFFCOMBOID = ?`, [comboId]);
     }
     return true;
@@ -421,21 +441,23 @@ export const listAvailableMenuItems = async (canteenId) => {
       s.SERVICEID,
       s.SERVNAME,
       COALESCE(s.SERVNAME, mi.SHORTNAME, 'Item') AS CATCODE,
-      mi.OFFSER,
+      mi.ISOFFSER AS OFFSER,
+      mi.ISOFFSER,
       mi.STATUSID,
       COALESCE(
         (SELECT d.PRICE 
          FROM CMS_ITEMPRICE p
-         JOIN CMS_ITEMPRICEDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+         JOIN CMS_ITMPRICDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+         JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = d.CTYPEID
          WHERE p.MENUITEMID = mi.MENUITEMID 
-           AND d.CTYPECODE = 'OFF'
+           AND ct.CTYPECODE = 'OFF'
            AND p.STATUSID = 10
          ORDER BY p.EFFFROM DESC LIMIT 1), 
         0.00
       ) AS OFFPRICE
     FROM CMS_MENUITEM mi
     LEFT JOIN CMS_SERVICE s ON s.SERVICEID = mi.SERVICEID
-    WHERE mi.STATUSID = 10 AND mi.OFFSER = 1
+    WHERE mi.STATUSID = 10 AND mi.ISOFFSER = 1
     HAVING OFFPRICE > 0
     ORDER BY mi.ITEMNAME ASC
     `
@@ -497,12 +519,13 @@ export const getEligibleApprovers = async (apprLvl, requesterUserId) => {
       pe.EMPCODE,
       pe.DEPT,
       pe.DESIG,
-      pe.LEVEL,
+      pe.EMPLEVEL AS LEVEL,
+      pe.EMPLEVEL,
       lm.APPRLVL
     FROM CMS_USER u
     JOIN CMS_CUSTOMER c ON c.USERID = u.USERID
     JOIN CMS_PERMEMP pe ON pe.CUSTOMERID = c.CUSTOMERID
-    JOIN CMS_LVLMAP lm ON lm.EMPLEVEL = pe.LEVEL AND lm.ISACTIVE = 1
+    JOIN CMS_LVLMAP lm ON lm.EMPLEVEL = pe.EMPLEVEL AND lm.ISACTIVE = 1
     WHERE u.ISACTIVE = 1
       AND c.STATUSID = 10
       AND u.USERID != ?
@@ -620,7 +643,7 @@ export const createOfficialBooking = async (bookingData, user) => {
     FROM CMS_USER u
     JOIN CMS_CUSTOMER c ON c.USERID = u.USERID
     JOIN CMS_PERMEMP pe ON pe.CUSTOMERID = c.CUSTOMERID
-    JOIN CMS_LVLMAP lm ON lm.EMPLEVEL = pe.LEVEL AND lm.ISACTIVE = 1
+    JOIN CMS_LVLMAP lm ON lm.EMPLEVEL = pe.EMPLEVEL AND lm.ISACTIVE = 1
     WHERE u.USERID = ? AND u.ISACTIVE = 1 AND c.STATUSID = 10
     `,
     [APPROVERID]
@@ -697,7 +720,7 @@ export const createOfficialBooking = async (bookingData, user) => {
     // Record initial submission audit
     await conn.query(
       `
-      INSERT INTO CMS_OFFAPPR (OFFBOOKID, ACTIONBY, ACTIONROLE, ACTION, REJREASON)
+      INSERT INTO CMS_OFFAPPR (OFFBOOKID, ACTIONBY, ACTIONROLE, ACTIONCODE, REJREASON)
       VALUES (?, ?, 'EMPLOYEE', 'SUBMITTED', NULL)
       `,
       [bookingId, user.USERID]
@@ -779,7 +802,8 @@ export const getOfficialBookingById = async (bookingId) => {
   const [items] = await pool.query(
     `
     SELECT 
-      oci.COMBOITEMID,
+      oci.OFFCOMBDTID,
+      oci.OFFCOMBDTID AS COMBOITEMID,
       oci.MENUITEMID,
       mi.ITEMNAME AS MENUNAME,
       mi.ITEMNAME,
@@ -789,14 +813,15 @@ export const getOfficialBookingById = async (bookingId) => {
       COALESCE(
         (SELECT d.PRICE 
          FROM CMS_ITEMPRICE p
-         JOIN CMS_ITEMPRICEDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+         JOIN CMS_ITMPRICDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+         JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = d.CTYPEID
          WHERE p.MENUITEMID = mi.MENUITEMID 
-           AND d.CTYPECODE = 'OFF'
+           AND ct.CTYPECODE = 'OFF'
            AND p.STATUSID = 10
          ORDER BY p.EFFFROM DESC LIMIT 1), 
         0.00
       ) AS OFFPRICE
-    FROM CMS_OFFCOMBO_ITEM oci
+    FROM CMS_OFFCOMBDT oci
     JOIN CMS_MENUITEM mi ON mi.MENUITEMID = oci.MENUITEMID
     LEFT JOIN CMS_SERVICE s ON s.SERVICEID = mi.SERVICEID
     WHERE oci.OFFCOMBOID = ?
@@ -813,7 +838,8 @@ export const getOfficialBookingById = async (bookingId) => {
       oa.ACTIONBY,
       u.FULLNAME AS ACTIONBY_NAME,
       oa.ACTIONROLE,
-      oa.ACTION,
+      oa.ACTIONCODE,
+      oa.ACTIONCODE AS ACTION,
       oa.REJREASON,
       oa.ACTIONAT
     FROM CMS_OFFAPPR oa
@@ -946,7 +972,7 @@ export const processApproverAction = async ({ bookingId, action, rejReason, appr
     // 3. Record audit trail
     await conn.query(
       `
-      INSERT INTO CMS_OFFAPPR (OFFBOOKID, ACTIONBY, ACTIONROLE, ACTION, REJREASON)
+      INSERT INTO CMS_OFFAPPR (OFFBOOKID, ACTIONBY, ACTIONROLE, ACTIONCODE, REJREASON)
       VALUES (?, ?, 'APPROVER', ?, ?)
       `,
       [bookingId, approverUserId, actionLabel, rejReason || null]
@@ -1046,7 +1072,7 @@ export const processManagerAction = async ({ bookingId, action, rejReason, manag
     // 3. Record audit trail
     await conn.query(
       `
-      INSERT INTO CMS_OFFAPPR (OFFBOOKID, ACTIONBY, ACTIONROLE, ACTION, REJREASON)
+      INSERT INTO CMS_OFFAPPR (OFFBOOKID, ACTIONBY, ACTIONROLE, ACTIONCODE, REJREASON)
       VALUES (?, ?, 'CANTEEN_MANAGER', ?, ?)
       `,
       [bookingId, managerUserId, actionLabel, rejReason || null]
@@ -1112,7 +1138,7 @@ export const resubmitOfficialBooking = async (bookingId, updatedData, user) => {
       FROM CMS_USER u
       JOIN CMS_CUSTOMER c ON c.USERID = u.USERID
       JOIN CMS_PERMEMP pe ON pe.CUSTOMERID = c.CUSTOMERID
-      JOIN CMS_LVLMAP lm ON lm.EMPLEVEL = pe.LEVEL AND lm.ISACTIVE = 1
+      JOIN CMS_LVLMAP lm ON lm.EMPLEVEL = pe.EMPLEVEL AND lm.ISACTIVE = 1
       WHERE u.USERID = ? AND u.ISACTIVE = 1 AND c.STATUSID = 10
       `,
       [newApproverId]
@@ -1194,7 +1220,7 @@ export const resubmitOfficialBooking = async (bookingId, updatedData, user) => {
     // Record resubmission in audit history
     await conn.query(
       `
-      INSERT INTO CMS_OFFAPPR (OFFBOOKID, ACTIONBY, ACTIONROLE, ACTION, REJREASON)
+      INSERT INTO CMS_OFFAPPR (OFFBOOKID, ACTIONBY, ACTIONROLE, ACTIONCODE, REJREASON)
       VALUES (?, ?, 'EMPLOYEE', 'RESUBMITTED', 'Request modified and resubmitted')
       `,
       [bookingId, user.USERID]
@@ -1291,7 +1317,8 @@ export const listConfirmedOfficialBookings = async (canteenId, { date, fromDate,
     `
     SELECT 
       oci.OFFCOMBOID,
-      oci.COMBOITEMID,
+      oci.OFFCOMBDTID,
+      oci.OFFCOMBDTID AS COMBOITEMID,
       oci.MENUITEMID,
       mi.ITEMNAME AS MENUNAME,
       mi.ITEMNAME,
@@ -1301,14 +1328,15 @@ export const listConfirmedOfficialBookings = async (canteenId, { date, fromDate,
       COALESCE(
         (SELECT d.PRICE 
          FROM CMS_ITEMPRICE p
-         JOIN CMS_ITEMPRICEDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+         JOIN CMS_ITMPRICDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+         JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = d.CTYPEID
          WHERE p.MENUITEMID = mi.MENUITEMID 
-           AND d.CTYPECODE = 'OFF'
+           AND ct.CTYPECODE = 'OFF'
            AND p.STATUSID = 10
          ORDER BY p.EFFFROM DESC LIMIT 1), 
         0.00
       ) AS OFFPRICE
-    FROM CMS_OFFCOMBO_ITEM oci
+    FROM CMS_OFFCOMBDT oci
     JOIN CMS_MENUITEM mi ON mi.MENUITEMID = oci.MENUITEMID
     LEFT JOIN CMS_SERVICE s ON s.SERVICEID = mi.SERVICEID
     WHERE oci.OFFCOMBOID IN (?)
@@ -1353,7 +1381,7 @@ export const getOfficialKitchenPrepSummary = async (canteenId, targetDate) => {
       COUNT(DISTINCT ob.OFFBOOKID) AS ORDER_COUNT,
       COUNT(DISTINCT ob.OFFBOOKID) AS TOTAL_ORDERS_COUNT
     FROM CMS_OFFBOOK ob
-    JOIN CMS_OFFCOMBO_ITEM oci ON oci.OFFCOMBOID = ob.OFFCOMBOID
+    JOIN CMS_OFFCOMBDT oci ON oci.OFFCOMBOID = ob.OFFCOMBOID
     JOIN CMS_MENUITEM mi ON mi.MENUITEMID = oci.MENUITEMID
     LEFT JOIN CMS_SERVICE s ON s.SERVICEID = mi.SERVICEID
     WHERE ob.CANTEENID = ?
@@ -1384,7 +1412,7 @@ export const getOfficialKitchenPrepSummary = async (canteenId, targetDate) => {
       pe.DEPT AS REQUESTER_DEPT,
       pe.DESIG AS REQUESTER_DESIG
     FROM CMS_OFFBOOK ob
-    JOIN CMS_OFFCOMBO_ITEM oci ON oci.OFFCOMBOID = ob.OFFCOMBOID
+    JOIN CMS_OFFCOMBDT oci ON oci.OFFCOMBOID = ob.OFFCOMBOID
     JOIN CMS_USER u_emp ON u_emp.USERID = ob.BOOKEDBY
     JOIN CMS_CUSTOMER cust ON cust.CUSTOMERID = ob.CUSTOMERID
     LEFT JOIN CMS_PERMEMP pe ON pe.CUSTOMERID = cust.CUSTOMERID

@@ -26,33 +26,35 @@ export class WalkinService {
           u.LOGINID,
           u.FULLNAME,
           c.DISPNAME,
-          c.CTYPECODE,
+          ct.CTYPECODE,
           ct.CTYPENAME,
           pe.EMPCODE,
           pe.DEPT,
           pe.DESIG,
           ce.CONTCODE,
           ce.VENDORNAME,
-          COALESCE(ce.DEFAULTCANTEENID, pe.DEFAULTCANTEENID) AS DEFAULTCANTEENID,
+          ce.DEFAULTCANTEENID AS DEFAULTCANTEENID,
           w.WALLETID,
           COALESCE(w.BALANCE, 0.00) AS WALLETBALANCE
        FROM CMS_CUSTOMER c
-       JOIN CMS_CUSTTYPE ct ON ct.CTYPECODE = c.CTYPECODE
+       JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = c.CTYPEID
        LEFT JOIN CMS_USER u ON u.USERID = c.USERID
        LEFT JOIN CMS_PERMEMP pe ON pe.CUSTOMERID = c.CUSTOMERID
        LEFT JOIN CMS_CONTEMP ce ON ce.CUSTOMERID = c.CUSTOMERID
+       LEFT JOIN CMS_OCEEMP oe ON oe.CUSTOMERID = c.CUSTOMERID
        LEFT JOIN CMS_WALLET w ON w.CUSTOMERID = c.CUSTOMERID AND w.STATUSID = 10
        LEFT JOIN CMS_ACCKEY ak ON ak.CUSTOMERID = c.CUSTOMERID AND ak.STATUSID = 10
        WHERE c.STATUSID = 10
-         AND c.CTYPECODE IN ('PRM', 'CNT')
+         AND ct.CTYPECODE IN ('PRM', 'CNT', 'OCE')
          AND (
              LOWER(pe.EMPCODE) = LOWER(?)
              OR LOWER(ce.CONTCODE) = LOWER(?)
+             OR LOWER(oe.EMPCODE) = LOWER(?)
              OR LOWER(u.LOGINID) = LOWER(?)
-             OR ak.KEYVALUE = ?
+             OR UPPER(ak.KEYVALUE) = UPPER(?)
          )
        LIMIT 1`,
-            [cleanQuery, cleanQuery, cleanQuery, cleanQuery]
+            [cleanQuery, cleanQuery, cleanQuery, cleanQuery, cleanQuery]
         );
 
         return rows[0] || null;
@@ -70,23 +72,24 @@ export class WalkinService {
             `SELECT 
           c.CUSTOMERID,
           c.DISPNAME,
-          c.CTYPECODE,
+          ct.CTYPECODE,
           v.VISNAME,
-          v.VISMOBILE,
+          v.MOBILENO AS VISMOBILE,
           v.VISORG,
           v.VISPURPOSE,
           w.WALLETID,
           COALESCE(w.BALANCE, 0.00) AS WALLETBALANCE,
           ak.KEYVALUE AS RFID
        FROM CMS_CUSTOMER c
+       JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = c.CTYPEID
        JOIN CMS_VISITOR v ON v.CUSTOMERID = c.CUSTOMERID
        LEFT JOIN CMS_WALLET w ON w.CUSTOMERID = c.CUSTOMERID AND w.STATUSID = 10
        LEFT JOIN CMS_ACCKEY ak ON ak.CUSTOMERID = c.CUSTOMERID AND ak.STATUSID = 10
        WHERE c.STATUSID = 10
          AND (
-             v.VISMOBILE = ? 
+             v.MOBILENO = ? 
              OR LOWER(v.VISNAME) LIKE LOWER(CONCAT('%', ?, '%'))
-             OR ak.KEYVALUE = ?
+             OR UPPER(ak.KEYVALUE) = UPPER(?)
          )
        LIMIT 10`,
             [cleanQuery, cleanQuery, cleanQuery]
@@ -106,15 +109,15 @@ export class WalkinService {
 
             // A. Create Customer Record
             const [custResult] = await conn.query(
-                `INSERT INTO CMS_CUSTOMER (USERID, CTYPECODE, DISPNAME, STATUSID, VALIDFROM, VALIDUNTIL)
-         VALUES (NULL, 'VIS', TRIM(?), 10, CURRENT_TIMESTAMP, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 1 DAY))`,
+                `INSERT INTO CMS_CUSTOMER (USERID, CTYPEID, DISPNAME, STATUSID, VALIDFROM, VALIDUNTIL)
+         VALUES (NULL, (SELECT CTYPEID FROM CMS_CUSTTYPE WHERE CTYPECODE = 'VIS' LIMIT 1), TRIM(?), 10, CURRENT_TIMESTAMP, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 1 DAY))`,
                 [VISNAME]
             );
             const customerId = custResult.insertId;
 
             // B. Create Visitor Record
             await conn.query(
-                `INSERT INTO CMS_VISITOR (CUSTOMERID, VISNAME, VISMOBILE, VISORG, VISPURPOSE, VISDATE, VALIDUNTIL, CREATEDBY, STATUSID)
+                `INSERT INTO CMS_VISITOR (CUSTOMERID, VISNAME, MOBILENO, VISORG, VISPURPOSE, VISDATE, VALIDUNTIL, CREATEDBY, STATUSID)
          VALUES (?, TRIM(?), ?, ?, ?, CURDATE(), DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 1 DAY), ?, 10)`,
                 [customerId, VISNAME, VISMOBILE, VISORG || null, VISPURPOSE || "Walk-In Visit", staffUserId]
             );
@@ -179,9 +182,10 @@ export class WalkinService {
               SELECT d.PRICE
               FROM CMS_ITEMPRICE p
               JOIN CMS_STATUS ip_st ON ip_st.STATUSID = p.STATUSID AND ip_st.STATUSCODE = 'ACT'
-              JOIN CMS_ITEMPRICEDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+              JOIN CMS_ITMPRICDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+              JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = d.CTYPEID
               WHERE p.MENUITEMID = dm.MENUITEMID
-                AND d.CTYPECODE = ?
+                AND ct.CTYPECODE = ?
                 AND p.EFFFROM <= CURDATE()
               ORDER BY p.EFFFROM DESC 
               LIMIT 1
@@ -193,7 +197,7 @@ export class WalkinService {
        JOIN CMS_STATUS dm_st ON dm_st.STATUSID = dm.STATUSID AND dm_st.STATUSCODE = 'ACT'
        JOIN CMS_STATUS mi_st ON mi_st.STATUSID = mi.STATUSID AND mi_st.STATUSCODE = 'ACT'
        WHERE ds.CANTEENID = ?
-         AND ds.SERVDATE = CURDATE()
+         AND ds.SERVICEDATE = CURDATE()
          AND ds.STATUSID = 10
          AND ds.APPRSTATUSID = 22 
        ORDER BY dm.ISBASE DESC, mi.ITEMNAME ASC`,
@@ -216,7 +220,10 @@ export class WalkinService {
 
             // A. Verify Customer
             const [[customer]] = await conn.query(
-                `SELECT CUSTOMERID, CTYPECODE, DISPNAME FROM CMS_CUSTOMER WHERE CUSTOMERID = ? AND STATUSID = 10`,
+                `SELECT c.CUSTOMERID, c.CTYPEID, ct.CTYPECODE, c.DISPNAME 
+                 FROM CMS_CUSTOMER c 
+                 JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = c.CTYPEID 
+                 WHERE c.CUSTOMERID = ? AND c.STATUSID = 10`,
                 [customerId]
             );
             if (!customer) {
@@ -234,9 +241,10 @@ export class WalkinService {
               SELECT d.PRICE
               FROM CMS_ITEMPRICE p
               JOIN CMS_STATUS ip_st ON ip_st.STATUSID = p.STATUSID AND ip_st.STATUSCODE = 'ACT'
-              JOIN CMS_ITEMPRICEDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+              JOIN CMS_ITMPRICDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+              JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = d.CTYPEID
               WHERE p.MENUITEMID = dm.MENUITEMID
-                AND d.CTYPECODE = ?
+                AND ct.CTYPECODE = ?
                 AND p.EFFFROM <= CURDATE()
               ORDER BY p.EFFFROM DESC 
               LIMIT 1
@@ -328,7 +336,7 @@ export class WalkinService {
                 `INSERT INTO CMS_BOOKING (
            BOOKNO, BOOKTYPEID, CUSTOMERID, SERVICEID, SERVICEDATE, STATUSID,
            BOOKSEQNO, TOTALITEMS, TOTALQTY, TOTALAMOUNT,
-           BOOKEDBY, BOOKEDON, SERVEDBY, SERVEDON, REMARKS, CREATEDBY
+           BOOKEDBY, BOOKEDAT, SERVEDBY, SERVEDAT, REMARKS, CREATEDBY
          ) VALUES (
            ?, 3, ?, ?, CURDATE(), 32,
            ?, ?, ?, ?,
@@ -364,7 +372,7 @@ export class WalkinService {
                 const txnRef = await genAutoNo(conn, "CMS_WALLETTRAN", "REFNO");
                 await conn.query(
                     `INSERT INTO CMS_WALLETTRAN (
-             WALLETID, BOOKINGID, CANTEENID, TRANSTYPE, SOURCECODE,
+             WALLETID, BOOKID, CANTEENID, TRANSTYPE, SOURCECODE,
              AMOUNT, BALBEFORE, BALAFTER, PAYMENTMETHOD, REFNO, STATUSID, CREATEDBY, REMARKS
            ) VALUES (
              ?, ?, ?, 'DEBIT', 'BOOKING',
@@ -374,18 +382,18 @@ export class WalkinService {
                 );
             }
 
-            // H. Immutable History Entry (CMS_BOOKHIST + CMS_BOOKITMHS)
+            // H. Immutable History Entry (CMS_BOOKHIST + CMS_BOOKITMHST)
             const [histResult] = await conn.query(
                 `INSERT INTO CMS_BOOKHIST (
            BOOKID, BOOKNO, BOOKTYPEID, CUSTOMERID, SERVICEID, SERVICEDATE,
            STATUSID, BOOKSEQNO, TOTALITEMS, TOTALQTY, TOTALAMOUNT,
-           BOOKEDBY, BOOKEDON, SERVEDBY, SERVEDON,
+           BOOKEDBY, BOOKEDAT, SERVEDBY, SERVEDAT,
            REMARKS, CREATEDBY, CREATEDAT, CHANGEDBY, CHGREASON
          )
          SELECT 
            BOOKID, BOOKNO, BOOKTYPEID, CUSTOMERID, SERVICEID, SERVICEDATE,
            STATUSID, BOOKSEQNO, TOTALITEMS, TOTALQTY, TOTALAMOUNT,
-           BOOKEDBY, BOOKEDON, SERVEDBY, SERVEDON,
+           BOOKEDBY, BOOKEDAT, SERVEDBY, SERVEDAT,
            REMARKS, CREATEDBY, CREATEDAT, SERVEDBY, 'Immediate Walk-In Service'
          FROM CMS_BOOKING WHERE BOOKID = ?`,
                 [bookingId]
@@ -393,7 +401,7 @@ export class WalkinService {
             const bookHistId = histResult.insertId;
 
             await conn.query(
-                `INSERT INTO CMS_BOOKITMHS (
+                `INSERT INTO CMS_BOOKITMHST (
            BOOKHISTID, BOOKITEMID, DAYMENUID, MENUITEMID, QTY, RATE, AMOUNT, REMARKS, STATUSID
          )
          SELECT 

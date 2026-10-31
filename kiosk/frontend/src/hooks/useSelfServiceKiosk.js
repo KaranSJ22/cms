@@ -1,13 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { kioskApi } from "../api/kioskApi";
 
-const INACTIVITY_TIMEOUT_MS = 60000; // 60s auto-logout
+const INACTIVITY_TIMEOUT_MS = 120000; // 2 minutes (120s) auto-logout
+const WARNING_TIMEOUT_MS = 105000;    // 1m 45s warning prompt (15s before logout)
 
 export function useSelfServiceKiosk() {
   const [sessionActive, setSessionActive] = useState(false);
   const [identifier, setIdentifier] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Inactivity Warning State
+  const [showInactivityWarning, setShowInactivityWarning] = useState(false);
+  const [inactivityRemaining, setInactivityRemaining] = useState(15);
 
   // Employee Session Data
   const [employeeData, setEmployeeData] = useState(null);
@@ -29,17 +34,45 @@ export function useSelfServiceKiosk() {
 
   const inputRef = useRef(null);
   const watchdogTimerRef = useRef(null);
+  const warningTimerRef = useRef(null);
+  const countdownIntervalRef = useRef(null);
 
-  // Inactivity Watchdog: Resets session after 60s of complete inactivity
+  // Inactivity Watchdog: 2-minute timer with 15-second graceful warning prompt
   const resetWatchdog = useCallback(() => {
     if (watchdogTimerRef.current) clearTimeout(watchdogTimerRef.current);
-    // Never auto-logout if booking request is in flight or confirmation modal is open
-    if (sessionActive && !bookingLoading && !confirmation) {
+    if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    setShowInactivityWarning(false);
+    setInactivityRemaining(15);
+
+    // Never auto-logout if booking request is in flight
+    if (sessionActive && !bookingLoading) {
+      // 1. Warning trigger at 105 seconds (15 seconds before logout)
+      warningTimerRef.current = setTimeout(() => {
+        setShowInactivityWarning(true);
+        setInactivityRemaining(15);
+        countdownIntervalRef.current = setInterval(() => {
+          setInactivityRemaining((prev) => {
+            if (prev <= 1) {
+              clearInterval(countdownIntervalRef.current);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      }, WARNING_TIMEOUT_MS);
+
+      // 2. Final auto-logout at 120 seconds (2 minutes)
       watchdogTimerRef.current = setTimeout(() => {
         handleEndSession();
       }, INACTIVITY_TIMEOUT_MS);
     }
-  }, [sessionActive, bookingLoading, confirmation]);
+  }, [sessionActive, bookingLoading]);
+
+  // Keep session active upon user interaction
+  const handleContinueSession = useCallback(() => {
+    resetWatchdog();
+  }, [resetWatchdog]);
 
   // Comprehensive user activity listener to reset watchdog timer on any interaction
   useEffect(() => {
@@ -47,17 +80,26 @@ export function useSelfServiceKiosk() {
 
     resetWatchdog();
 
-    const handleActivity = () => resetWatchdog();
-    const events = ["pointerdown", "pointermove", "touchstart", "touchmove", "click", "keydown", "wheel", "scroll"];
+    const handleActivity = () => {
+      // Reset only if warning is not currently blocking or if user interacts
+      resetWatchdog();
+    };
+    const events = ["pointerdown", "touchstart", "click", "keydown"];
     events.forEach((ev) => window.addEventListener(ev, handleActivity, { passive: true }));
 
     return () => {
       events.forEach((ev) => window.removeEventListener(ev, handleActivity));
       if (watchdogTimerRef.current) clearTimeout(watchdogTimerRef.current);
+      if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     };
   }, [sessionActive, resetWatchdog]);
 
   const handleEndSession = () => {
+    if (watchdogTimerRef.current) clearTimeout(watchdogTimerRef.current);
+    if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    setShowInactivityWarning(false);
     setSessionActive(false);
     setEmployeeData(null);
     setIdentifier("");
@@ -110,8 +152,8 @@ export function useSelfServiceKiosk() {
         setSelectedService(null);
         setServiceMenu(null);
         setConfirmation(null);
+        setActiveTab("bookings");
       }
-      setActiveTab("bookings");
       loadNextDayServices();
     } catch (err) {
       setError({
@@ -162,6 +204,16 @@ export function useSelfServiceKiosk() {
     setSelectedService(null);
     setServiceMenu(null);
     setSelectedItems({});
+  };
+
+  const handleContinueBookingMore = () => {
+    setConfirmation(null);
+    setSelectedItems({});
+    setSelectedService(null);
+    setServiceMenu(null);
+    setActiveTab("book_next_day");
+    resetWatchdog();
+    loadNextDayServices();
   };
 
   const handleQuantityChange = (dayMenuId, delta) => {
@@ -240,7 +292,20 @@ export function useSelfServiceKiosk() {
         BOOKINGID: String(bookId),
         CUSTOMERID: employeeData.customer.customerId,
       });
-      // Refresh profile
+
+      // Optimistically update React state immediately:
+      // Remove the cancelled booking from upcomingBookings so UI updates without flicker
+      setEmployeeData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          upcomingBookings: (prev.upcomingBookings || []).filter(
+            (b) => String(b.bookId) !== String(bookId) && String(b.bookNo) !== String(bookId)
+          ),
+        };
+      });
+
+      // Refresh profile in background to sync wallet balance and state
       handleScan(null, String(employeeData.customer.customerId));
     } catch (err) {
       setError({
@@ -254,7 +319,13 @@ export function useSelfServiceKiosk() {
 
   const isServiceBooked = (serviceId) => {
     const list = employeeData?.upcomingBookings || [];
-    return list.some((b) => b.serviceId === serviceId && b.serviceDate === targetDate);
+    return list.some(
+      (b) =>
+        b.serviceId === serviceId &&
+        b.serviceDate === targetDate &&
+        b.statusCode !== "CAN" &&
+        b.syncStatus !== "CANCELLED"
+    );
   };
 
   return {
@@ -285,6 +356,10 @@ export function useSelfServiceKiosk() {
     handleQuantityChange,
     handleConfirmBooking,
     handleCancelBooking,
+    showInactivityWarning,
+    inactivityRemaining,
+    handleContinueSession,
+    handleContinueBookingMore,
     isServiceBooked,
   };
 }

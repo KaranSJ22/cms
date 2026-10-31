@@ -4,7 +4,6 @@ import { lazy, Suspense } from 'react'
 import AppLayout from '../layouts/AppLayout'
 import AuthLayout from '../layouts/AuthLayout'
 import StaffTerminalLayout from '../layouts/StaffTerminalLayout'
-import EmployeeKioskLayout from '../layouts/EmployeeKioskLayout'
 import ProtectedRoute from './ProtectedRoute'
 import { usePermissions } from '../hooks/usePermissions'
 import { getDefaultTab } from './routeConfig'
@@ -28,9 +27,11 @@ const WalletPage        = lazy(() => import('../features/wallet/pages/WalletPage
 const MonthlyPayrollReportPage = lazy(() => import('../features/reports/pages/MonthlyPayrollReportPage'))
 
 // SYSADM pages
-const IdentityPage      = lazy(() => import('../features/identity/pages/IdentityPage'))
-const HolidaysPage      = lazy(() => import('../features/holidays/pages/HolidaysPage'))
-const LevelMappingPage  = lazy(() => import('../features/officialrequest/pages/LevelMappingPage'))
+const KioskDevicesPage      = lazy(() => import('../features/kiosk/pages/KioskDevicesPage'))
+const CanteenFacilitiesPage = lazy(() => import('../features/canteen/pages/CanteenFacilitiesPage'))
+const IdentityPage          = lazy(() => import('../features/identity/pages/IdentityPage'))
+const HolidaysPage          = lazy(() => import('../features/holidays/pages/HolidaysPage'))
+const LevelMappingPage      = lazy(() => import('../features/officialrequest/pages/LevelMappingPage'))
 
 // Official Request pages
 const OfficialBookingPage         = lazy(() => import('../features/officialrequest/pages/OfficialBookingPage'))
@@ -42,7 +43,6 @@ const OfficialKitchenPrepPage     = lazy(() => import('../features/officialreque
 
 // Kiosk / Terminal pages
 const KioskBootResolver    = lazy(() => import('../features/kiosk/pages/KioskBootResolver'))
-const SelfServiceKioskPage = lazy(() => import('../features/kiosk/pages/SelfServiceKioskPage'))
 const ServingTerminalPage  = lazy(() => import('../features/kiosk/pages/ServingTerminalPage'))
 
 // Employee pages
@@ -130,12 +130,22 @@ export default function AppRoutes() {
         } /> */}
         <Route path="/reports/kitchen-summary" element={<Navigate to="/dashboard" replace />} />
         <Route path="/reports/payroll" element={
-          <ProtectedRoute allowedRoles={['SYSADM', 'CNTMGR', 'CNTAST']}>
+          <ProtectedRoute allowedRoles={['CNTMGR', 'CNTAST']}>
             <PageSuspense><MonthlyPayrollReportPage /></PageSuspense>
           </ProtectedRoute>
         } />
         
         {/* SYSADM routes */}
+        <Route path="/kiosk-devices" element={
+          <ProtectedRoute allowedRoles={['SYSADM']}>
+            <PageSuspense><KioskDevicesPage /></PageSuspense>
+          </ProtectedRoute>
+        } />
+        <Route path="/canteen-facilities" element={
+          <ProtectedRoute allowedRoles={['SYSADM']}>
+            <PageSuspense><CanteenFacilitiesPage /></PageSuspense>
+          </ProtectedRoute>
+        } />
         <Route path="/identity"   element={
           <ProtectedRoute allowedRoles={['SYSADM']}>
             <PageSuspense><IdentityPage /></PageSuspense>
@@ -174,11 +184,6 @@ export default function AppRoutes() {
       <Route element={<StaffTerminalLayout />}>
         <Route path="/kiosk/serving-terminal" element={<PageSuspense><ServingTerminalPage /></PageSuspense>} />
         <Route path="/kiosk/serving" element={<Navigate to="/kiosk/serving-terminal" replace />} />
-      </Route>
-
-      {/* 2. Employee Self-Service Station (Lobby Kiosk with Auto-Reset) */}
-      <Route element={<EmployeeKioskLayout />}>
-        <Route path="/kiosk/self-service" element={<PageSuspense><SelfServiceKioskPage /></PageSuspense>} />
       </Route>
 
       {/* Fallback */}

@@ -70,7 +70,8 @@ BEGIN
     -- Result Set 3: Combo Items
     SELECT 
         oci.OFFCOMBOID,
-        oci.COMBOITEMID,
+        oci.OFFCOMBDTID,
+        oci.OFFCOMBDTID AS COMBOITEMID,
         oci.MENUITEMID,
         mi.ITEMNAME AS MENUNAME,
         mi.ITEMNAME,
@@ -80,14 +81,15 @@ BEGIN
         COALESCE(
           (SELECT d.PRICE 
            FROM CMS_ITEMPRICE p
-           JOIN CMS_ITEMPRICEDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+           JOIN CMS_ITMPRICDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+           JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = d.CTYPEID
            WHERE p.MENUITEMID = mi.MENUITEMID 
-             AND d.CTYPECODE = 'OFF'
+             AND ct.CTYPECODE = 'OFF'
              AND p.STATUSID = 10
            ORDER BY p.EFFFROM DESC LIMIT 1), 
           0.00
         ) AS OFFPRICE
-    FROM CMS_OFFCOMBO_ITEM oci
+    FROM CMS_OFFCOMBDT oci
     JOIN CMS_MENUITEM mi ON mi.MENUITEMID = oci.MENUITEMID
     LEFT JOIN CMS_SERVICE s ON s.SERVICEID = mi.SERVICEID
     JOIN CMS_OFFCOMBO oc ON oc.OFFCOMBOID = oci.OFFCOMBOID
@@ -100,11 +102,7 @@ END$$
 
 
 /* ============================================================
-   2. CMSOFFGETSERVICE — Service Details by ID
-   Returns 3 result sets:
-     1. Service header
-     2. Combos for this service
-     3. Dish items for all combos of this service
+   2. CMSOFFGETSERVICE — Service Details with Combos and Dishes
    ============================================================ */
 CREATE PROCEDURE CMSOFFGETSERVICE (
     IN POFFSERVID INT
@@ -121,7 +119,10 @@ BEGIN
         os.REQAPPRLVL,
         os.STATUSID,
         st.STATUSNAME,
-        os.CREATEDAT
+        os.CREATEDBY,
+        os.CREATEDAT,
+        os.UPDATEDBY,
+        os.UPDATEDAT
     FROM CMS_OFFSERV os
     JOIN CMS_CANTEEN c ON c.CANTEENID = os.CANTEENID
     JOIN CMS_STATUS st ON st.STATUSID = os.STATUSID
@@ -145,7 +146,8 @@ BEGIN
     -- Result Set 3: Combo Items
     SELECT 
         oci.OFFCOMBOID,
-        oci.COMBOITEMID,
+        oci.OFFCOMBDTID,
+        oci.OFFCOMBDTID AS COMBOITEMID,
         oci.MENUITEMID,
         mi.ITEMNAME AS MENUNAME,
         mi.ITEMNAME,
@@ -155,14 +157,15 @@ BEGIN
         COALESCE(
           (SELECT d.PRICE 
            FROM CMS_ITEMPRICE p
-           JOIN CMS_ITEMPRICEDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+           JOIN CMS_ITMPRICDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+           JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = d.CTYPEID
            WHERE p.MENUITEMID = mi.MENUITEMID 
-             AND d.CTYPECODE = 'OFF'
+             AND ct.CTYPECODE = 'OFF'
              AND p.STATUSID = 10
            ORDER BY p.EFFFROM DESC LIMIT 1), 
           0.00
         ) AS OFFPRICE
-    FROM CMS_OFFCOMBO_ITEM oci
+    FROM CMS_OFFCOMBDT oci
     JOIN CMS_MENUITEM mi ON mi.MENUITEMID = oci.MENUITEMID
     LEFT JOIN CMS_SERVICE s ON s.SERVICEID = mi.SERVICEID
     WHERE oci.OFFCOMBOID IN (SELECT OFFCOMBOID FROM CMS_OFFCOMBO WHERE OFFSERVID = POFFSERVID)
@@ -186,14 +189,16 @@ BEGIN
         s.SERVICEID,
         s.SERVNAME,
         COALESCE(s.SERVNAME, mi.SHORTNAME, 'Item') AS CATCODE,
-        mi.OFFSER,
+        mi.ISOFFSER,
+        mi.ISOFFSER AS OFFSER,
         mi.STATUSID,
         COALESCE(
           (SELECT d.PRICE 
            FROM CMS_ITEMPRICE p
-           JOIN CMS_ITEMPRICEDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+           JOIN CMS_ITMPRICDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+           JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = d.CTYPEID
            WHERE p.MENUITEMID = mi.MENUITEMID 
-             AND d.CTYPECODE = 'OFF'
+             AND ct.CTYPECODE = 'OFF'
              AND p.STATUSID = 10
            ORDER BY p.EFFFROM DESC LIMIT 1), 
           0.00
@@ -201,9 +206,10 @@ BEGIN
         COALESCE(
           (SELECT d.PRICE 
            FROM CMS_ITEMPRICE p
-           JOIN CMS_ITEMPRICEDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+           JOIN CMS_ITMPRICDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+           JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = d.CTYPEID
            WHERE p.MENUITEMID = mi.MENUITEMID 
-             AND d.CTYPECODE = 'OFF'
+             AND ct.CTYPECODE = 'OFF'
              AND p.STATUSID = 10
            ORDER BY p.EFFFROM DESC LIMIT 1), 
           0.00
@@ -211,7 +217,7 @@ BEGIN
     FROM CMS_MENUITEM mi
     LEFT JOIN CMS_SERVICE s ON s.SERVICEID = mi.SERVICEID
     WHERE mi.STATUSID = 10 
-      AND mi.OFFSER = 1
+      AND mi.ISOFFSER = 1
     HAVING OFFPRICE > 0
     ORDER BY mi.ITEMNAME ASC;
 END$$
@@ -247,12 +253,13 @@ BEGIN
         pe.EMPCODE,
         pe.DEPT,
         pe.DESIG,
-        pe.LEVEL,
+        pe.EMPLEVEL,
+        pe.EMPLEVEL AS LEVEL,
         lm.APPRLVL
     FROM CMS_USER u
     JOIN CMS_CUSTOMER c ON c.USERID = u.USERID
     JOIN CMS_PERMEMP pe ON pe.CUSTOMERID = c.CUSTOMERID
-    JOIN CMS_LVLMAP lm ON lm.EMPLEVEL = pe.LEVEL AND lm.ISACTIVE = 1
+    JOIN CMS_LVLMAP lm ON lm.EMPLEVEL = pe.EMPLEVEL AND lm.ISACTIVE = 1
     WHERE u.ISACTIVE = 1
       AND c.STATUSID = 10
       AND (PREQUESTERUSERID IS NULL OR u.USERID != PREQUESTERUSERID)
@@ -266,11 +273,7 @@ END$$
 
 
 /* ============================================================
-   6. CMSOFFGETBOOKING — Complete Official Booking Details
-   Returns 3 result sets:
-     1. Booking header with user & approver metadata
-     2. Combo dish items
-     3. Audit trail history
+   6. CMSOFFGETBOOKING — Complete Booking Detail with Items & Trail
    ============================================================ */
 CREATE PROCEDURE CMSOFFGETBOOKING (
     IN PBOOKINGID INT
@@ -284,17 +287,17 @@ BEGIN
         c.CANTEENNAME,
         ob.OFFSERVID,
         os.SERVNAME,
-        os.REQAPPRLVL,
         ob.OFFCOMBOID,
         oc.COMBONAME,
-        oc.GROSSPRICE,
-        oc.HANDLINGCHARGE AS COMBO_HANDLINGCHARGE,
+        oc.DESCR AS COMBODESCR,
         ob.CUSTOMERID,
+        cust.DISPNAME AS CUSTOMER_NAME,
+        ob.BOOKEDBY,
         u_emp.FULLNAME AS REQUESTER_NAME,
+        u_emp.MOBILENO AS REQUESTER_PHONE,
         pe.EMPCODE AS REQUESTER_EMPCODE,
         pe.DEPT AS REQUESTER_DEPT,
         pe.DESIG AS REQUESTER_DESIG,
-        ob.BOOKEDBY,
         ob.PURPOSE,
         ob.VENUE,
         ob.EVENTDATETIME,
@@ -307,11 +310,12 @@ BEGIN
         ob.APPROVERID,
         u_appr.FULLNAME AS APPROVER_NAME,
         pe_appr.DESIG AS APPROVER_DESIG,
-        pe_appr.DEPT AS APPROVER_DEPT,
         ob.STATUSID,
         st.STATUSNAME,
         st.STATUSCODE,
-        ob.BOOKEDAT
+        ob.BOOKEDAT,
+        ob.UPDATEDBY,
+        ob.UPDATEDAT
     FROM CMS_OFFBOOK ob
     JOIN CMS_CANTEEN c ON c.CANTEENID = ob.CANTEENID
     JOIN CMS_OFFSERV os ON os.OFFSERVID = ob.OFFSERVID
@@ -327,7 +331,8 @@ BEGIN
 
     -- Result Set 2: Combo Items
     SELECT 
-        oci.COMBOITEMID,
+        oci.OFFCOMBDTID,
+        oci.OFFCOMBDTID AS COMBOITEMID,
         oci.MENUITEMID,
         mi.ITEMNAME AS MENUNAME,
         mi.ITEMNAME,
@@ -337,14 +342,15 @@ BEGIN
         COALESCE(
           (SELECT d.PRICE 
            FROM CMS_ITEMPRICE p
-           JOIN CMS_ITEMPRICEDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+           JOIN CMS_ITMPRICDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+           JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = d.CTYPEID
            WHERE p.MENUITEMID = mi.MENUITEMID 
-             AND d.CTYPECODE = 'OFF'
+             AND ct.CTYPECODE = 'OFF'
              AND p.STATUSID = 10
            ORDER BY p.EFFFROM DESC LIMIT 1), 
           0.00
         ) AS OFFPRICE
-    FROM CMS_OFFCOMBO_ITEM oci
+    FROM CMS_OFFCOMBDT oci
     JOIN CMS_MENUITEM mi ON mi.MENUITEMID = oci.MENUITEMID
     LEFT JOIN CMS_SERVICE s ON s.SERVICEID = mi.SERVICEID
     WHERE oci.OFFCOMBOID = (SELECT OFFCOMBOID FROM CMS_OFFBOOK WHERE OFFBOOKID = PBOOKINGID)
@@ -356,7 +362,8 @@ BEGIN
         oa.ACTIONBY,
         u.FULLNAME AS ACTIONBY_NAME,
         oa.ACTIONROLE,
-        oa.ACTION,
+        oa.ACTIONCODE,
+        oa.ACTIONCODE AS ACTION,
         oa.REJREASON,
         oa.ACTIONAT
     FROM CMS_OFFAPPR oa
@@ -493,9 +500,6 @@ END$$
 
 /* ============================================================
    10. CMSOFFLISTCONFIRMED — Confirmed Orders for Event Schedule
-   Returns 2 result sets:
-     1. Confirmed booking headers
-     2. Combo dish items for packing & preparation
    ============================================================ */
 CREATE PROCEDURE CMSOFFLISTCONFIRMED (
     IN PCANTEENID INT,
@@ -565,7 +569,8 @@ BEGIN
     -- Result Set 2: Combo Items for These Bookings
     SELECT 
         oci.OFFCOMBOID,
-        oci.COMBOITEMID,
+        oci.OFFCOMBDTID,
+        oci.OFFCOMBDTID AS COMBOITEMID,
         oci.MENUITEMID,
         mi.ITEMNAME AS MENUNAME,
         mi.ITEMNAME,
@@ -575,14 +580,15 @@ BEGIN
         COALESCE(
           (SELECT d.PRICE 
            FROM CMS_ITEMPRICE p
-           JOIN CMS_ITEMPRICEDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+           JOIN CMS_ITMPRICDT d ON d.ITEMPRICEID = p.ITEMPRICEID
+           JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = d.CTYPEID
            WHERE p.MENUITEMID = mi.MENUITEMID 
-             AND d.CTYPECODE = 'OFF'
+             AND ct.CTYPECODE = 'OFF'
              AND p.STATUSID = 10
            ORDER BY p.EFFFROM DESC LIMIT 1), 
           0.00
         ) AS OFFPRICE
-    FROM CMS_OFFCOMBO_ITEM oci
+    FROM CMS_OFFCOMBDT oci
     JOIN CMS_MENUITEM mi ON mi.MENUITEMID = oci.MENUITEMID
     LEFT JOIN CMS_SERVICE s ON s.SERVICEID = mi.SERVICEID
     WHERE oci.OFFCOMBOID IN (
@@ -602,10 +608,6 @@ END$$
 
 /* ============================================================
    11. CMSOFFGETKITCHENPREP — Daily Kitchen Preparation Aggregates
-   Returns 3 result sets:
-     1. Aggregated dishes with total prep quantities
-     2. Individual order breakdowns per dish
-     3. Day summary statistics
    ============================================================ */
 CREATE PROCEDURE CMSOFFGETKITCHENPREP (
     IN PCANTEENID   INT,
@@ -625,7 +627,7 @@ BEGIN
         COUNT(DISTINCT ob.OFFBOOKID) AS ORDER_COUNT,
         COUNT(DISTINCT ob.OFFBOOKID) AS TOTAL_ORDERS_COUNT
     FROM CMS_OFFBOOK ob
-    JOIN CMS_OFFCOMBO_ITEM oci ON oci.OFFCOMBOID = ob.OFFCOMBOID
+    JOIN CMS_OFFCOMBDT oci ON oci.OFFCOMBOID = ob.OFFCOMBOID
     JOIN CMS_MENUITEM mi ON mi.MENUITEMID = oci.MENUITEMID
     LEFT JOIN CMS_SERVICE s ON s.SERVICEID = mi.SERVICEID
     WHERE ob.CANTEENID = PCANTEENID
@@ -651,7 +653,7 @@ BEGIN
         pe.DEPT AS REQUESTER_DEPT,
         pe.DESIG AS REQUESTER_DESIG
     FROM CMS_OFFBOOK ob
-    JOIN CMS_OFFCOMBO_ITEM oci ON oci.OFFCOMBOID = ob.OFFCOMBOID
+    JOIN CMS_OFFCOMBDT oci ON oci.OFFCOMBOID = ob.OFFCOMBOID
     JOIN CMS_USER u_emp ON u_emp.USERID = ob.BOOKEDBY
     JOIN CMS_CUSTOMER cust ON cust.CUSTOMERID = ob.CUSTOMERID
     LEFT JOIN CMS_PERMEMP pe ON pe.CUSTOMERID = cust.CUSTOMERID
@@ -688,6 +690,7 @@ BEGIN
         b.OFFSERVID,
         os.SERVNAME,
         b.OFFCOMBOID,
+        oc.COMBONAME,
         b.CUSTOMERID,
         b.BOOKEDBY,
         b.PURPOSE,
@@ -710,6 +713,7 @@ BEGIN
     JOIN CMS_STATUS st ON st.STATUSID = b.STATUSID
     JOIN CMS_CANTEEN c ON c.CANTEENID = b.CANTEENID
     JOIN CMS_OFFSERV os ON os.OFFSERVID = b.OFFSERVID
+    JOIN CMS_OFFCOMBO oc ON oc.OFFCOMBOID = b.OFFCOMBOID
     WHERE b.OFFBOOKID = POFFBOOKID;
 END$$
 

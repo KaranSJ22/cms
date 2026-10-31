@@ -99,10 +99,11 @@ BEGIN
     END IF;
 
     -- Validate customer
-    SELECT CTYPECODE, STATUSID
+    SELECT CT.CTYPECODE, C.STATUSID
     INTO   VCTYPECODE, VCUSTSTATUSID
-    FROM   CMS_CUSTOMER
-    WHERE  CUSTOMERID = PCUSTOMERID;
+    FROM   CMS_CUSTOMER C
+    JOIN   CMS_CUSTTYPE CT ON CT.CTYPEID = C.CTYPEID
+    WHERE  C.CUSTOMERID = PCUSTOMERID;
 
     IF VCTYPECODE IS NULL THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Customer not found';
@@ -172,7 +173,7 @@ BEGIN
             FROM   CMS_DAYSLOT DS
             JOIN   CMS_DAYMENU DM ON DM.DAYSLOTID   = DS.DAYSLOTID
             WHERE  DS.SERVICEID   = PSERVICEID
-              AND  DS.SERVDATE    = VCURDATE
+              AND  DS.SERVICEDATE = VCURDATE
               AND  DS.STATUSID    = 10
               AND  DS.APPRSTATUSID = 22
               AND  DM.STATUSID    = 10
@@ -240,10 +241,11 @@ BEGIN
                     SUM(JT.QTY * COALESCE((
                         SELECT IPD.PRICE
                         FROM   CMS_ITEMPRICE    IP
-                        JOIN   CMS_ITEMPRICEDT  IPD ON IPD.ITEMPRICEID = IP.ITEMPRICEID
+                        JOIN   CMS_ITMPRICDT    IPD ON IPD.ITEMPRICEID = IP.ITEMPRICEID
+                        JOIN   CMS_CUSTTYPE     CT  ON CT.CTYPEID = IPD.CTYPEID
                         JOIN   CMS_STATUS       IPST ON IPST.STATUSID = IP.STATUSID
                         WHERE  IP.MENUITEMID  = DM.MENUITEMID
-                          AND  IPD.CTYPECODE  = VCTYPECODE
+                          AND  CT.CTYPECODE   = VCTYPECODE
                           AND  IP.EFFFROM    <= VCURDATE
                           AND  IPST.STATUSCODE = 'ACT'
                         ORDER BY IP.EFFFROM DESC LIMIT 1
@@ -282,7 +284,7 @@ BEGIN
                 INSERT INTO CMS_BOOKING (
                     BOOKNO, BOOKTYPEID, CUSTOMERID, SERVICEID, SERVICEDATE,
                     STATUSID, TOTALITEMS, TOTALQTY, TOTALAMOUNT,
-                    BOOKEDBY, BOOKEDON, CREATEDBY
+                    BOOKEDBY, BOOKEDAT, CREATEDBY
                 ) VALUES (
                     VBOOKNO, VBOOKTYPEID, PCUSTOMERID, PSERVICEID, VCURDATE,
                     VCRSTATUSID, VTOTALITEMS, VTOTALQTY, VTOTALAMOUNT,
@@ -297,7 +299,7 @@ BEGIN
                     INSERT INTO CMS_WALLETTRAN
                     (
                         WALLETID,
-                        BOOKINGID,
+                        BOOKID,
                         TRANSTYPE,
                         SOURCECODE,
                         AMOUNT,
@@ -336,10 +338,11 @@ BEGIN
                     COALESCE((
                         SELECT IPD.PRICE
                         FROM   CMS_ITEMPRICE   IP
-                        JOIN   CMS_ITEMPRICEDT IPD ON IPD.ITEMPRICEID = IP.ITEMPRICEID
+                        JOIN   CMS_ITMPRICDT IPD ON IPD.ITEMPRICEID = IP.ITEMPRICEID
+                        JOIN   CMS_CUSTTYPE    CT  ON CT.CTYPEID = IPD.CTYPEID
                         JOIN   CMS_STATUS      IPST ON IPST.STATUSID = IP.STATUSID
                         WHERE  IP.MENUITEMID  = DM.MENUITEMID
-                          AND  IPD.CTYPECODE  = VCTYPECODE
+                          AND  CT.CTYPECODE   = VCTYPECODE
                           AND  IP.EFFFROM    <= VCURDATE
                           AND  IPST.STATUSCODE = 'ACT'
                         ORDER BY IP.EFFFROM DESC LIMIT 1
@@ -347,10 +350,11 @@ BEGIN
                     JT.QTY * COALESCE((
                         SELECT IPD.PRICE
                         FROM   CMS_ITEMPRICE   IP
-                        JOIN   CMS_ITEMPRICEDT IPD ON IPD.ITEMPRICEID = IP.ITEMPRICEID
+                        JOIN   CMS_ITMPRICDT IPD ON IPD.ITEMPRICEID = IP.ITEMPRICEID
+                        JOIN   CMS_CUSTTYPE    CT  ON CT.CTYPEID = IPD.CTYPEID
                         JOIN   CMS_STATUS      IPST ON IPST.STATUSID = IP.STATUSID
                         WHERE  IP.MENUITEMID  = DM.MENUITEMID
-                          AND  IPD.CTYPECODE  = VCTYPECODE
+                          AND  CT.CTYPECODE   = VCTYPECODE
                           AND  IP.EFFFROM    <= VCURDATE
                           AND  IPST.STATUSCODE = 'ACT'
                         ORDER BY IP.EFFFROM DESC LIMIT 1

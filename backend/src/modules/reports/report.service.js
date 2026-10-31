@@ -40,11 +40,11 @@ export const findMonthlyPayrollData = async ({
         u.USERID,
         u.LOGINID,
         u.FULLNAME,
-        c.CTYPECODE,
+        ct.CTYPECODE,
         CASE 
-            WHEN c.CTYPECODE IN ('PRM', 'PERMEMP') THEN 'Permanent Employee'
-            WHEN c.CTYPECODE IN ('OCE', 'OCEEMP') THEN 'Other Centre Employee'
-            ELSE c.CTYPECODE
+            WHEN ct.CTYPECODE IN ('PRM', 'PERMEMP') THEN 'Permanent Employee'
+            WHEN ct.CTYPECODE IN ('OCE', 'OCEEMP') THEN 'Other Centre Employee'
+            ELSE ct.CTYPECODE
         END AS CTYPENAME,
         COALESCE(pe.EMPCODE, oe.EMPCODE, u.LOGINID) AS EMPCODE,
         COALESCE(pe.DEPT, oe.DEPT, 'N/A') AS DEPT,
@@ -58,6 +58,7 @@ export const findMonthlyPayrollData = async ({
         COALESCE(SUM(b.TOTALAMOUNT), 0) AS TOTAL_AMOUNT,
         GROUP_CONCAT(DISTINCT can.CANTEENNAME ORDER BY can.CANTEENNAME SEPARATOR ', ') AS CANTEENS_USED
     FROM CMS_CUSTOMER c
+    INNER JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = c.CTYPEID
     INNER JOIN CMS_USER u ON c.USERID = u.USERID
     LEFT JOIN CMS_PERMEMP pe ON c.CUSTOMERID = pe.CUSTOMERID
     LEFT JOIN CMS_OCEEMP oe ON c.CUSTOMERID = oe.CUSTOMERID
@@ -80,14 +81,14 @@ export const findMonthlyPayrollData = async ({
         GROUP BY b.BOOKID, b.CUSTOMERID, b.SERVICEDATE, b.STATUSID, b.TOTALAMOUNT
     ) b ON c.CUSTOMERID = b.CUSTOMERID
     INNER JOIN CMS_CANTEEN can ON b.CANTEENID = can.CANTEENID
-    WHERE c.CTYPECODE IN (${typePlaceholders})
+    WHERE ct.CTYPECODE IN (${typePlaceholders})
       ${loginFilterClause}
     GROUP BY 
         c.CUSTOMERID, 
         u.USERID, 
         u.LOGINID, 
         u.FULLNAME, 
-        c.CTYPECODE, 
+        ct.CTYPECODE, 
         pe.EMPCODE, 
         oe.EMPCODE, 
         pe.DEPT, 
@@ -110,12 +111,13 @@ export const findEmployeeProfile = async (customerId) => {
         u.USERID,
         u.LOGINID,
         u.FULLNAME,
-        c.CTYPECODE,
+        ct.CTYPECODE,
         COALESCE(pe.EMPCODE, oe.EMPCODE, u.LOGINID) AS EMPCODE,
         COALESCE(pe.DEPT, oe.DEPT, 'N/A') AS DEPT,
         COALESCE(pe.DESIG, oe.DESIG, 'N/A') AS DESIG,
         oe.CENTERNAME
     FROM CMS_CUSTOMER c
+    INNER JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = c.CTYPEID
     INNER JOIN CMS_USER u ON c.USERID = u.USERID
     LEFT JOIN CMS_PERMEMP pe ON c.CUSTOMERID = pe.CUSTOMERID
     LEFT JOIN CMS_OCEEMP oe ON c.CUSTOMERID = oe.CUSTOMERID
@@ -141,8 +143,10 @@ export const findEmployeeMonthlyBookings = async ({ customerId, startDate, endDa
         COALESCE(st.STATUSNAME, 'Confirmed') AS STATUSNAME,
         b.TOTALQTY,
         b.TOTALAMOUNT,
-        b.BOOKEDON,
-        b.SERVEDON
+        b.BOOKEDAT,
+        b.BOOKEDAT AS BOOKEDON,
+        b.SERVEDAT,
+        b.SERVEDAT AS SERVEDON
     FROM CMS_BOOKING b
     LEFT JOIN CMS_SERVICE s ON b.SERVICEID = s.SERVICEID
     LEFT JOIN CMS_STATUS st ON b.STATUSID = st.STATUSID

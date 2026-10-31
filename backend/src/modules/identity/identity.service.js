@@ -233,7 +233,7 @@ export const findCustomerByIdentifier = async (identifier) => {
         u.FULLNAME,
         u.EMAIL,
         u.MOBILENO,
-        c.CTYPECODE,
+        ct.CTYPECODE,
         ct.CTYPENAME,
         c.DISPNAME,
         c.STATUSID,
@@ -247,7 +247,7 @@ export const findCustomerByIdentifier = async (identifier) => {
         COALESCE(ce.CONTCODE, pe.EMPCODE, oe.EMPCODE, u.LOGINID) AS EMPLOYEE_CODE
      FROM CMS_CUSTOMER c
      LEFT JOIN CMS_USER u ON u.USERID = c.USERID
-     LEFT JOIN CMS_CUSTTYPE ct ON ct.CTYPECODE = c.CTYPECODE
+     LEFT JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = c.CTYPEID
      LEFT JOIN CMS_STATUS st ON st.STATUSID = c.STATUSID
      LEFT JOIN CMS_CONTEMP ce ON ce.CUSTOMERID = c.CUSTOMERID
      LEFT JOIN CMS_PERMEMP pe ON pe.CUSTOMERID = c.CUSTOMERID

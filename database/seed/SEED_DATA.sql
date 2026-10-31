@@ -12,7 +12,7 @@ DELETE FROM CMS_OCEEMP;
 DELETE FROM CMS_CONTEMP;
 DELETE FROM CMS_PERMEMP;
 DELETE FROM CMS_CUSTOMER;
-DELETE FROM CMS_CONSUMERROLE;
+DELETE FROM CMS_USERROLE;
 DELETE FROM CMS_CANTEENROLE;
 DELETE FROM CMS_USER;
 DELETE FROM CMS_CANTEEN;
@@ -66,7 +66,7 @@ ON DUPLICATE KEY UPDATE CANTEENCODE = VALUES(CANTEENCODE), CANTEENNAME = VALUES(
 
 -- ============================================================
 -- 5. SEED USERS 
--- Password hash: Using a dummy hash for testing 'password123'
+-- Password: All seed users use 'admin123'
 -- ============================================================
 INSERT INTO CMS_USER (USERID, LOGINID, FULLNAME, EMAIL, MOBILENO, PWDHASH, ISACTIVE) VALUES 
 (1, 'admin', 'System Admin', 'admin@isro.gov.in', '9999999999', '$2b$10$Aiy6UGHkmFyVghhQpZM3JO.8g3GCeFXwk8B21ZGnlNOGJACP66zRG', 1),
@@ -100,6 +100,13 @@ ON DUPLICATE KEY UPDATE
     ISACTIVE = VALUES(ISACTIVE);
 
 -- ============================================================
+-- 5B. USER ROLE MAPPING (SYSADM for user 1 'admin')
+-- ============================================================
+INSERT INTO CMS_USERROLE (USERID, ROLEID, ISACTIVE) VALUES 
+(1, 1, 1)
+ON DUPLICATE KEY UPDATE ISACTIVE = VALUES(ISACTIVE);
+
+-- ============================================================
 -- 6. CANTEEN ROLE MAPPING
 -- Manager 1 has Canteen A & B. Manager 2 has Canteen C.
 -- ============================================================
@@ -120,26 +127,26 @@ ON DUPLICATE KEY UPDATE
 -- 7. CUSTOMERS & EMPLOYEES
 -- ============================================================
 -- Create CMS_CUSTOMER entries for the eaters (Perm, Cont, OCE, Vis)
-INSERT INTO CMS_CUSTOMER (CUSTOMERID, USERID, CTYPECODE, DISPNAME, STATUSID) VALUES 
-(1, 9, 'PRM', 'Perm Emp 1', 10),
-(2, 10, 'PRM', 'Perm Emp 2', 10),
-(3, 11, 'PRM', 'Perm Emp 3', 10),
-(4, 12, 'PRM', 'Perm Emp 4', 10),
-(5, 13, 'PRM', 'Perm Emp 5', 10),
-(6, 14, 'PRM', 'Perm Emp 6', 10),
-(7, 15, 'PRM', 'Perm Emp 7', 10),
-(8, 16, 'CNT', 'Cont Emp 1', 10),
-(9, 17, 'CNT', 'Cont Emp 2', 10),
-(10, 18, 'CNT', 'Cont Emp 3', 10),
-(11, 19, 'CNT', 'Cont Emp 4', 10),
-(12, 20, 'CNT', 'Cont Emp 5', 10),
-(13, 21, 'OCE', 'OCE Emp 1', 10),
-(14, 22, 'OCE', 'OCE Emp 2', 10),
-(15, 23, 'VIS', 'Visitor 1', 10)
-ON DUPLICATE KEY UPDATE USERID = VALUES(USERID), CTYPECODE = VALUES(CTYPECODE), DISPNAME = VALUES(DISPNAME), STATUSID = VALUES(STATUSID);
+INSERT INTO CMS_CUSTOMER (CUSTOMERID, USERID, CTYPEID, DISPNAME, STATUSID) VALUES 
+(1, 9, 1, 'Perm Emp 1', 10),
+(2, 10, 1, 'Perm Emp 2', 10),
+(3, 11, 1, 'Perm Emp 3', 10),
+(4, 12, 1, 'Perm Emp 4', 10),
+(5, 13, 1, 'Perm Emp 5', 10),
+(6, 14, 1, 'Perm Emp 6', 10),
+(7, 15, 1, 'Perm Emp 7', 10),
+(8, 16, 2, 'Cont Emp 1', 10),
+(9, 17, 2, 'Cont Emp 2', 10),
+(10, 18, 2, 'Cont Emp 3', 10),
+(11, 19, 2, 'Cont Emp 4', 10),
+(12, 20, 2, 'Cont Emp 5', 10),
+(13, 21, 3, 'OCE Emp 1', 10),
+(14, 22, 3, 'OCE Emp 2', 10),
+(15, 23, 4, 'Visitor 1', 10)
+ON DUPLICATE KEY UPDATE USERID = VALUES(USERID), CTYPEID = VALUES(CTYPEID), DISPNAME = VALUES(DISPNAME), STATUSID = VALUES(STATUSID);
 
 -- Permanent Employees (with Employee Levels for Official Request approval workflow)
-INSERT INTO CMS_PERMEMP (CUSTOMERID, EMPCODE, DEPT, DESIG, LEVEL) VALUES 
+INSERT INTO CMS_PERMEMP (CUSTOMERID, EMPCODE, DEPT, DESIG, EMPLEVEL) VALUES 
 (1, 'P001', 'Propulsion', 'Engineer SE', 13),
 (2, 'P002', 'Propulsion', 'Engineer SD', 14),
 (3, 'P003', 'Avionics', 'Scientist SC', 15),
@@ -147,7 +154,7 @@ INSERT INTO CMS_PERMEMP (CUSTOMERID, EMPCODE, DEPT, DESIG, LEVEL) VALUES
 (5, 'P005', 'Admin', 'Admin Officer', 14),
 (6, 'P006', 'Accounts', 'Accounts Officer', 14),
 (7, 'P007', 'Directorate', 'Director', 18)
-ON DUPLICATE KEY UPDATE EMPCODE = VALUES(EMPCODE), DEPT = VALUES(DEPT), DESIG = VALUES(DESIG), LEVEL = VALUES(LEVEL);
+ON DUPLICATE KEY UPDATE EMPCODE = VALUES(EMPCODE), DEPT = VALUES(DEPT), DESIG = VALUES(DESIG), EMPLEVEL = VALUES(EMPLEVEL);
 
 -- Level Approver Tier Mapping (Levels 13, 14 -> L1; 15, 16, 17, 18 -> L2)
 INSERT INTO CMS_LVLMAP (EMPLEVEL, APPRLVL, ISACTIVE) VALUES 
@@ -192,18 +199,15 @@ INSERT INTO CMS_WALLET (WALLETID, CUSTOMERID, BALANCE, RESERVEDAMT, STATUSID) VA
 ON DUPLICATE KEY UPDATE BALANCE = VALUES(BALANCE);
 
 -- KIOSK DEVICES
-INSERT INTO CMS_KIOSK_DEVICE (KIOSKID, DEVICECODE, DEVICENAME, IPADDRESS, CANTEENID, KIOSKTYPE, STATUSID, ISACTIVE)
+INSERT INTO CMS_KIOSK (KIOSKID, DEVICECODE, DEVICENAME, IPADDRESS, CANTEENID, KIOSKTYPE, STATUSID)
 VALUES 
-(1, 'KSK-COUNTER-01', 'Canteen A Staff Counter 1', '127.0.0.1', 1, 'STAFF_COUNTER', 10, 1),
-(2, 'KSK-LOBBY-01', 'Canteen A Lobby Self-Service', '192.168.1.102', 1, 'EMP_SELF_SERVICE', 10, 1),
-(3, 'KSK-DEV-LOCAL', 'Local Dev Kiosk (IPv6 Localhost)', '::1', 1, 'EMP_SELF_SERVICE', 10, 1)
+(1, 'KSK-COUNTER-01', 'Canteen A Staff Counter 1', '192.168.1.15', 1, 'STAFF_COUNTER', 10),
+(2, 'KSK-LOBBY-01', 'Canteen A Lobby Self-Service', '192.168.1.14', 1, 'EMP_SELF_SERVICE', 10)
 ON DUPLICATE KEY UPDATE 
     DEVICENAME = VALUES(DEVICENAME),
+    IPADDRESS = VALUES(IPADDRESS),
     CANTEENID = VALUES(CANTEENID),
     KIOSKTYPE = VALUES(KIOSKTYPE),
-    ISACTIVE = VALUES(ISACTIVE);
+    STATUSID = VALUES(STATUSID);
 
 SET FOREIGN_KEY_CHECKS = 1;
-UPDATE CMS_KIOSK_DEVICE 
-SET IPADDRESS = '192.168.1.14' 
-WHERE KIOSKTYPE = 'EMP_SELF_SERVICE' AND KIOSKID = 2;

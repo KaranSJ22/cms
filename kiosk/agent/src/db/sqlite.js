@@ -20,13 +20,13 @@ export const getDb = () => {
     verbose: env.NODE_ENV === "development" ? (msg) => logger.debug({ sqlite: msg }) : undefined,
   });
 
-  // Enable WAL mode & performance pragmas for Raspberry Pi flash storage
+  // Enable WAL mode & performance pragmas optimized for Raspberry Pi 5 flash storage
   dbInstance.pragma("journal_mode = WAL");
   dbInstance.pragma("synchronous = NORMAL");
   dbInstance.pragma("foreign_keys = ON");
   dbInstance.pragma("busy_timeout = 5000");
 
-  logger.info({ dbPath }, "SQLite database connected in WAL mode");
+  logger.info({ dbPath }, "SQLite database connected in WAL mode (better-sqlite3)");
   return dbInstance;
 };
 

@@ -94,7 +94,10 @@ export class WalletService {
 
       // 3. Customer Type & Status Check (10 = 'ACT' from SEED_STATUS.sql)
       const [[cust]] = await conn.query(
-        `SELECT CUSTOMERID, CTYPECODE, DISPNAME FROM CMS_CUSTOMER WHERE CUSTOMERID = ? AND STATUSID = 10`,
+        `SELECT c.CUSTOMERID, c.CTYPEID, ct.CTYPECODE, c.DISPNAME 
+         FROM CMS_CUSTOMER c 
+         JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = c.CTYPEID 
+         WHERE c.CUSTOMERID = ? AND c.STATUSID = 10`,
         [customerId]
       );
       if (!cust) throw new NotFoundError("Customer not found or inactive");
@@ -154,7 +157,7 @@ export class WalletService {
       // 8. Record Ledger Entry with CANTEENID and STATUSID = 40 ('DEP' / Deposit)
       await conn.query(
         `INSERT INTO CMS_WALLETTRAN (
-           WALLETID, BOOKINGID, CANTEENID, TRANSTYPE, SOURCECODE,
+           WALLETID, BOOKID, CANTEENID, TRANSTYPE, SOURCECODE,
            AMOUNT, BALBEFORE, BALAFTER, PAYMENTMETHOD, REFNO, STATUSID, CREATEDBY, REMARKS
          ) VALUES (
            ?, NULL, ?, 'CREDIT', 'TOPUP',

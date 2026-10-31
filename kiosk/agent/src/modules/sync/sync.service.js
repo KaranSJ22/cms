@@ -50,6 +50,46 @@ export const pushOutboxBatch = async () => {
 };
 
 /**
+ * Pushes a batch of queued outbox serving events to the central server
+ */
+export const pushServingEventsBatch = async () => {
+  const chunk = SyncRepository.getPendingServingEventsChunk(50);
+  if (!chunk.length) return { processedCount: 0 };
+
+  const eventUuids = chunk.map((c) => c.event_uuid);
+  SyncRepository.markServingEventsSyncing(eventUuids);
+
+  try {
+    const payload = {
+      kioskCode: env.KIOSK_CODE,
+      batchId: `BATCH-SRV-${env.KIOSK_CODE}-${Date.now()}`,
+      events: chunk.map((c) => ({
+        eventUuid: c.event_uuid,
+        eventType: c.event_type,
+        payload: JSON.parse(c.payload_json),
+        createdAt: c.created_at,
+      })),
+    };
+
+    const res = await centralClient.post("/kiosk/sync-serving", payload);
+    const results = res.data?.DATA?.results || res.data?.results || [];
+
+    SyncRepository.applyServingSyncResults(results);
+    logger.info(
+      { batchSize: chunk.length, syncedResults: results.length },
+      "Successfully synced offline serving events outbox batch to central server"
+    );
+
+    return { processedCount: chunk.length, results };
+  } catch (error) {
+    const errMsg = error.response?.data?.MESSAGE || error.message || "Serving events network sync failure";
+    logger.warn({ err: errMsg, batchSize: chunk.length }, "Serving events push failed, marked for retry");
+    SyncRepository.markServingEventsError(eventUuids, errMsg);
+    return { processedCount: 0, error: errMsg };
+  }
+};
+
+/**
  * Pulls master data snapshot from central server to populate local SQLite cache
  */
 export const pullBootstrapPackage = async () => {
@@ -80,6 +120,8 @@ export const pullBootstrapPackage = async () => {
       daySlots: data.daySlots || [],
       menuItems: data.menuItems || [],
       activeBookings: data.activeBookings || [],
+      todayBookings: data.todayBookings || [],
+      todayBookItems: data.todayBookItems || [],
     });
 
     const newLastModified =
@@ -93,6 +135,7 @@ export const pullBootstrapPackage = async () => {
         slots: data.daySlots?.length || 0,
         dishes: data.menuItems?.length || 0,
         activeBookings: data.activeBookings?.length || 0,
+        todayServingBookings: data.todayBookings?.length || 0,
       },
       "Downlink bootstrap sync completed successfully"
     );
@@ -100,7 +143,11 @@ export const pullBootstrapPackage = async () => {
     return { success: true, notModified: false };
   } catch (error) {
     const errMsg = error.response?.data?.MESSAGE || error.message || "Bootstrap sync failed";
-    logger.warn({ err: errMsg }, "Central server unreachable during downlink pull");
+    if (error.response || error.code === "ECONNREFUSED" || error.code === "ENOTFOUND" || error.code === "ETIMEDOUT") {
+      logger.warn({ err: errMsg }, "Central server unreachable or rejected downlink pull");
+    } else {
+      logger.error({ err: errMsg, stack: error.stack }, "Failed to process and store downlink snapshot in SQLite");
+    }
     return { success: false, error: errMsg };
   }
 };

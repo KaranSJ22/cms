@@ -4,7 +4,7 @@ import { sendSuccess } from "../../common/responses/apiResponse.js";
 export const scanSelfServiceController = async (req, res, next) => {
   try {
     const identifier = req.validated?.body?.PIDENTIFIER || req.body?.PIDENTIFIER;
-    const result = KioskService.scanEmployee(identifier);
+    const result = await KioskService.scanEmployee(identifier);
     return sendSuccess(res, result, "Employee verified successfully");
   } catch (error) {
     next(error);

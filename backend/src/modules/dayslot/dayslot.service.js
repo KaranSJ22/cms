@@ -44,7 +44,8 @@ export const createDaySlot = async (daySlotData, createdByUserId) => {
   const created = await createDaySlotRepository({
     CANTEENID: daySlotData.CANTEENID,
     SERVICEID: daySlotData.SERVICEID,
-    SERVDATE: daySlotData.SERVDATE,
+    SERVDATE: daySlotData.SERVDATE || daySlotData.SERVICEDATE,
+    SERVICEDATE: daySlotData.SERVICEDATE || daySlotData.SERVDATE,
     STARTTIME: daySlotData.STARTTIME,
     ENDTIME: daySlotData.ENDTIME,
     CREATEDBY: createdByUserId,

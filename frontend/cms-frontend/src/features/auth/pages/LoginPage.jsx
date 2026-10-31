@@ -9,11 +9,11 @@ export default function LoginPage() {
   const { login, ssoLogin, error, setError } = useAuth()
   const navigate = useNavigate()
 
-  const [mode, setMode]         = useState('password') // 'password' | 'sso'
-  const [loginId, setLoginId]   = useState('')
+  const [mode, setMode] = useState('password') // 'password' | 'sso'
+  const [loginId, setLoginId] = useState('')
   const [password, setPassword] = useState('')
   const [ssoToken, setSsoToken] = useState('')
-  const [loading, setLoading]   = useState(false)
+  const [loading, setLoading] = useState(false)
   const [localErr, setLocalErr] = useState('')
 
   async function handleSubmit(e) {
@@ -41,7 +41,7 @@ export default function LoginPage() {
     <div className="w-full max-w-md mx-auto">
       {/* ── Main Structured Login Panel ── */}
       <div className="bg-slate-900 border border-slate-800 rounded-md shadow-md p-6 sm:p-8">
-        
+
         {/* ── Official ISRO & HSFC Header ── */}
         <div className="text-center mb-6">
           {/* Official ISRO Logo */}
@@ -68,18 +68,15 @@ export default function LoginPage() {
           </div>
 
           <h1 className="font-grotesk font-bold text-base text-white tracking-wider uppercase mt-3">
-            Canteen Management System
+            Canteen Mitra
           </h1>
-          <p className="text-[0.68rem] text-slate-400 mt-0.5 tracking-wide">
-            High Reliability Operations & Pre-Booking Portal
-          </p>
         </div>
 
         {/* ── Authentication Mode Toggle ── */}
         <div className="flex gap-1 p-1 mb-5 rounded bg-slate-950 border border-slate-800">
           {[
             { key: 'password', label: 'Password Login' },
-            { key: 'sso',      label: 'ISRO SSO Login' },
+            { key: 'sso', label: 'ISRO SSO Login' },
           ].map((m) => (
             <button
               key={m.key}

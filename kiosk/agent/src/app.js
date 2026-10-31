@@ -11,7 +11,12 @@ import { env } from "./config/env.js";
 const app = express();
 
 app.set("trust proxy", true);
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  })
+);
 
 const allowedOrigins = [
   ...((env.ALLOWED_ORIGINS || "").split(",").map((o) => o.trim()).filter(Boolean)),

@@ -21,6 +21,22 @@ export const testDbConnection = async () => {
   try {
     const [rows] = await pool.query("SELECT 1 AS RESULT");
     logger.info({ DB: env.DB_NAME }, "MySQL connection successful");
+
+    // Ensure root admin user (USERID 1) has active SYSADM role in CMS_USERROLE
+    await pool.query(`
+      INSERT INTO CMS_USERROLE (USERID, ROLEID, ISACTIVE)
+      VALUES (1, 1, 1)
+      ON DUPLICATE KEY UPDATE ISACTIVE = 1
+    `).catch(() => {});
+
+    // Ensure dev loopback/PC IPs (127.0.0.1, ::1) are not treated as hardware kiosks in CMS_KIOSK
+    await pool.query(`
+      UPDATE CMS_KIOSK SET IPADDRESS = '192.168.1.15' WHERE KIOSKID = 1 AND IPADDRESS = '127.0.0.1'
+    `).catch(() => {});
+    await pool.query(`
+      DELETE FROM CMS_KIOSK WHERE KIOSKID = 3 AND IPADDRESS = '::1'
+    `).catch(() => {});
+
     return rows[0];
   } catch (error) {
     logger.error({ err: error }, "MySQL connection failed");

@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useOutletContext } from "react-router-dom";
 import { useDayMenu } from "../hooks/useDayMenu";
 import SingleDayBuilder from "../components/SingleDayBuilder";
 import DayMenuTable from "../components/DayMenuTable";
+import PendingApprovalsQueue from "../components/PendingApprovalsQueue";
 import { useAuth } from "../../../hooks/useAuth";
+import { CheckCircleIcon } from "@heroicons/react/24/outline";
 
 import * as servicesApi from "../../services/api/servicesApi";
 import { getActiveCanteens, getDaySlots, getDaySlot, createDaySlot, updateDaySlot } from "../../dayslot/api/daySlotsApi";
@@ -12,6 +14,9 @@ import { holidayApi } from "../../holidays/api/holidayApi";
 export default function DayMenuPlannerPage() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
+  const outletContext = useOutletContext() || {};
+  const setPendingMenusCount = outletContext.setPendingMenus;
+
   const queryCanteen = searchParams.get("canteen") || searchParams.get("canteenId") || "";
   const queryDate = searchParams.get("date") || "";
   const queryService = searchParams.get("service") || searchParams.get("serviceId") || "";
@@ -19,20 +24,27 @@ export default function DayMenuPlannerPage() {
   const { 
     dayMenus, 
     setDayMenus,
+    pendingMenus,
     loading, 
+    pendingLoading,
     error, 
     setError,
     fetchDayMenuWorkspace, 
     replaceMenuItems,
     submitMenu,
     approveMenu,
-    rejectMenu
+    rejectMenu,
+    fetchPendingDayMenus,
   } = useDayMenu();
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [actionLoadingSlotId, setActionLoadingSlotId] = useState(null);
   const [remarks, setRemarks] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectTargetSlot, setRejectTargetSlot] = useState(null);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [hasAutoSelected, setHasAutoSelected] = useState(false);
 
   // Context State
   const [canteens, setCanteens] = useState([]);
@@ -41,6 +53,8 @@ export default function DayMenuPlannerPage() {
   const [selectedCanteen, setSelectedCanteen] = useState(queryCanteen);
   const [selectedDate, setSelectedDate] = useState(queryDate);
   const [selectedService, setSelectedService] = useState(queryService);
+  const [selectedPendingId, setSelectedPendingId] = useState(null);
+  const [pendingCanteenFilter, setPendingCanteenFilter] = useState(queryCanteen || "");
 
   // Sync if URL query parameters change dynamically
   useEffect(() => {
@@ -62,6 +76,13 @@ export default function DayMenuPlannerPage() {
 
   const [resolvedSlot, setResolvedSlot] = useState(null);
   const [isResolving, setIsResolving] = useState(false);
+
+  // Permissions & Roles
+  const userCanteenRole = (user?.CANTEENROLES || []).find(r => r.CANTEENID === Number(selectedCanteen))?.ROLECODE;
+  const isSysAdmin = (user?.SYSTEMROLES || []).includes('SYSADM');
+  const hasAnyManagerRole = (user?.CANTEENROLES || []).some(r => r.ROLECODE === 'CNTMGR' || r.ROLECODE === 'CTNMGR');
+  const canReviewApprovals = hasAnyManagerRole || isSysAdmin;
+  const isManager = userCanteenRole === 'CNTMGR' || userCanteenRole === 'CTNMGR' || isSysAdmin;
 
   // Build holiday map { 'YYYY-MM-DD': holidayName }
   const holidayMap = useMemo(() => {
@@ -105,17 +126,51 @@ export default function DayMenuPlannerPage() {
     loadInitialData();
   }, [user]);
 
+  // Load Pending Menus for Managers/Admins
+  useEffect(() => {
+    if (canReviewApprovals) {
+      fetchPendingDayMenus().catch(console.error);
+    }
+  }, [canReviewApprovals, fetchPendingDayMenus]);
+
+  // Auto-Select First Pending Menu when navigating from dashboard or when pending menus exist
+  useEffect(() => {
+    if (hasAutoSelected || !canReviewApprovals) return;
+    if (!pendingMenus || pendingMenus.length === 0) return;
+
+    const isViewPending = searchParams.get("view") === "pending";
+    const hasExplicitContext = Boolean(queryCanteen && queryDate && queryService);
+
+    if (isViewPending || !hasExplicitContext) {
+      let target = pendingMenus[0];
+      if (queryCanteen) {
+        const matching = pendingMenus.find((s) => String(s.CANTEENID) === String(queryCanteen));
+        if (matching) target = matching;
+      }
+
+      if (target) {
+        const targetDate = String(target.SERVICEDATE || target.SERVDATE || "").substring(0, 10);
+        setSelectedCanteen(String(target.CANTEENID));
+        setSelectedDate(targetDate);
+        setSelectedService(String(target.SERVICEID));
+        setSelectedPendingId(target.DAYSLOTID);
+        setHasAutoSelected(true);
+      }
+    }
+  }, [pendingMenus, searchParams, queryCanteen, queryDate, queryService, hasAutoSelected, canReviewApprovals]);
+
+  // Filtered pending list based on canteen selector
+  const filteredPendingList = useMemo(() => {
+    if (!pendingCanteenFilter) return pendingMenus;
+    return (pendingMenus || []).filter(
+      (s) => String(s.CANTEENID) === String(pendingCanteenFilter)
+    );
+  }, [pendingMenus, pendingCanteenFilter]);
+
   // Try to resolve the DAYSLOTID whenever Canteen, Date, or Service changes
   useEffect(() => {
     async function resolveSlot() {
       if (selectedCanteen && selectedDate && selectedService) {
-        // If it's a holiday and manager hasn't enabled holiday override
-        if (isCurrentDateHoliday && !holidayOverride) {
-          setResolvedSlot(null);
-          if (typeof setDayMenus === 'function') setDayMenus([]);
-          return;
-        }
-
         setIsResolving(true);
         setError(null);
         try {
@@ -137,6 +192,13 @@ export default function DayMenuPlannerPage() {
             setSlotEndTime(slot.ENDTIME ? slot.ENDTIME.substring(0, 5) : defEnd);
             await fetchDayMenuWorkspace(slot.DAYSLOTID);
           } else {
+            // If it's a holiday and manager hasn't enabled holiday override
+            if (isCurrentDateHoliday && !holidayOverride) {
+              setResolvedSlot(null);
+              if (typeof setDayMenus === 'function') setDayMenus([]);
+              return;
+            }
+
             // Virtual slot: Auto-creation on save/publish
             const virtualSlot = {
               isNew: true,
@@ -163,7 +225,7 @@ export default function DayMenuPlannerPage() {
       }
     }
     resolveSlot();
-  }, [selectedCanteen, selectedDate, selectedService, isCurrentDateHoliday, holidayOverride, services, fetchDayMenuWorkspace, setError]);
+  }, [selectedCanteen, selectedDate, selectedService, isCurrentDateHoliday, holidayOverride, services, fetchDayMenuWorkspace, setError, setDayMenus]);
 
   // Handle slot timings update for an existing slot
   const handleUpdateTimings = async () => {
@@ -196,7 +258,7 @@ export default function DayMenuPlannerPage() {
     try {
       let slotId = resolvedSlot.DAYSLOTID;
 
-      // Point 14: Auto-create Day Slot if missing
+      // Auto-create Day Slot if missing
       if (resolvedSlot.isNew) {
         const created = await createDaySlot({
           CANTEENID: Number(selectedCanteen),
@@ -213,6 +275,8 @@ export default function DayMenuPlannerPage() {
         await fetchDayMenuWorkspace(slotId);
         const updatedSlot = await getDaySlot(slotId);
         if (updatedSlot) setResolvedSlot(updatedSlot);
+        setSuccessMessage("Draft items saved successfully.");
+        setTimeout(() => setSuccessMessage(""), 4000);
       }
     } catch (err) {
       setError(err.response?.data?.MESSAGE || err.response?.data?.message || err.message || "Failed to save draft");
@@ -229,16 +293,101 @@ export default function DayMenuPlannerPage() {
       await fetchDayMenuWorkspace(resolvedSlot.DAYSLOTID);
       const updatedSlot = await getDaySlot(resolvedSlot.DAYSLOTID);
       if (updatedSlot) setResolvedSlot(updatedSlot);
-      if (actionName === 'reject') setShowRejectModal(false);
+      if (actionName === 'reject') {
+        setShowRejectModal(false);
+        setRejectTargetSlot(null);
+      }
       setRemarks("");
+
+      // Refresh pending queue
+      const remaining = await fetchPendingDayMenus();
+      if (setPendingMenusCount) {
+        setPendingMenusCount(Array.isArray(remaining) ? remaining.length : 0);
+      }
+      setSuccessMessage(`✓ Menu ${actionName === 'approve' ? 'approved & published' : actionName === 'reject' ? 'rejected' : 'submitted'} successfully!`);
+      setTimeout(() => setSuccessMessage(""), 5000);
     }
     setActionLoading(false);
   };
 
-  // Check roles for the specific canteen (support both CNTMGR and SYSADM)
-  const userCanteenRole = (user?.CANTEENROLES || []).find(r => r.CANTEENID === Number(selectedCanteen))?.ROLECODE;
-  const isManager = userCanteenRole === 'CNTMGR' || userCanteenRole === 'CTNMGR' || user?.SYSTEMROLES?.includes('SYSADM');
-  
+  // Inspect slot from Pending Approvals Queue
+  const handleSelectPendingSlot = (slot) => {
+    setSelectedPendingId(slot.DAYSLOTID);
+    setSelectedCanteen(String(slot.CANTEENID));
+    setSelectedDate(String(slot.SERVICEDATE || slot.SERVDATE).substring(0, 10));
+    setSelectedService(String(slot.SERVICEID));
+    
+    // Auto-override holiday if slot was created on a holiday
+    if (holidayMap[String(slot.SERVICEDATE || slot.SERVDATE).substring(0, 10)]) {
+      setHolidayOverride(true);
+    }
+
+    const el = document.getElementById("slot-context-bar") || document.getElementById("slot-action-bar");
+    if (el) el.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Quick Approve directly from Pending Queue Card
+  const handleQuickApprovePendingSlot = async (slot) => {
+    setActionLoadingSlotId(slot.DAYSLOTID);
+    setError(null);
+    try {
+      const success = await approveMenu(slot.DAYSLOTID, "Quick direct approval by Manager");
+      if (success) {
+        const slotDate = String(slot.SERVICEDATE || slot.SERVDATE).substring(0, 10);
+        setSuccessMessage(`✓ Approved and published menu for ${slot.SERVNAME} on ${slotDate} (${slot.CANTEENNAME})`);
+        setTimeout(() => setSuccessMessage(""), 5000);
+
+        const remaining = await fetchPendingDayMenus();
+        if (setPendingMenusCount) {
+          setPendingMenusCount(Array.isArray(remaining) ? remaining.length : 0);
+        }
+
+        // If currently inspected slot was approved, refresh it
+        if (resolvedSlot && Number(resolvedSlot.DAYSLOTID) === Number(slot.DAYSLOTID)) {
+          await fetchDayMenuWorkspace(slot.DAYSLOTID);
+          const updatedSlot = await getDaySlot(slot.DAYSLOTID);
+          if (updatedSlot) setResolvedSlot(updatedSlot);
+        }
+      }
+    } catch (err) {
+      console.error("Quick approval failed:", err);
+    } finally {
+      setActionLoadingSlotId(null);
+    }
+  };
+
+  // Reject slot modal confirm handler
+  const handleConfirmReject = async () => {
+    const slotId = rejectTargetSlot?.DAYSLOTID || resolvedSlot?.DAYSLOTID;
+    if (!slotId) return;
+    setActionLoading(true);
+    try {
+      const success = await rejectMenu(slotId, remarks);
+      if (success) {
+        setSuccessMessage("Menu rejected and returned to assistant for revision.");
+        setTimeout(() => setSuccessMessage(""), 5000);
+        setShowRejectModal(false);
+        setRemarks("");
+        setRejectTargetSlot(null);
+
+        const remaining = await fetchPendingDayMenus();
+        if (setPendingMenusCount) {
+          setPendingMenusCount(Array.isArray(remaining) ? remaining.length : 0);
+        }
+
+        if (resolvedSlot && Number(resolvedSlot.DAYSLOTID) === Number(slotId)) {
+          await fetchDayMenuWorkspace(slotId);
+          const updatedSlot = await getDaySlot(slotId);
+          if (updatedSlot) setResolvedSlot(updatedSlot);
+        }
+      }
+    } catch (err) {
+      console.error("Rejection failed:", err);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Use status from slot (APPRSTATUSCODE from CMSLISTSLOT / CMSGETSLOT)
   const slotStatus = resolvedSlot?.APPRSTATUSCODE || resolvedSlot?.APPRSTATUS || resolvedSlot?.MENUAPPRSTATUS || (resolvedSlot?.isNew ? 'NEW' : 'DRF');
   const isDraftOrRejected = slotStatus === 'DRF' || slotStatus === 'REJ';
@@ -258,6 +407,13 @@ export default function DayMenuPlannerPage() {
           await fetchDayMenuWorkspace(resolvedSlot.DAYSLOTID);
           const updatedSlot = await getDaySlot(resolvedSlot.DAYSLOTID);
           if (updatedSlot) setResolvedSlot(updatedSlot);
+          
+          const remaining = await fetchPendingDayMenus();
+          if (setPendingMenusCount) {
+            setPendingMenusCount(Array.isArray(remaining) ? remaining.length : 0);
+          }
+          setSuccessMessage("✓ Menu approved and published successfully!");
+          setTimeout(() => setSuccessMessage(""), 5000);
         }
       }
     } catch (err) {
@@ -297,10 +453,16 @@ export default function DayMenuPlannerPage() {
             await approveMenu(slotId, "Direct approval on save and publish");
           }
         }
-        // If already approved (APR), items were replaced in-place, no need to resubmit
         await fetchDayMenuWorkspace(slotId);
         const updatedSlot = await getDaySlot(slotId);
         if (updatedSlot) setResolvedSlot(updatedSlot);
+
+        const remaining = await fetchPendingDayMenus();
+        if (setPendingMenusCount) {
+          setPendingMenusCount(Array.isArray(remaining) ? remaining.length : 0);
+        }
+        setSuccessMessage("✓ Menu saved and published successfully!");
+        setTimeout(() => setSuccessMessage(""), 5000);
       }
     } catch (err) {
       setError(err.response?.data?.MESSAGE || err.response?.data?.message || err.message || "Failed to publish menu");
@@ -326,6 +488,23 @@ export default function DayMenuPlannerPage() {
         </div>
       </div>
 
+      {/* Success Notification Banner */}
+      {successMessage && (
+        <div className="p-4 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl flex items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <CheckCircleIcon className="w-5 h-5 text-emerald-600 shrink-0" />
+            <span>{successMessage}</span>
+          </div>
+          <button
+            onClick={() => setSuccessMessage("")}
+            className="text-emerald-700 hover:text-emerald-900 text-xs font-bold"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Error Banner */}
       {error && (
         <div className="p-4 bg-rose-50/80 text-rose-700 border border-rose-200 rounded-xl flex items-start gap-3">
           <svg className="mt-0.5 shrink-0 text-rose-500 w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -335,8 +514,28 @@ export default function DayMenuPlannerPage() {
         </div>
       )}
 
+      {/* ── Pending Approvals Review Queue (for Managers/Admins) ── */}
+      {canReviewApprovals && (
+        <PendingApprovalsQueue
+          pendingList={filteredPendingList}
+          selectedSlotId={selectedPendingId || (isPending ? resolvedSlot?.DAYSLOTID : null)}
+          onSelectSlot={handleSelectPendingSlot}
+          onApproveSlot={handleQuickApprovePendingSlot}
+          onRejectSlot={(slot) => {
+            setRejectTargetSlot(slot);
+            setShowRejectModal(true);
+          }}
+          loading={pendingLoading}
+          actionLoadingSlotId={actionLoadingSlotId}
+          canteens={canteens}
+          selectedCanteenFilter={pendingCanteenFilter}
+          onCanteenFilterChange={setPendingCanteenFilter}
+          onRefresh={fetchPendingDayMenus}
+        />
+      )}
+
       {/* Step 1: Select Day Slot (Full Width Context Bar) */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div id="slot-context-bar" className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-6 bg-slate-50 border-b border-slate-100">
           {/* Holiday Alert Banner with granular override */}
           {isCurrentDateHoliday && (
@@ -400,7 +599,10 @@ export default function DayMenuPlannerPage() {
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Canteen</label>
               <select
                 value={selectedCanteen}
-                onChange={(e) => setSelectedCanteen(e.target.value)}
+                onChange={(e) => {
+                  setSelectedCanteen(e.target.value);
+                  setSelectedPendingId(null);
+                }}
                 className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               >
                 <option value="">Select Canteen</option>
@@ -414,7 +616,10 @@ export default function DayMenuPlannerPage() {
               <input
                 type="date"
                 value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
+                onChange={(e) => {
+                  setSelectedDate(e.target.value);
+                  setSelectedPendingId(null);
+                }}
                 className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
@@ -422,7 +627,10 @@ export default function DayMenuPlannerPage() {
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Service</label>
               <select
                 value={selectedService}
-                onChange={(e) => setSelectedService(e.target.value)}
+                onChange={(e) => {
+                  setSelectedService(e.target.value);
+                  setSelectedPendingId(null);
+                }}
                 className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               >
                 <option value="">Select Service</option>
@@ -488,7 +696,7 @@ export default function DayMenuPlannerPage() {
 
       {/* Action Bar for the Slot */}
       {resolvedSlot && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div id="slot-action-bar" className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex flex-col">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Slot Status & Actions</span>
             <div className="flex items-center gap-2 mt-1">
@@ -535,16 +743,19 @@ export default function DayMenuPlannerPage() {
             {!resolvedSlot.isNew && isPending && isManager && (
               <>
                 <button
-                  onClick={() => setShowRejectModal(true)}
+                  onClick={() => {
+                    setRejectTargetSlot(resolvedSlot);
+                    setShowRejectModal(true);
+                  }}
                   disabled={actionLoading}
                   className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-medium text-sm rounded-lg border border-rose-200 transition-colors disabled:opacity-50"
                 >
                   Reject Menu
                 </button>
                 <button
-                  onClick={() => handleAction(approveMenu, 'approve', [remarks])}
+                  onClick={() => handleAction(approveMenu, 'approve', [remarks || 'Approved by Manager'])}
                   disabled={actionLoading}
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-lg transition-colors shadow-md shadow-emerald-500/20 disabled:opacity-50"
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-lg transition-colors shadow-md shadow-emerald-500/20 disabled:opacity-50 flex items-center gap-1.5"
                 >
                   {actionLoading ? 'Approving...' : '✓ Approve & Publish Menu'}
                 </button>
@@ -582,10 +793,12 @@ export default function DayMenuPlannerPage() {
           ) : (
             <div className="h-full flex flex-col items-center justify-center p-8 text-center text-slate-500 bg-slate-50/50 rounded-xl border border-dashed border-slate-300">
               <svg className="h-16 w-16 text-slate-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
               <h3 className="text-lg font-medium text-slate-700 mb-1">No Slot Selected</h3>
-              <p className="max-w-xs text-sm">Resolve a day slot above to view its current menu and start adding items.</p>
+              <p className="max-w-xs text-sm">
+                Select a pending slot from the queue above or resolve a day slot to view its current menu and items.
+              </p>
             </div>
           )}
         </div>
@@ -596,8 +809,15 @@ export default function DayMenuPlannerPage() {
       {showRejectModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="px-6 py-5 border-b border-slate-100">
-              <h3 className="text-lg font-semibold text-slate-800">Reject Menu</h3>
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-800">Reject Menu</h3>
+                {rejectTargetSlot && (
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {rejectTargetSlot.SERVNAME || ""} · {rejectTargetSlot.CANTEENNAME || ""} ({String(rejectTargetSlot.SERVICEDATE || rejectTargetSlot.SERVDATE || "").substring(0, 10)})
+                  </p>
+                )}
+              </div>
             </div>
             <div className="p-6">
               <label className="block text-sm font-medium text-slate-700 mb-2">Rejection Remarks (Required)</label>
@@ -605,21 +825,24 @@ export default function DayMenuPlannerPage() {
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
                 rows={3}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
-                placeholder="Explain what needs to be changed..."
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 text-sm"
+                placeholder="Explain what needs to be changed by the assistant..."
               />
             </div>
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
               <button
-                onClick={() => setShowRejectModal(false)}
-                className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors"
+                onClick={() => {
+                  setShowRejectModal(false);
+                  setRejectTargetSlot(null);
+                }}
+                className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors text-sm"
               >
                 Cancel
               </button>
               <button
-                onClick={() => handleAction(rejectMenu, 'reject', [remarks])}
+                onClick={handleConfirmReject}
                 disabled={actionLoading || !remarks.trim()}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 text-sm"
               >
                 {actionLoading ? 'Rejecting...' : 'Confirm Rejection'}
               </button>

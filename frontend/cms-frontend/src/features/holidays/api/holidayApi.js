@@ -7,5 +7,5 @@ export const holidayApi = {
   getHoliday: (id) => axios.get(`${BASE_PATH}/${id}`),
   createHoliday: (data) => axios.post(BASE_PATH, data),
   updateHoliday: (id, data) => axios.put(`${BASE_PATH}/${id}`, data),
-  deactivateHoliday: (id) => axios.patch(`${BASE_PATH}/${id}/deactivate`),
+  deactivateHoliday: (id) => axios.delete(`${BASE_PATH}/${id}`),
 };

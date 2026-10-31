@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { ArrowRightStartOnRectangleIcon, ComputerDesktopIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import { useKioskDragScroll } from "../features/kiosk/hooks/useKioskDragScroll";
 
 export default function StaffTerminalLayout() {
   const scrollRef = useKioskDragScroll();
-  const { user, activeCanteen, logout } = useAuth();
+  const { user, activeCanteen } = useAuth();
   const navigate = useNavigate();
 
   // Real-time IST Clock
@@ -27,13 +27,6 @@ export default function StaffTerminalLayout() {
     const interval = setInterval(updateClock, 1000);
     return () => clearInterval(interval);
   }, []);
-
-  const handleEndShift = () => {
-    if (window.confirm("Are you sure you want to end your shift and lock this terminal?")) {
-      logout();
-      navigate("/login");
-    }
-  };
 
   const canteenLabel =
     activeCanteen?.CANTEENNAME ||
@@ -65,7 +58,7 @@ export default function StaffTerminalLayout() {
           </div>
         </div>
 
-        {/* Operator HUD & End Shift */}
+        {/* Operator HUD & Dashboard Return */}
         <div className="flex items-center gap-3 md:gap-4">
           <div className="hidden sm:flex flex-col text-right">
             <span className="text-[0.65rem] uppercase font-bold text-slate-400">
@@ -82,12 +75,12 @@ export default function StaffTerminalLayout() {
 
           <button
             type="button"
-            onClick={handleEndShift}
-            title="End Shift / Lock Station"
-            className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800/80 transition-colors flex items-center gap-1.5"
+            onClick={() => navigate("/dashboard")}
+            title="Return to Operations Dashboard"
+            className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
           >
-            <ArrowRightStartOnRectangleIcon className="w-4 h-4" />
-            <span className="hidden md:inline">End Shift</span>
+            <ArrowLeftIcon className="w-4 h-4" />
+            <span className="hidden md:inline">Dashboard</span>
           </button>
         </div>
       </header>

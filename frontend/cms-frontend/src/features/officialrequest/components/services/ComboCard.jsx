@@ -65,7 +65,7 @@ export default function ComboCard({
             ) : (
               combo.ITEMS.map((dish) => (
                 <span
-                  key={dish.COMBOITEMID || dish.MENUITEMID}
+                  key={dish.OFFCOMBDTID || dish.COMBOITEMID || dish.MENUITEMID}
                   className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
                 >
                   <span>{dish.MENUNAME || dish.ITEMNAME}</span>
@@ -87,7 +87,7 @@ export default function ComboCard({
             <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
               {combo.ITEMS.map((dish) => (
                 <div
-                  key={dish.COMBOITEMID || dish.MENUITEMID}
+                  key={dish.OFFCOMBDTID || dish.COMBOITEMID || dish.MENUITEMID}
                   className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800"
                 >
                   <div className="min-w-0 flex-1">

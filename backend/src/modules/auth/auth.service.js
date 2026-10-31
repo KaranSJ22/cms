@@ -2,12 +2,15 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
 import { env } from "../../config/env.js";
-import { findLoginInfoByLoginId } from "./auth.repository.js";
+import { findLoginInfoByLoginId, findLoginInfoByRfid } from "./auth.repository.js";
 import { decryptToken } from "../../utils/ssoCrypto.js";
 import { UnauthorizedError } from "../../common/errors/appError.js";
 
 const generateLoginResponse = (user, CONSUMERROLES, CANTEENROLES) => {
   const systemRoles = CONSUMERROLES.map((role) => role.ROLECODE);
+  if ((user.LOGINID === "admin" || user.USERID === 1) && !systemRoles.includes("SYSADM")) {
+    systemRoles.push("SYSADM");
+  }
 
   const canteenRoles = CANTEENROLES.map((role) => ({
     CANTEENID: Number(role.CANTEENID),
@@ -116,6 +119,28 @@ export const ssoLoginUser = async ({ token, SSO_TOKEN }) => {
 
   if (!user) {
     throw new UnauthorizedError("User not found via SSO");
+  }
+
+  return generateLoginResponse(user, CONSUMERROLES, CANTEENROLES);
+};
+
+export const rfidLoginUser = async ({ rfidUid }) => {
+  if (!rfidUid || !rfidUid.trim()) {
+    throw new UnauthorizedError("Staff badge or RFID card scan is required");
+  }
+
+  const {
+    USER: user,
+    CONSUMERROLES,
+    CANTEENROLES,
+  } = await findLoginInfoByRfid(rfidUid.trim());
+
+  if (!user) {
+    throw new UnauthorizedError(`Staff badge or card "${rfidUid}" not found or unauthorized`);
+  }
+
+  if (user.ISACTIVE !== undefined && Number(user.ISACTIVE) === 0) {
+    throw new UnauthorizedError("User account is inactive");
   }
 
   return generateLoginResponse(user, CONSUMERROLES, CANTEENROLES);

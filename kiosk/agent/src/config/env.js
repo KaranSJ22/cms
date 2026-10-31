@@ -6,8 +6,10 @@ dotenv.config();
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.coerce.number().default(5000),
+  HOST: z.string().default("0.0.0.0"),
   LOG_LEVEL: z.string().default("info"),
 
+  KIOSK_ID: z.coerce.number().default(1),
   KIOSK_CODE: z.string().min(1).default("K1"),
   CANTEEN_ID: z.coerce.number().default(1),
 

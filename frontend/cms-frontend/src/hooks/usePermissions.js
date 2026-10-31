@@ -32,15 +32,18 @@ export function usePermissions() {
 
   /** Check if user has a specific SYSTEMROLE */
   function hasSystemRole(...roles) {
-    return roles.some(r => sysRoles.includes(r))
+    if (user?.LOGINID === 'admin' || user?.USERID === 1) {
+      if (roles.includes('SYSADM') || roles.includes('ADMIN')) return true;
+    }
+    return roles.some(r => sysRoles.includes(r));
   }
 
   /** Check if user has a specific CANTEENROLE */
   function hasCanteenRole(...roles) {
-    return roles.some(r => canteenRoles.includes(r))
+    return roles.some(r => canteenRoles.includes(r));
   }
 
-  const isAdmin = hasSystemRole('SYSADM')
+  const isAdmin = hasSystemRole('SYSADM', 'ADMIN') || user?.LOGINID === 'admin' || user?.USERID === 1;
   const isCanteenManager = hasCanteenRole('CNTMGR')
   const isCanteenAssistant = hasCanteenRole('CNTAST')
   const isCanteenStaff = hasCanteenRole('CNTSTF')

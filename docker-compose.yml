@@ -1,0 +1,101 @@
+services:
+  # ============================================================
+  # 1. MySQL 8.0 Database Service (Rocky Linux 9)
+  # ============================================================
+  db:
+    build:
+      context: ./database
+      dockerfile: Dockerfile
+    container_name: cms_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: RootPassword@123
+      MYSQL_DATABASE: CMS_DB
+      MYSQL_USER: cms_app
+      MYSQL_PASSWORD: StrongPassword@123
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pRootPassword@123"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+    networks:
+      - cms_net
+
+  # ============================================================
+  # 2. Automated Database Initializer (One-shot, runs on first clone)
+  # ============================================================
+  init-db:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cms_init_db
+    restart: "no"
+    command: ["node", "scripts/run-all-sql.js", "--user=root", "--password=RootPassword@123", "--host=db", "--if-empty"]
+    volumes:
+      - ./database:/app/database:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - cms_net
+
+  # ============================================================
+  # 3. Node.js Express Backend Service (Rocky Linux 9 + PM2)
+  # ============================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cms_backend
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: cms_app
+      DB_PASSWORD: StrongPassword@123
+      DB_NAME: CMS_DB
+      DB_SSL: "false"
+      JWT_SECRET: ${JWT_SECRET:-isro_cms_secure_jwt_secret_production_key_2026}
+      JWT_EXPIRES_IN: 8h
+      FRONTEND_URL: http://localhost,http://frontend
+      LOG_LEVEL: info
+    volumes:
+      - ./database:/app/database:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      init-db:
+        condition: service_completed_successfully
+    networks:
+      - cms_net
+
+  # ============================================================
+  # 4. Nginx + React Vite Frontend Service (Rocky Linux 9)
+  # ============================================================
+  frontend:
+    build:
+      context: ./frontend/cms-frontend
+      dockerfile: Dockerfile
+    container_name: cms_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - cms_net
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  cms_net:
+    driver: bridge

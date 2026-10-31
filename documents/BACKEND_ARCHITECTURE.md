@@ -167,7 +167,7 @@ Manages canteen service configurations (e.g., Breakfast, Lunch) and their proper
 Manages the core catalog of menu items (`/menu-items`), excluding pricing.
 
 ### 6.6 Pricing Module
-Manages effective-date-based pricing (`CMS_ITEMPRICE` & `CMS_ITEMPRICEDT`) for menu items, differentiating rates across customer types.
+Manages effective-date-based pricing (`CMS_ITEMPRICE` & `CMS_ITMPRICDT`, with backward-compatibility view `CMS_ITEMPRICEDT`) for menu items, differentiating rates across customer types.
 
 ### 6.7 Day Slot Module
 Manages dated operation windows mapping to specific services.
@@ -195,6 +195,12 @@ Facilitates bulk planning by defining and assigning repeated sets of menu items 
 
 ### 6.15 Reports Module
 Data aggregation for kitchen and administration, e.g., `/reports/serving-prep` for daily kitchen prep sheets.
+
+### 6.16 Official Request Module
+Handles official departmental food requests (`/official`), combo item definitions (`CMS_OFFCOMBDT`), and multi-level approval workflows (`CMS_OFFAPPR`) for meetings, VIPs, and official ISRO events.
+
+### 6.17 Walk-in Module
+Provides immediate point-of-sale walk-in booking and serving endpoints (`/walkin`) for spot dining, mobile-authenticated orders, and ad-hoc meal token generation with immediate transaction logging.
 
 ---
 

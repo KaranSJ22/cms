@@ -6,6 +6,10 @@ export default function TodayBookingsTab({
   handleCancelBooking,
   cancellingId,
 }) {
+  const activeBookings = upcomingBookings.filter(
+    (b) => b.statusCode !== "CAN" && b.syncStatus !== "CANCELLED"
+  );
+
   return (
     <div className="space-y-4 max-w-2xl mx-auto w-full">
       {/* Declined / Rejected Pre-Bookings Warning Banner */}
@@ -39,7 +43,7 @@ export default function TodayBookingsTab({
         </div>
       )}
 
-      {upcomingBookings.length === 0 ? (
+      {activeBookings.length === 0 ? (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 max-w-lg mx-auto w-full shadow-lg">
           <span className="text-4xl mb-3 block">🍽️</span>
           <h3 className="text-base font-bold text-white mb-1">No Upcoming Bookings Found</h3>
@@ -49,7 +53,7 @@ export default function TodayBookingsTab({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {upcomingBookings.map((b) => (
+        {activeBookings.map((b) => (
           <div
             key={b.bookId || b.bookNo}
             className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col justify-between"
@@ -57,7 +61,7 @@ export default function TodayBookingsTab({
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                  #{b.bookNo}
+                  #{b.bookNo || (b.bookId ? String(b.bookId).slice(0, 8).toUpperCase() : "PENDING")}
                 </span>
                 <span
                   className={`text-[10px] font-bold px-2 py-0.5 rounded ${
@@ -66,7 +70,7 @@ export default function TodayBookingsTab({
                       : "bg-emerald-950 text-emerald-400 border border-emerald-800"
                   }`}
                 >
-                  {b.isLocalOutbox ? "Pending Sync" : "Confirmed"}
+                  {b.isLocalOutbox ? "Pending Sync • Offline" : "Confirmed • Central"}
                 </span>
               </div>
 
@@ -81,16 +85,14 @@ export default function TodayBookingsTab({
               )}
             </div>
 
-            {b.isLocalOutbox && (
-              <button
-                type="button"
-                onClick={() => handleCancelBooking(b.bookId)}
-                disabled={cancellingId === b.bookId}
-                className="w-full py-2 bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 text-xs font-bold rounded-xl transition-all cursor-pointer active:scale-95"
-              >
-                {cancellingId === b.bookId ? "Cancelling..." : "Cancel Pre-Booking"}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => handleCancelBooking(b.bookId)}
+              disabled={cancellingId === b.bookId}
+              className="w-full py-2 bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 text-xs font-bold rounded-xl transition-all cursor-pointer active:scale-95"
+            >
+              {cancellingId === b.bookId ? "Cancelling..." : "Cancel Pre-Booking"}
+            </button>
           </div>
         ))}
       </div>

@@ -99,6 +99,16 @@ export default function MyBookingsPage() {
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mb-3"></div>
           <p className="text-sm font-medium">Loading your booking history...</p>
         </div>
+      ) : viewMode === "calendar" ? (
+        <BookingsCalendarView
+          monthName={monthName}
+          prevMonth={prevMonth}
+          nextMonth={nextMonth}
+          setToday={setToday}
+          monthlyMetrics={monthlyMetrics}
+          calendarDays={calendarDays}
+          handleSelectDay={handleSelectDay}
+        />
       ) : bookings.length === 0 ? (
         <div className="text-center p-16 bg-white rounded-2xl shadow-sm border border-slate-200">
           <ClockIcon className="w-12 h-12 text-slate-300 mx-auto mb-3" />
@@ -107,7 +117,7 @@ export default function MyBookingsPage() {
             You haven&apos;t made any meal bookings yet. Go to Pre-Book Meals to plan your catering.
           </p>
         </div>
-      ) : viewMode === "table" ? (
+      ) : (
         <BookingsTableView
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
@@ -119,16 +129,6 @@ export default function MyBookingsPage() {
           serverPagination={serverPagination}
           paginatedBookings={filteredBookings}
           handleViewBooking={handleViewBooking}
-        />
-      ) : (
-        <BookingsCalendarView
-          monthName={monthName}
-          prevMonth={prevMonth}
-          nextMonth={nextMonth}
-          setToday={setToday}
-          monthlyMetrics={monthlyMetrics}
-          calendarDays={calendarDays}
-          handleSelectDay={handleSelectDay}
         />
       )}
 

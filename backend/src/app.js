@@ -16,7 +16,7 @@ import { detectKiosk } from "./middlewares/kioskDevice.middleware.js";
 
 const app = express();
 
-app.set("trust proxy", true);
+app.set("trust proxy", 1);
 
 app.use(helmet());
 
@@ -82,6 +82,10 @@ app.use(
 );
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.get("/api-docs.json", (req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  res.json(swaggerSpec);
+});
 
 app.get("/health", (req, res) => {
   return res.status(200).json({

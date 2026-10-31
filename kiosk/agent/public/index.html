@@ -10,10 +10,61 @@
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <script type="module" crossorigin src="/assets/index-AQIVizgD.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CkxUxXrX.css">
+    <script type="module" crossorigin src="/assets/index-DFWTMVHG.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-O2Bo8CbM.css">
   </head>
-  <body class="bg-slate-950 text-slate-100 select-none overflow-y-auto antialiased">
     <div id="root"></div>
+    <script>
+      (function() {
+        let evtSource = null;
+        function connect() {
+          try {
+            evtSource = new EventSource('/api/kiosk/system/rfid/stream');
+            evtSource.onmessage = function(e) {
+              try {
+                const data = JSON.parse(e.data);
+                if (data && data.rfidUid) {
+                  const uid = String(data.rfidUid).trim().toUpperCase();
+                  console.log('[CMS RFID Broadcast Received]:', uid);
+
+                  // 1. Dispatch rapid keydown events to window for KioskScanHero & CounterScanHero
+                  for (let i = 0; i < uid.length; i++) {
+                    window.dispatchEvent(new KeyboardEvent('keydown', { key: uid[i], bubbles: true }));
+                  }
+                  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+
+                  // 2. Also populate any active or visible input element directly
+                  const active = document.activeElement;
+                  const inputs = Array.from(document.querySelectorAll('input:not([type="hidden"])'));
+                  const target = (active && active.tagName === 'INPUT') ? active : inputs[0];
+                  if (target) {
+                    const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+                    if (nativeSetter) {
+                      nativeSetter.call(target, uid);
+                    } else {
+                      target.value = uid;
+                    }
+                    target.dispatchEvent(new Event('input', { bubbles: true }));
+                    target.dispatchEvent(new Event('change', { bubbles: true }));
+                    target.form?.requestSubmit?.();
+                  }
+                }
+              } catch (err) {
+                console.error('[RFID SSE Error]', err);
+              }
+            };
+            evtSource.onerror = function() {
+              evtSource.close();
+              setTimeout(connect, 3000);
+            };
+          } catch (e) {
+            setTimeout(connect, 3000);
+          }
+        }
+        if (typeof window !== 'undefined' && 'EventSource' in window) {
+          connect();
+        }
+      })();
+    </script>
   </body>
 </html>

@@ -10,6 +10,8 @@ import sys
 import time
 import signal
 import spidev
+import urllib.request
+import json
 
 try:
     from evdev import UInput, ecodes as e
@@ -23,6 +25,7 @@ except ImportError:
 SPI_BUS = int(os.getenv("RFID_SPI_BUS", "0"))
 SPI_DEVICE = int(os.getenv("RFID_SPI_DEV", "0"))
 SPI_SPEED = int(os.getenv("RFID_SPI_SPEED", "1000000"))  # 1 MHz
+RST_GPIO_PIN = int(os.getenv("RFID_RST_PIN", "25"))  # Pin 22 / GPIO 25 on Pi 5
 DEBOUNCE_COOLDOWN = float(os.getenv("RFID_DEBOUNCE_SEC", "2.0"))  # 2s cooldown for same card
 USE_COLON_FORMAT = os.getenv("RFID_COLON_SEPARATED", "false").lower() == "true"
 
@@ -234,6 +237,18 @@ def emit_keystrokes(ui, text):
     ui.syn()
 
 
+def notify_agent(uid_str):
+    """Broadcasts RFID scan over local HTTP so network browser clients receive the tap instantly."""
+    try:
+        url = "http://127.0.0.1:5000/api/kiosk/system/rfid/tap"
+        payload = json.dumps({"rfidUid": uid_str}).encode("utf-8")
+        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=0.3)
+    except Exception:
+        # Agent might be booting or busy; skip gracefully
+        pass
+
+
 # -----------------------------------------------------------------------------
 # Process Lifecycle & Signal Handling
 # -----------------------------------------------------------------------------
@@ -241,6 +256,36 @@ def shutdown_handler(signum, frame):
     global running
     print(f"\n[INFO] Received signal {signum}. Shutting down cleanly...")
     running = False
+
+
+def init_gpio_rst(gpio_pin):
+    """
+    Drives RC522 RST pin (Pin 22 / BCM GPIO 25) HIGH so chip is awake.
+    Supports modern libgpiod, RPi.GPIO / rpi-lgpio, or skips gracefully.
+    """
+    try:
+        import gpiod
+        chip_path = "/dev/gpiochip4" if os.path.exists("/dev/gpiochip4") else "/dev/gpiochip0"
+        chip = gpiod.Chip(chip_path)
+        line = chip.get_line(gpio_pin)
+        line.request(consumer="rfid_rst", type=gpiod.LINE_REQ_DIR_OUT)
+        line.set_value(1)
+        print(f"[OK] GPIO {gpio_pin} (RST) driven HIGH via libgpiod ({chip_path})")
+        return line
+    except Exception:
+        pass
+
+    try:
+        import RPi.GPIO as GPIO
+        GPIO.setwarnings(False)
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(gpio_pin, GPIO.OUT)
+        GPIO.output(gpio_pin, GPIO.HIGH)
+        print(f"[OK] GPIO {gpio_pin} (RST) driven HIGH via RPi.GPIO/lgpio")
+        return True
+    except Exception as ex:
+        print(f"[INFO] GPIO RST pin control skipped (or RST hardwired to 3.3V): {ex}")
+        return None
 
 
 # -----------------------------------------------------------------------------
@@ -256,7 +301,10 @@ def main():
     print(" CMS Kiosk - RFID Virtual Keyboard Daemon")
     print("==================================================")
 
-    # 1. Initialize SPI
+    # 1. Assert Hardware Reset Pin
+    rst_handle = init_gpio_rst(RST_GPIO_PIN)
+
+    # 2. Initialize SPI
     try:
         spi = spidev.SpiDev()
         spi.open(SPI_BUS, SPI_DEVICE)
@@ -303,8 +351,9 @@ def main():
                     is_past_cooldown = (current_time - last_scan_time) >= DEBOUNCE_COOLDOWN
 
                     if is_new_card or is_past_cooldown:
-                        print(f"[{time.strftime('%X')}] [TAP] Card detected: {uid_string} -> Emitting keystrokes...")
+                        print(f"[{time.strftime('%X')}] [TAP] Card detected: {uid_string} -> Emitting keystrokes & network broadcast...")
                         emit_keystrokes(uinput_device, uid_string)
+                        notify_agent(uid_string)
                         last_uid = uid_string
                         last_scan_time = current_time
 

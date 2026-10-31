@@ -1,5 +1,5 @@
 import * as SyncService from "./sync.service.js";
-import { purgeHistoricalOutbox } from "./sync.repository.js";
+import { purgeHistoricalOutbox, purgeHistoricalServingOutbox } from "./sync.repository.js";
 import { logger } from "../../utils/logger.js";
 import { env } from "../../config/env.js";
 
@@ -35,7 +35,10 @@ const runUplinkCycle = async () => {
       // 1. Flush queued outbox bookings
       await SyncService.pushOutboxBatch();
 
-      // 2. Emit hardware heartbeat
+      // 2. Flush queued outbox serving events
+      await SyncService.pushServingEventsBatch();
+
+      // 3. Emit hardware heartbeat
       await SyncService.sendHeartbeatTelemetry({
         uptimeSec: Math.floor(process.uptime()),
         memoryUsageMb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
@@ -116,9 +119,13 @@ export const startSyncWorker = () => {
   // 4. Run historical outbox retention cleanup (prune synced > 7 days) and schedule daily
   const runPurge = () => {
     try {
-      const pruned = purgeHistoricalOutbox(7);
-      if (pruned > 0) {
-        logger.info({ pruned }, "Pruned historical synced/cancelled outbox records");
+      const prunedBookings = purgeHistoricalOutbox(7);
+      const prunedServing = purgeHistoricalServingOutbox(7);
+      if (prunedBookings > 0 || prunedServing > 0) {
+        logger.info(
+          { prunedBookings, prunedServing },
+          "Pruned historical synced/cancelled outbox records"
+        );
       }
     } catch (err) {
       logger.warn({ err: err.message }, "Outbox historical purge caught error");

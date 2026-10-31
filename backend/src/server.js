@@ -2,10 +2,15 @@ import readline from "readline";
 import app from "./app.js";
 import { env } from "./config/env.js";
 import { logger } from "./utils/logger.js";
-import { pool } from "./db/connection.js";
+import { pool, testDbConnection } from "./db/connection.js";
 
-const server = app.listen(env.PORT, "0.0.0.0", () => {
+const server = app.listen(env.PORT, "0.0.0.0", async () => {
   logger.info(`CMS backend server running on port ${env.PORT}`);
+  try {
+    await testDbConnection();
+  } catch (err) {
+    logger.warn({ err }, "Initial DB connection verification warning");
+  }
 });
 
 server.on("error", (err) => {

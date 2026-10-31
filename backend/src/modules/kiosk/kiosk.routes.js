@@ -1,10 +1,54 @@
 import { Router } from "express";
 import { validate } from "../../middlewares/validate.middleware.js";
 import { detectKiosk, requireKiosk } from "../../middlewares/kioskDevice.middleware.js";
+import { authenticate, optionalAuthenticate } from "../../middlewares/auth.middleware.js";
+import { authorizeSystemRoles } from "../../middlewares/role.middleware.js";
 import * as KioskController from "./kiosk.controller.js";
 import * as validation from "./kiosk.validation.js";
 
 const router = Router();
+
+// ------------------------------------------------------------
+// 0. Hardware Kiosk Fleet Management (SYSADM only)
+// ------------------------------------------------------------
+router.get(
+  "/devices",
+  authenticate,
+  authorizeSystemRoles("SYSADM"),
+  validate(validation.listKioskDevicesSchema),
+  KioskController.listKioskDevicesController
+);
+
+router.post(
+  "/devices",
+  authenticate,
+  authorizeSystemRoles("SYSADM"),
+  validate(validation.registerKioskDeviceSchema),
+  KioskController.registerKioskDeviceController
+);
+
+router.get(
+  "/devices/telemetry",
+  authenticate,
+  authorizeSystemRoles("SYSADM"),
+  KioskController.getKioskFleetTelemetryController
+);
+
+router.get(
+  "/devices/:id",
+  authenticate,
+  authorizeSystemRoles("SYSADM"),
+  validate(validation.kioskIdParamSchema),
+  KioskController.getKioskDeviceDetailsController
+);
+
+router.put(
+  "/devices/:id/status",
+  authenticate,
+  authorizeSystemRoles("SYSADM"),
+  validate(validation.updateKioskStatusSchema),
+  KioskController.updateKioskDeviceStatusController
+);
 
 // ------------------------------------------------------------
 // 1. Device Handshake & Telemetry
@@ -94,28 +138,63 @@ router.post(
 );
 
 // ------------------------------------------------------------
-// 3. Staff Counter Terminal Operations
+// 3. Staff Counter Terminal Operations (/counter/*)
 // ------------------------------------------------------------
 // Get active or upcoming meal slot for serving counter
 router.get(
-  "/current-slot",
+  "/counter/current-slot",
   detectKiosk,
   KioskController.getCurrentSlotController
 );
 
 // Dedicated slot-aware booking resolution
 router.get(
-  "/resolve/:identifier",
+  "/counter/resolve/:identifier",
   detectKiosk,
   KioskController.resolveServingBookingController
 );
 
-// Mark booking served at kiosk
+// Mark booking served at kiosk with staff operator attribution
 router.post(
-  "/serve",
+  "/counter/serve",
   detectKiosk,
+  optionalAuthenticate,
   KioskController.serveBookingController
 );
+
+// Cancel booking at serving counter with staff attribution & wallet refund
+router.post(
+  "/counter/cancel",
+  detectKiosk,
+  optionalAuthenticate,
+  KioskController.cancelCounterBookingController
+);
+
+// Staff Shift Login for Serving Counter
+router.post(
+  "/counter/login",
+  KioskController.counterLoginController
+);
+
+// Counter facility & slot discovery aliases
+router.get("/counter/canteens", detectKiosk, KioskController.getActiveCanteensController);
+router.get("/counter/today-slots", detectKiosk, KioskController.getTodaySlotsController);
+
+// Surplus Walk-in dispensing
+router.get("/counter/walkin/customer", optionalAuthenticate, KioskController.counterWalkinCustomerController);
+router.get("/counter/walkin/menu", optionalAuthenticate, KioskController.counterWalkinMenuController);
+router.post("/counter/walkin/serve", optionalAuthenticate, KioskController.counterWalkinServeController);
+
+// Diagnostics & Heartbeat
+router.get("/system/health", (req, res) =>
+  res.json({ SUCCESS: true, MESSAGE: "Central Backend Kiosk Subsystem Online" })
+);
+
+// Backwards-compatible aliases for legacy callers
+router.get("/current-slot", detectKiosk, KioskController.getCurrentSlotController);
+router.get("/resolve/:identifier", detectKiosk, KioskController.resolveServingBookingController);
+router.post("/serve", detectKiosk, optionalAuthenticate, KioskController.serveBookingController);
+
 
 // ------------------------------------------------------------
 // 4. Canteen & Meal Slot Discovery
@@ -149,6 +228,13 @@ router.post(
   "/sync-offline",
   detectKiosk,
   KioskController.syncOfflineController
+);
+
+// Ingest offline counter serving events batch
+router.post(
+  "/sync-serving",
+  detectKiosk,
+  KioskController.syncServingEventsController
 );
 
 export default router;

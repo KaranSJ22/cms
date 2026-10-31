@@ -71,8 +71,8 @@ export default function TopLeftItemDescriptionCard({ item, onClose }) {
 
             {/* Description Text */}
             <p className="text-xs sm:text-sm text-slate-700 font-medium leading-relaxed max-w-3xl bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/70">
-              {item.ITEMDESCR
-                ? item.ITEMDESCR
+              {(item.DESCR || item.ITEMDESCR)
+                ? (item.DESCR || item.ITEMDESCR)
                 : 'No specific preparation notes or description provided for this menu item.'}
             </p>
           </div>

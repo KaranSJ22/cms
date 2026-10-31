@@ -71,6 +71,7 @@ export const getDayMenusSchema = z.object({
       CANTEENID: z.coerce.number().int().positive().optional(),
       SERVICEID: z.coerce.number().int().positive().optional(),
       DAYSLOTID: z.coerce.number().int().positive().optional(),
+      SERVICEDATE: dateSchema.optional(),
       SERVDATE: dateSchema.optional(),
       APPRSTATUS: z.string().trim().max(20).optional(),
     })
@@ -110,7 +111,8 @@ export const bulkCreateDayMenuSchema = z.object({
     STARTDATE:  dateSchema,
     STARTTIME:  timeSchema,
     ENDTIME:    timeSchema,
-    // 5 day configs (Monday to Friday). Days with empty ITEMS or holidays are skipped.
+    ACTION:     z.enum(["DRAFT", "SUBMIT", "PUBLISH"]).default("PUBLISH"),
+    // 5 to 7 day configs (Monday to Sunday). Days with empty ITEMS or holidays are skipped.
     DAYS: z.array(bulkDaySchema).min(1).max(7),
   }),
 });

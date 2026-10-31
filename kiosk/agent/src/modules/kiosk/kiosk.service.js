@@ -1,12 +1,14 @@
 import * as KioskRepository from "./kiosk.repository.js";
+import { centralClient } from "../sync/sync.client.js";
 import { NotFoundError } from "../../common/errors/appError.js";
 import { WALLET_ELIGIBLE_TYPES } from "../../config/constants.js";
 import { getTodayIST, getTomorrowIST } from "../../utils/dateTime.js";
+import { logger } from "../../utils/logger.js";
 
 /**
- * Scan RFID / Employee ID at local Kiosk
+ * Resolves employee profile from local SQLite cache
  */
-export const scanEmployee = (identifier) => {
+export const getLocalEmployeeProfile = (identifier) => {
   const customer = KioskRepository.findCustomerByIdentifier(identifier);
   if (!customer) {
     throw new NotFoundError(
@@ -82,7 +84,89 @@ export const scanEmployee = (identifier) => {
     wallet,
     upcomingBookings,
     declinedBookings,
+    isLiveOnline: false,
   };
+};
+
+/**
+ * Scan RFID / Employee ID at local Kiosk (Direct-First with Local Cache Fallback)
+ */
+export const scanEmployee = async (identifier) => {
+  // 1. Direct Central Scan (1.5s Intranet Timeout)
+  try {
+    const res = await centralClient.post(
+      "/kiosk/self-service/scan",
+      { PIDENTIFIER: identifier },
+      { timeout: 1500 }
+    );
+    const liveData = res.data?.DATA || res.data;
+
+    if (liveData && liveData.customer) {
+      // Opportunistically update local SQLite cache with live central data
+      try {
+        KioskRepository.upsertCustomerCache(liveData.customer);
+        if (liveData.wallet) {
+          KioskRepository.upsertWalletCache(liveData.customer.customerId, liveData.wallet);
+        }
+      } catch (cacheErr) {
+        logger.warn({ err: cacheErr.message }, "Failed to update local cache from live scan");
+      }
+
+      // Check if there are any locally queued outbox bookings still pending sync
+      const today = getTodayIST();
+      const { outboxRows } = KioskRepository.getCustomerActiveBookings(
+        liveData.customer.customerId,
+        today
+      );
+
+      const pendingOutbox = outboxRows.map((r) => ({
+        bookId: r.offline_uuid,
+        bookNo: r.token_no,
+        serviceId: r.service_id,
+        serviceName: r.service_name,
+        serviceDate: r.serv_date,
+        totalAmount: r.total_amount,
+        syncStatus: r.sync_status,
+        isLocalOutbox: true,
+      }));
+
+      // Merge local outbox records with confirmed central bookings (only active CRT bookings)
+      const combinedBookings = [
+        ...pendingOutbox,
+        ...(liveData.upcomingBookings || [])
+          .filter((b) => (b.STATUSCODE || b.statusCode || "CRT") === "CRT")
+          .map((b) => ({
+            bookId: b.BOOKID || b.bookId,
+            bookNo: b.BOOKNO || b.bookNo,
+            serviceId: b.SERVICEID || b.serviceId,
+            serviceName: b.SERVNAME || b.serviceName,
+            serviceDate: b.SERVICEDATE ? String(b.SERVICEDATE).slice(0, 10) : b.serviceDate,
+            totalAmount: b.TOTALAMOUNT != null ? Number(b.TOTALAMOUNT) : b.totalAmount,
+            statusCode: b.STATUSCODE || b.statusCode || "CRT",
+            isLocalOutbox: false,
+          })),
+      ];
+
+      return {
+        customer: liveData.customer,
+        wallet: liveData.wallet,
+        upcomingBookings: combinedBookings,
+        declinedBookings: liveData.declinedBookings || [],
+        isLiveOnline: true,
+      };
+    }
+  } catch (netErr) {
+    // If the central server responded with a 404 (user not found), propagate it
+    if (netErr.response?.status === 404) {
+      throw new NotFoundError(
+        netErr.response?.data?.MESSAGE || `Employee with badge "${identifier}" was not found.`
+      );
+    }
+    logger.warn({ err: netErr.message }, "Central scan timed out or offline; reading SQLite cache");
+  }
+
+  // 2. Offline Fallback: Read from local SQLite cache
+  return getLocalEmployeeProfile(identifier);
 };
 
 /**

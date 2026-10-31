@@ -5,6 +5,7 @@ export function useDayMenu() {
   const [dayMenus, setDayMenus] = useState([]);
   const [pendingMenus, setPendingMenus] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pendingLoading, setPendingLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const fetchDayMenuWorkspace = useCallback(async (daySlotId) => {
@@ -63,24 +64,27 @@ export function useDayMenu() {
   };
 
   const fetchPendingDayMenus = useCallback(async (canteenId = null) => {
-    setLoading(true);
+    setPendingLoading(true);
     setError(null);
     try {
       const data = await dayMenuApi.getPendingDayMenus(canteenId);
       setPendingMenus(data || []);
-      return data;
+      return data || [];
     } catch (err) {
       setError(err.response?.data?.MESSAGE || err.response?.data?.message || err.response?.data?.error || err.message || "Failed to fetch pending menus");
-      return null;
+      return [];
     } finally {
-      setLoading(false);
+      setPendingLoading(false);
     }
   }, []);
 
   return {
     dayMenus,
+    setDayMenus,
     pendingMenus,
+    setPendingMenus,
     loading,
+    pendingLoading,
     error,
     setError,
     fetchDayMenuWorkspace,

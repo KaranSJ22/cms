@@ -1,5 +1,7 @@
 import { getDb, withTransaction } from "../../db/sqlite.js";
 import { OUTBOX_STATUS, SYNC_CONFIG } from "../../config/constants.js";
+import { env } from "../../config/env.js";
+import { SYNC_QUERIES } from "./sync.queries.js";
 
 /**
  * Retrieves the oldest pending or retryable outbox bookings in FIFO order
@@ -7,13 +9,7 @@ import { OUTBOX_STATUS, SYNC_CONFIG } from "../../config/constants.js";
 export const getPendingOutboxChunk = (limit = SYNC_CONFIG.DEFAULT_CHUNK_SIZE) => {
   const db = getDb();
   return db
-    .prepare(
-      `SELECT * FROM outbox_bookings
-       WHERE sync_status IN (?, ?)
-         AND retry_count < ?
-       ORDER BY created_at ASC
-       LIMIT ?`
-    )
+    .prepare(SYNC_QUERIES.GET_PENDING_OUTBOX_CHUNK)
     .all(OUTBOX_STATUS.PENDING, OUTBOX_STATUS.RETRYABLE_ERROR, SYNC_CONFIG.MAX_RETRY_COUNT, limit);
 };
 
@@ -24,12 +20,7 @@ export const markChunkSyncing = (offlineUuids) => {
   if (!offlineUuids.length) return;
   const db = getDb();
   const placeholders = offlineUuids.map(() => "?").join(",");
-
-  db.prepare(
-    `UPDATE outbox_bookings
-     SET sync_status = ?
-     WHERE offline_uuid IN (${placeholders})`
-  ).run(OUTBOX_STATUS.SYNCING, ...offlineUuids);
+  db.prepare(SYNC_QUERIES.BUILD_MARK_SYNCING_SQL(placeholders)).run(OUTBOX_STATUS.SYNCING, ...offlineUuids);
 };
 
 /**
@@ -37,29 +28,11 @@ export const markChunkSyncing = (offlineUuids) => {
  */
 export const applyItemizedResults = (results = []) => {
   return withTransaction((db) => {
-    const updateSuccess = db.prepare(
-      `UPDATE outbox_bookings
-       SET sync_status = ?, synced_at = ?
-       WHERE offline_uuid = ?`
-    );
-
-    const updateRejected = db.prepare(
-      `UPDATE outbox_bookings
-       SET sync_status = ?, sync_error = ?
-       WHERE offline_uuid = ?`
-    );
-
-    const findBooking = db.prepare(
-      "SELECT customer_id, service_id, serv_date, total_amount, payment_method FROM outbox_bookings WHERE offline_uuid = ?"
-    );
-
-    const deleteActiveGuard = db.prepare(
-      "DELETE FROM cached_active_prebookings WHERE customer_id = ? AND service_id = ? AND serv_date = ?"
-    );
-
-    const refundWallet = db.prepare(
-      "UPDATE cached_wallets SET balance = balance + ? WHERE customer_id = ?"
-    );
+    const updateSuccess = db.prepare(SYNC_QUERIES.MARK_BOOKING_SYNCED);
+    const updateRejected = db.prepare(SYNC_QUERIES.MARK_BOOKING_REJECTED);
+    const findBooking = db.prepare(SYNC_QUERIES.FIND_BOOKING_FOR_ROLLBACK);
+    const deleteActiveGuard = db.prepare(SYNC_QUERIES.DELETE_ACTIVE_GUARD);
+    const refundWallet = db.prepare(SYNC_QUERIES.REFUND_WALLET);
 
     const now = new Date().toISOString();
 
@@ -98,11 +71,11 @@ export const markChunkRetryable = (offlineUuids, errorMessage) => {
   const db = getDb();
   const placeholders = offlineUuids.map(() => "?").join(",");
 
-  db.prepare(
-    `UPDATE outbox_bookings
-     SET sync_status = ?, retry_count = retry_count + 1, sync_error = ?
-     WHERE offline_uuid IN (${placeholders})`
-  ).run(OUTBOX_STATUS.RETRYABLE_ERROR, errorMessage, ...offlineUuids);
+  db.prepare(SYNC_QUERIES.BUILD_MARK_RETRYABLE_SQL(placeholders)).run(
+    OUTBOX_STATUS.RETRYABLE_ERROR,
+    errorMessage,
+    ...offlineUuids
+  );
 };
 
 /**
@@ -110,12 +83,144 @@ export const markChunkRetryable = (offlineUuids, errorMessage) => {
  */
 export const getPendingOutboxCount = () => {
   const db = getDb();
-  const row = db
-    .prepare(
-      "SELECT COUNT(*) AS count FROM outbox_bookings WHERE sync_status IN ('PENDING', 'SYNCING', 'RETRYABLE_ERROR')"
-    )
-    .get();
+  const row = db.prepare(SYNC_QUERIES.GET_PENDING_OUTBOX_COUNT).get();
   return row ? Number(row.count) : 0;
+};
+
+// ------------------------------------------------------------
+// Private Step Functions for Downlink Snapshot Ingestion
+// ------------------------------------------------------------
+
+const ingestCustomers = (db, customers = []) => {
+  const insertCustomer = db.prepare(SYNC_QUERIES.UPSERT_CUSTOMER);
+  for (const c of customers) {
+    const rawRfid = (c.RFIDUID || c.rfidUid || "").trim();
+    const rawLoginId = (c.LOGINID || c.loginId || c.CUSTOMERID || c.customerId || "").toString().trim();
+    insertCustomer.run(
+      c.CUSTOMERID || c.customerId,
+      rawRfid ? rawRfid.toUpperCase() : null,
+      rawLoginId ? rawLoginId.toUpperCase() : `CUST-${c.CUSTOMERID || c.customerId}`,
+      c.DISPNAME || c.dispName || "Employee",
+      c.CTYPECODE || c.ctypeCode || "PRM",
+      c.CTYPENAME || c.ctypeName || "Employee"
+    );
+  }
+};
+
+const ingestWallets = (db, wallets = []) => {
+  const getPendingDeductions = db.prepare(SYNC_QUERIES.GET_PENDING_WALLET_DEDUCTIONS);
+  const insertWallet = db.prepare(SYNC_QUERIES.UPSERT_WALLET);
+
+  for (const w of wallets) {
+    const custId = w.CUSTOMERID || w.customerId;
+    const centralBal = Number(w.BALANCE || w.balance || 0);
+    const pendingRow = getPendingDeductions.get(custId);
+    const pendingAmt = pendingRow ? Number(pendingRow.total) : 0;
+    const effectiveBal = Math.max(0, centralBal - pendingAmt);
+
+    insertWallet.run(custId, effectiveBal, w.STATUSID || w.statusId || 10);
+  }
+};
+
+const ingestDaySlots = (db, daySlots = [], canteenId = 1) => {
+  const insertSlot = db.prepare(SYNC_QUERIES.UPSERT_DAY_SLOT);
+  for (const s of daySlots) {
+    insertSlot.run(
+      s.DAYSLOTID || s.daySlotId,
+      s.CANTEENID || s.canteenId || canteenId,
+      s.SERVICEID || s.serviceId,
+      s.SERVNAME || s.serviceName,
+      s.SERVICEDATE || s.SERVDATE || s.servDate,
+      s.STARTTIME || s.startTime,
+      s.ENDTIME || s.endTime
+    );
+  }
+
+  // Prune any slots that don't belong to this canteen facility (clean menu items first to satisfy FK)
+  db.prepare(SYNC_QUERIES.PRUNE_FOREIGN_MENU_ITEMS).run(canteenId);
+  db.prepare(SYNC_QUERIES.PRUNE_FOREIGN_DAY_SLOTS).run(canteenId);
+};
+
+const ingestMenuItems = (db, menuItems = []) => {
+  const validSlotStmt = db.prepare(SYNC_QUERIES.CHECK_DAY_SLOT_EXISTS);
+  const insertMenuItem = db.prepare(SYNC_QUERIES.UPSERT_MENU_ITEM);
+
+  for (const m of menuItems) {
+    const slotId = m.DAYSLOTID || m.daySlotId;
+    if (!validSlotStmt.get(slotId)) continue; // Ensure slot exists in local cache
+
+    insertMenuItem.run(
+      m.DAYMENUID || m.dayMenuId,
+      slotId,
+      m.MENUITEMID || m.menuItemId,
+      m.ITEMNAME || m.itemName,
+      Number(m.RATE || m.rate || 0),
+      m.ISBASE ? 1 : 0,
+      m.ISSPECIAL ? 1 : 0,
+      m.MAXQTY || m.maxQty || 1,
+      m.BOOKUNTIL || m.bookUntil || null
+    );
+  }
+};
+
+const ingestActivePrebookings = (db, activeBookings = []) => {
+  const insertActive = db.prepare(SYNC_QUERIES.UPSERT_ACTIVE_PREBOOKING);
+  for (const b of activeBookings) {
+    insertActive.run(
+      b.CUSTOMERID || b.customerId,
+      b.SERVICEID || b.serviceId,
+      b.SERVICEDATE || b.SERVDATE || b.servDate,
+      b.BOOKID || b.bookId || null,
+      b.TOKENNO || b.tokenNo || b.BOOKNO || b.bookNo || ""
+    );
+  }
+};
+
+const ingestTodayManifest = (db, todayBookings = [], todayBookItems = []) => {
+  if (todayBookings && todayBookings.length) {
+    const insertToday = db.prepare(SYNC_QUERIES.UPSERT_TODAY_BOOKING);
+    for (const tb of todayBookings) {
+      insertToday.run(
+        tb.bookId || tb.BOOKID,
+        tb.bookNo || tb.BOOKNO,
+        tb.customerId || tb.CUSTOMERID,
+        (tb.loginId || tb.LOGINID || "").toUpperCase(),
+        (tb.rfidUid || tb.RFIDUID || "") ? (tb.rfidUid || tb.RFIDUID).toUpperCase() : null,
+        tb.dispName || tb.DISPNAME || "Employee",
+        tb.ctypeCode || tb.CTYPECODE || "PRM",
+        tb.serviceId || tb.SERVICEID,
+        tb.daySlotId || tb.DAYSLOTID,
+        tb.slotName || tb.SLOTNAME || "Meal Slot",
+        tb.statusCode || tb.STATUSCODE || "CRT",
+        tb.servedBy || tb.SERVEDBY || null,
+        tb.servedOn || tb.SERVEDAT || tb.SERVEDON || null,
+        Number(tb.totalAmount || tb.TOTALAMOUNT || 0)
+      );
+    }
+  }
+
+  if (todayBookItems && todayBookItems.length) {
+    const validBookingStmt = db.prepare(SYNC_QUERIES.CHECK_TODAY_BOOKING_EXISTS);
+    const insertItem = db.prepare(SYNC_QUERIES.UPSERT_TODAY_BOOK_ITEM);
+
+    for (const bi of todayBookItems) {
+      const bId = bi.bookId || bi.BOOKID;
+      if (!validBookingStmt.get(bId)) {
+        continue; // Skip line items whose parent booking is cancelled/not cached
+      }
+      insertItem.run(
+        bi.bookItemId || bi.BOOKITEMID,
+        bId,
+        bi.menuItemId || bi.MENUITEMID,
+        bi.itemName || bi.ITEMNAME || "Dish",
+        bi.qty || bi.QTY || 1,
+        Number(bi.rate || bi.RATE || 0)
+      );
+    }
+  }
+
+  // Clean up any orphaned today items whose parent bookings were cancelled or removed
+  db.prepare(SYNC_QUERIES.PRUNE_ORPHAN_TODAY_BOOK_ITEMS).run();
 };
 
 /**
@@ -127,117 +232,17 @@ export const upsertDownlinkSnapshot = ({
   daySlots = [],
   menuItems = [],
   activeBookings = [],
+  todayBookings = [],
+  todayBookItems = [],
 }) => {
   return withTransaction((db) => {
-    // 1. Customers
-    const insertCustomer = db.prepare(
-      `INSERT INTO cached_customers (customer_id, rfid_uid, login_id, disp_name, ctype_code, ctype_name)
-       VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(customer_id) DO UPDATE SET
-         rfid_uid = excluded.rfid_uid,
-         login_id = excluded.login_id,
-         disp_name = excluded.disp_name,
-         ctype_code = excluded.ctype_code,
-         ctype_name = excluded.ctype_name`
-    );
-    for (const c of customers) {
-      const rawRfid = (c.RFIDUID || c.rfidUid || "").trim();
-      const rawLoginId = (c.LOGINID || c.loginId || c.CUSTOMERID || c.customerId || "").toString().trim();
-      insertCustomer.run(
-        c.CUSTOMERID || c.customerId,
-        rawRfid ? rawRfid.toUpperCase() : null,
-        rawLoginId ? rawLoginId.toUpperCase() : `CUST-${c.CUSTOMERID || c.customerId}`,
-        c.DISPNAME || c.dispName || "Employee",
-        c.CTYPECODE || c.ctypeCode || "PRM",
-        c.CTYPENAME || c.ctypeName || "Employee"
-      );
-    }
-
-    // 2. Wallets
-    const insertWallet = db.prepare(
-      `INSERT INTO cached_wallets (customer_id, balance, status_id, updated_at)
-       VALUES (?, ?, ?, datetime('now'))
-       ON CONFLICT(customer_id) DO UPDATE SET
-         balance = excluded.balance,
-         status_id = excluded.status_id,
-         updated_at = datetime('now')`
-    );
-    for (const w of wallets) {
-      insertWallet.run(
-        w.CUSTOMERID || w.customerId,
-        Number(w.BALANCE || w.balance || 0),
-        w.STATUSID || w.statusId || 10
-      );
-    }
-
-    // 3. Day Slots
-    const insertSlot = db.prepare(
-      `INSERT INTO cached_day_slots (day_slot_id, service_id, service_name, serv_date, start_time, end_time)
-       VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(day_slot_id) DO UPDATE SET
-         service_id = excluded.service_id,
-         service_name = excluded.service_name,
-         serv_date = excluded.serv_date,
-         start_time = excluded.start_time,
-         end_time = excluded.end_time`
-    );
-    for (const s of daySlots) {
-      insertSlot.run(
-        s.DAYSLOTID || s.daySlotId,
-        s.SERVICEID || s.serviceId,
-        s.SERVNAME || s.serviceName,
-        s.SERVDATE || s.servDate,
-        s.STARTTIME || s.startTime,
-        s.ENDTIME || s.endTime
-      );
-    }
-
-    // 4. Menu Items
-    const insertMenuItem = db.prepare(
-      `INSERT INTO cached_menu_items (
-         day_menu_id, day_slot_id, menu_item_id, item_name, rate, is_base, is_special, max_qty, book_until
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(day_menu_id) DO UPDATE SET
-         day_slot_id = excluded.day_slot_id,
-         menu_item_id = excluded.menu_item_id,
-         item_name = excluded.item_name,
-         rate = excluded.rate,
-         is_base = excluded.is_base,
-         is_special = excluded.is_special,
-         max_qty = excluded.max_qty,
-         book_until = excluded.book_until`
-    );
-    for (const m of menuItems) {
-      insertMenuItem.run(
-        m.DAYMENUID || m.dayMenuId,
-        m.DAYSLOTID || m.daySlotId,
-        m.MENUITEMID || m.menuItemId,
-        m.ITEMNAME || m.itemName,
-        Number(m.RATE || m.rate || 0),
-        m.ISBASE ? 1 : 0,
-        m.ISSPECIAL ? 1 : 0,
-        m.MAXQTY || m.maxQty || 1,
-        m.BOOKUNTIL || m.bookUntil || null
-      );
-    }
-
-    // 5. Active Pre-bookings from central (Web Portal & Other Kiosks)
-    const insertActive = db.prepare(
-      `INSERT INTO cached_active_prebookings (customer_id, service_id, serv_date, book_id, token_no)
-       VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(customer_id, service_id, serv_date) DO UPDATE SET
-         book_id = excluded.book_id,
-         token_no = excluded.token_no`
-    );
-    for (const b of activeBookings) {
-      insertActive.run(
-        b.CUSTOMERID || b.customerId,
-        b.SERVICEID || b.serviceId,
-        b.SERVDATE || b.servDate,
-        b.BOOKID || b.bookId || null,
-        b.TOKENNO || b.tokenNo || b.BOOKNO || b.bookNo || ""
-      );
-    }
+    const canteenId = Number(env.CANTEEN_ID || 1);
+    ingestCustomers(db, customers);
+    ingestWallets(db, wallets);
+    ingestDaySlots(db, daySlots, canteenId);
+    ingestMenuItems(db, menuItems);
+    ingestActivePrebookings(db, activeBookings);
+    ingestTodayManifest(db, todayBookings, todayBookItems);
   });
 };
 
@@ -247,7 +252,7 @@ export const upsertDownlinkSnapshot = ({
 export const getMeta = (key) => {
   const db = getDb();
   try {
-    const row = db.prepare("SELECT meta_value FROM system_meta WHERE meta_key = ?").get(key);
+    const row = db.prepare(SYNC_QUERIES.GET_SYSTEM_META).get(key);
     return row ? row.meta_value : null;
   } catch {
     return null;
@@ -260,13 +265,7 @@ export const getMeta = (key) => {
 export const setMeta = (key, value) => {
   const db = getDb();
   try {
-    db.prepare(
-      `INSERT INTO system_meta (meta_key, meta_value, updated_at)
-       VALUES (?, ?, datetime('now'))
-       ON CONFLICT(meta_key) DO UPDATE SET
-         meta_value = excluded.meta_value,
-         updated_at = datetime('now')`
-    ).run(key, String(value));
+    db.prepare(SYNC_QUERIES.SET_SYSTEM_META).run(key, String(value));
   } catch {
     // If system_meta table not initialized yet, silently ignore
   }
@@ -278,11 +277,66 @@ export const setMeta = (key, value) => {
 export const purgeHistoricalOutbox = (retentionDays = 7) => {
   const db = getDb();
   try {
-    const result = db.prepare(
-      `DELETE FROM outbox_bookings
-       WHERE sync_status IN ('SYNCED', 'CANCELLED')
-         AND created_at < datetime('now', '-' || ? || ' days')`
-    ).run(retentionDays);
+    const result = db.prepare(SYNC_QUERIES.PURGE_HISTORICAL_OUTBOX).run(retentionDays);
+    return result.changes;
+  } catch {
+    return 0;
+  }
+};
+
+/**
+ * Retrieves the oldest pending or retryable outbox serving events in FIFO order
+ */
+export const getPendingServingEventsChunk = (limit = 50) => {
+  const db = getDb();
+  return db.prepare(SYNC_QUERIES.GET_PENDING_SERVING_EVENTS).all(limit);
+};
+
+/**
+ * Marks a batch of outbox serving events as currently SYNCING
+ */
+export const markServingEventsSyncing = (eventUuids = []) => {
+  if (!eventUuids.length) return;
+  const db = getDb();
+  const placeholders = eventUuids.map(() => "?").join(",");
+  db.prepare(SYNC_QUERIES.BUILD_MARK_SERVING_SYNCING_SQL(placeholders)).run(...eventUuids);
+};
+
+/**
+ * Applies itemized serving event responses from central server
+ */
+export const applyServingSyncResults = (results = []) => {
+  return withTransaction((db) => {
+    const updateSuccess = db.prepare(SYNC_QUERIES.MARK_SERVING_EVENT_SYNCED);
+    const updateError = db.prepare(SYNC_QUERIES.MARK_SERVING_EVENT_ERROR);
+
+    for (const res of results) {
+      if (res.status === "SYNCED") {
+        updateSuccess.run(res.eventUuid);
+      } else {
+        updateError.run(res.message || res.errorMessage || "Server sync error", res.eventUuid);
+      }
+    }
+  });
+};
+
+/**
+ * Resets a failed chunk of serving events to ERROR
+ */
+export const markServingEventsError = (eventUuids = [], errorMessage = "Sync network error") => {
+  if (!eventUuids.length) return;
+  const db = getDb();
+  const placeholders = eventUuids.map(() => "?").join(",");
+  db.prepare(SYNC_QUERIES.BUILD_MARK_SERVING_ERROR_SQL(placeholders)).run(errorMessage, ...eventUuids);
+};
+
+/**
+ * Purges historical synced serving events older than retention window
+ */
+export const purgeHistoricalServingOutbox = (retentionDays = 7) => {
+  const db = getDb();
+  try {
+    const result = db.prepare(SYNC_QUERIES.PURGE_HISTORICAL_SERVING_OUTBOX).run(retentionDays);
     return result.changes;
   } catch {
     return 0;

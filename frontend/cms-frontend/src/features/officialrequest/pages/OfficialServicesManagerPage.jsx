@@ -235,20 +235,24 @@ export default function OfficialServicesManagerPage() {
       alert('Please add at least one menu item to the combo');
       return;
     }
-    if (!comboForm.COMBOPRICE || Number(comboForm.COMBOPRICE) <= 0) {
-      alert('Please enter a valid Combo Unit Price');
+    if (grossTotal <= 0) {
+      alert('The items selected for this combo must have a valid price');
       return;
     }
 
     try {
       setSubmitting(true);
+      const packageFoodRate = Number(grossTotal.toFixed(2));
+      const flatHandling = Number(handlingCharge.toFixed(2));
+      const totalComboPrice = Number((packageFoodRate + flatHandling).toFixed(2));
+
       const payload = {
         OFFSERVID: Number(showComboModal),
         COMBONAME: comboForm.COMBONAME.trim(),
         DESCR: comboForm.DESCR.trim(),
-        GROSSPRICE: Number(grossTotal.toFixed(2)),
-        HANDLINGCHARGE: Number(handlingCharge.toFixed(2)),
-        COMBOPRICE: Number(comboForm.COMBOPRICE),
+        GROSSPRICE: packageFoodRate,
+        HANDLINGCHARGE: flatHandling,
+        COMBOPRICE: totalComboPrice,
         ITEMS: comboForm.ITEMS.map((it) => ({
           MENUITEMID: it.MENUITEMID,
           QTY: it.QTY || 1,
@@ -342,13 +346,6 @@ export default function OfficialServicesManagerPage() {
     setHandlingCharge(charge);
   };
 
-  const handleSyncSuggestedPrice = () => {
-    setComboForm((prev) => ({
-      ...prev,
-      COMBOPRICE: grossTotal,
-    }));
-  };
-
   const activeCanteenObj = canteens.find(
     (c) => c.CANTEENID === Number(selectedCanteenId)
   );
@@ -372,7 +369,6 @@ export default function OfficialServicesManagerPage() {
           onAddItem={addItemToCombo}
           onRemoveItem={removeItemFromCombo}
           onUpdateQty={updateItemQty}
-          onSyncSuggestedPrice={handleSyncSuggestedPrice}
           onSaveCombo={handleSaveCombo}
           onClose={() => {
             setShowComboModal(null);

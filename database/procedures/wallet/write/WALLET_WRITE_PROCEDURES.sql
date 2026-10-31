@@ -45,9 +45,10 @@ BEGIN
             SET MESSAGE_TEXT = 'Initial wallet deposit must be at least 100.00 if depositing opening cash';
     END IF;
 
-    SELECT C.CTYPECODE
+    SELECT CT.CTYPECODE
       INTO VTYPECODE
       FROM CMS_CUSTOMER C
+      JOIN CMS_CUSTTYPE CT ON CT.CTYPEID = C.CTYPEID
      WHERE C.CUSTOMERID = PCUSTOMERID;
 
     IF VTYPECODE IS NULL THEN
@@ -96,7 +97,7 @@ BEGIN
         INSERT INTO CMS_WALLETTRAN
         (
             WALLETID,
-            BOOKINGID,
+            BOOKID,
             TRANSTYPE,
             SOURCECODE,
             AMOUNT,
@@ -225,7 +226,7 @@ BEGIN
     INSERT INTO CMS_WALLETTRAN
     (
         WALLETID,
-        BOOKINGID,
+        BOOKID,
         TRANSTYPE,
         SOURCECODE,
         AMOUNT,
@@ -503,7 +504,7 @@ BEGIN
     INSERT INTO CMS_WALLETTRAN
     (
         WALLETID,
-        BOOKINGID,
+        BOOKID,
         TRANSTYPE,
         SOURCECODE,
         AMOUNT,

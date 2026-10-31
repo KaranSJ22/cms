@@ -30,9 +30,11 @@ export const createMenuSchema = z.object({
       SHORTNAME: z.string().trim().min(1).max(30),
       ITEMNAME: z.string().trim().min(1).max(100),
       ITEMDESCR: z.string().trim().max(255).nullable().optional(),
+      DESCR: z.string().trim().max(255).nullable().optional(),
       ISSPECIAL: z.coerce.number().int().optional(),
       SERVICEID: z.coerce.number().int().positive().nullable().optional(),
       OFFSER: z.coerce.number().int().min(0).max(1).default(0).optional(),
+      ISOFFSER: z.coerce.number().int().min(0).max(1).optional(),
       PRICING: z
         .object({
           EFFFROM: z
@@ -62,9 +64,11 @@ export const updateMenuSchema = z.object({
       SHORTNAME: z.string().trim().min(1).max(30),
       ITEMNAME: z.string().trim().min(1).max(100),
       ITEMDESCR: z.string().trim().max(255).nullable().optional(),
+      DESCR: z.string().trim().max(255).nullable().optional(),
       ISSPECIAL: z.coerce.number().int().optional(),
       SERVICEID: z.coerce.number().int().positive().nullable().optional(),
       OFFSER: z.coerce.number().int().min(0).max(1).optional(),
+      ISOFFSER: z.coerce.number().int().min(0).max(1).optional(),
       STATUS: z.enum(["ACT", "DIS"]).default("ACT"),
       CHGREASON: z.string().trim().max(255).nullable().optional(),
     }),

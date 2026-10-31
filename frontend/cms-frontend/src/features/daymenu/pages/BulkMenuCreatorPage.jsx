@@ -49,6 +49,10 @@ export default function BulkMenuCreatorPage() {
     daySummary,
     totalConfiguredDays,
     totalPublishedDays,
+    totalPendingDays,
+    totalDraftDays,
+    isManager,
+    isAssistant,
     isReady,
     addItem,
     removeItem,
@@ -113,8 +117,10 @@ export default function BulkMenuCreatorPage() {
             Configure Menu Per Day (Mon – Sun)
           </h2>
           <span className="ml-auto text-xs text-slate-500 font-medium">
-            {totalConfiguredDays} of 7 days configured{' '}
-            {totalPublishedDays > 0 ? `(${totalPublishedDays} published)` : ''}
+            {totalConfiguredDays} of 7 days configured
+            {totalPublishedDays > 0 ? ` · ${totalPublishedDays} published` : ''}
+            {totalPendingDays > 0 ? ` · ${totalPendingDays} pending` : ''}
+            {totalDraftDays > 0 ? ` · ${totalDraftDays} draft` : ''}
           </span>
         </div>
 
@@ -167,7 +173,10 @@ export default function BulkMenuCreatorPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
             {weekDates.map((date, i) => {
               const count = daySummary[i];
-              const isPublished = !!publishedDays[i];
+              const dayStatus = publishedDays[i];
+              const isPublished = Boolean(dayStatus?.isPublished);
+              const isPending = Boolean(dayStatus?.isPending);
+              const isDraft = Boolean(dayStatus?.isDraft);
               const isWeekend = i === 5 || i === 6;
               const isActive = activeDayIndex === i;
               return (
@@ -180,6 +189,10 @@ export default function BulkMenuCreatorPage() {
                       ? 'bg-blue-600 border-blue-600 text-white shadow-sm shadow-blue-200'
                       : isPublished
                       ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:border-emerald-300'
+                      : isPending
+                      ? 'bg-amber-50 border-amber-200 text-amber-800 hover:border-amber-300'
+                      : isDraft
+                      ? 'bg-slate-50 border-slate-300 text-slate-700 hover:border-slate-400'
                       : isWeekend
                       ? 'bg-indigo-50/40 border-indigo-200/80 text-indigo-900 hover:border-indigo-300'
                       : count > 0
@@ -212,6 +225,10 @@ export default function BulkMenuCreatorPage() {
                         ? 'text-white/80'
                         : isPublished
                         ? 'text-emerald-600'
+                        : isPending
+                        ? 'text-amber-700'
+                        : isDraft
+                        ? 'text-slate-600'
                         : count > 0
                         ? 'text-blue-600'
                         : 'text-slate-300'
@@ -219,6 +236,10 @@ export default function BulkMenuCreatorPage() {
                   >
                     {isPublished
                       ? '✓ published'
+                      : isPending
+                      ? 'pending'
+                      : isDraft
+                      ? `draft (${count})`
                       : count > 0
                       ? `${count} item${count !== 1 ? 's' : ''}`
                       : 'empty'}
@@ -230,71 +251,140 @@ export default function BulkMenuCreatorPage() {
         </div>
       )}
 
-      {/* Sticky Submit Bar */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 px-6 py-4 flex items-center justify-between gap-4">
+      {/* Sticky Action Bar */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3 text-sm">
           <div
-            className={`w-2 h-2 rounded-full ${
+            className={`w-2.5 h-2.5 rounded-full ${
               isReady ? 'bg-emerald-500' : 'bg-slate-300'
             }`}
           />
-          <span className="text-slate-600 text-xs sm:text-sm">
-            {isReady
-              ? `${totalPublishedDays} published / locked · ${Math.max(
-                  0,
-                  totalConfiguredDays - totalPublishedDays
-                )} new day(s) configured`
-              : 'Select canteen, service, and week to configure items'}
-          </span>
+          <div className="flex flex-col">
+            <span className="text-slate-700 font-medium text-xs sm:text-sm">
+              {isReady
+                ? `${totalPublishedDays} published · ${totalPendingDays} pending · ${totalDraftDays} draft · ${Math.max(
+                    0,
+                    totalConfiguredDays - (totalPublishedDays + totalPendingDays + totalDraftDays)
+                  )} new day(s)`
+                : 'Select canteen, service, and week to configure items'}
+            </span>
+            <span className="text-[11px] text-slate-400">
+              {isManager
+                ? 'Role: Canteen Manager (Publish or Save as Draft)'
+                : 'Role: Canteen Assistant (Submit for Approval or Save as Draft)'}
+            </span>
+          </div>
         </div>
-        <button
-          id="bulk-submit-btn"
-          type="button"
-          onClick={handleSubmit}
-          disabled={!isReady || loading}
-          className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors shadow-sm shadow-blue-200 cursor-pointer"
-        >
-          {loading ? (
-            <>
-              <span className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
-              Processing…
-            </>
-          ) : totalPublishedDays === 7 ? (
-            <>
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-              Update Slot Timings
-            </>
+
+        <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+          {/* Secondary Action: Save as Draft */}
+          <button
+            id="bulk-draft-btn"
+            type="button"
+            onClick={() => handleSubmit('DRAFT')}
+            disabled={!isReady || loading}
+            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-xl border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-2xs cursor-pointer text-sm"
+          >
+            <svg
+              className="w-4 h-4 text-slate-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
+              />
+            </svg>
+            Save as Draft
+          </button>
+
+          {/* Primary Action: Assistant sends for approval; Manager publishes */}
+          {!isManager ? (
+            <button
+              id="bulk-submit-approval-btn"
+              type="button"
+              onClick={() => handleSubmit('SUBMIT')}
+              disabled={!isReady || loading}
+              className="flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all shadow-sm shadow-orange-200 cursor-pointer text-sm"
+            >
+              {loading ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+                  Submitting…
+                </>
+              ) : (
+                <>
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                    />
+                  </svg>
+                  Send for Manager Approval
+                </>
+              )}
+            </button>
           ) : (
-            <>
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 10V3L4 14h7v7l9-11h-7z"
-                />
-              </svg>
-              Save &amp; Create Bulk Menu
-            </>
+            <button
+              id="bulk-publish-btn"
+              type="button"
+              onClick={() => handleSubmit('PUBLISH')}
+              disabled={!isReady || loading}
+              className="flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors shadow-sm shadow-blue-200 cursor-pointer text-sm"
+            >
+              {loading ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+                  Publishing…
+                </>
+              ) : totalPublishedDays === 7 ? (
+                <>
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                  Update Slot Timings
+                </>
+              ) : (
+                <>
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13 10V3L4 14h7v7l9-11h-7z"
+                    />
+                  </svg>
+                  Publish Menu
+                </>
+              )}
+            </button>
           )}
-        </button>
+        </div>
       </div>
     </div>
   );

@@ -50,7 +50,7 @@ export default function ISROHeader({ onToggleMobileSidebar, isMobileSidebarOpen 
     <header className="relative bg-slate-900 border-b border-slate-800 text-white z-40 select-none shadow-sm">
       {/* ── Main Top Bar ── */}
       <div className="h-16 px-4 md:px-6 flex items-center justify-between gap-4">
-        
+
         {/* ── Left Branding Section ── */}
         <div className="flex items-center gap-3.5 flex-shrink-0 min-w-0">
           {/* Mobile Sidebar Toggle Button */}
@@ -84,7 +84,7 @@ export default function ISROHeader({ onToggleMobileSidebar, isMobileSidebarOpen 
                 Indian Space Research Organisation
               </span>
               <span className="text-[0.6rem] font-medium tracking-wide text-orange-400 leading-none mt-0.5">
-                Canteen Management System (CMS)
+                (CMS)
               </span>
             </div>
           </div>

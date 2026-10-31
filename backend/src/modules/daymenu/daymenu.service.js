@@ -10,11 +10,14 @@ import {
 } from "./daymenu.repository.js";
 import { pool } from "../../db/connection.js";
 import { toMySQLDateTime, addDaysIST } from "../../utils/dateTime.js";
-import { BadRequestError } from "../../common/errors/appError.js";
+import { BadRequestError, ForbiddenError } from "../../common/errors/appError.js";
 
 // Canonical Status & Approval State IDs (matching CMS_STATUS)
 const STATUS_ACTIVE = 10;
+const APPR_STATUS_DRAFT = 20;
+const APPR_STATUS_PENDING = 21;
 const APPR_STATUS_APPROVED = 22;
+const APPR_STATUS_REJECTED = 23;
 
 export const getWorkspace = async (DAYSLOTID) => {
   return await getDayMenuWorkspace(DAYSLOTID);
@@ -41,7 +44,38 @@ export const rejectDayMenu = async (DAYSLOTID, remarks, REJECTEDBY) => {
 };
 
 export const fetchPendingDayMenus = async (CANTEENID) => {
-  return await listPendingDayMenus(CANTEENID);
+  const pending = await listPendingDayMenus(CANTEENID);
+  if (!pending || pending.length === 0) return [];
+
+  const slotIds = pending.map((s) => s.DAYSLOTID);
+  try {
+    const [items] = await pool.execute(
+      `SELECT DM.DAYSLOTID, COUNT(DM.DAYMENUID) AS ITEMCOUNT,
+              GROUP_CONCAT(MI.ITEMNAME ORDER BY DM.ISBASE DESC, MI.ITEMNAME SEPARATOR ', ') AS ITEMSNAMES
+       FROM CMS_DAYMENU DM
+       JOIN CMS_MENUITEM MI ON MI.MENUITEMID = DM.MENUITEMID
+       WHERE DM.DAYSLOTID IN (${slotIds.map(() => '?').join(',')})
+       GROUP BY DM.DAYSLOTID`,
+      slotIds
+    );
+
+    const itemMap = new Map((items || []).map((i) => [i.DAYSLOTID, i]));
+
+    return pending.map((s) => ({
+      ...s,
+      SERVICEDATE: s.SERVICEDATE ? String(s.SERVICEDATE).substring(0, 10) : s.SERVDATE,
+      SERVDATE: s.SERVICEDATE ? String(s.SERVICEDATE).substring(0, 10) : s.SERVDATE,
+      ITEMCOUNT: itemMap.get(s.DAYSLOTID)?.ITEMCOUNT || 0,
+      ITEMSNAMES: itemMap.get(s.DAYSLOTID)?.ITEMSNAMES || "",
+    }));
+  } catch (err) {
+    console.error("Failed to enrich pending day menus with item preview:", err);
+    return pending.map((s) => ({
+      ...s,
+      SERVICEDATE: s.SERVICEDATE ? String(s.SERVICEDATE).substring(0, 10) : s.SERVDATE,
+      SERVDATE: s.SERVICEDATE ? String(s.SERVICEDATE).substring(0, 10) : s.SERVDATE,
+    }));
+  }
 };
 
 export const fetchPublishedMenu = async (canteenId, serviceDate, customerTypeCode) => {
@@ -78,6 +112,8 @@ export const bulkCreateMenuForWeek = async ({
   endTime,
   days,
   createdBy,
+  targetApprStatus = APPR_STATUS_APPROVED,
+  action = "PUBLISH",
 }) => {
   const conn = await pool.getConnection();
 
@@ -128,7 +164,7 @@ export const bulkCreateMenuForWeek = async ({
       // ── 2. Check if a Day Slot already exists for this canteen+service+date
       const [[existingSlot]] = await conn.execute(
         `SELECT DAYSLOTID, SLOTNO, STARTTIME, ENDTIME, STATUSID, APPRSTATUSID FROM CMS_DAYSLOT
-          WHERE CANTEENID = ? AND SERVICEID = ? AND SERVDATE = ?`,
+          WHERE CANTEENID = ? AND SERVICEID = ? AND SERVICEDATE = ?`,
         [canteenId, serviceId, servDateStr]
       );
 
@@ -141,13 +177,6 @@ export const bulkCreateMenuForWeek = async ({
         daySlotId = existingSlot.DAYSLOTID;
         slotNo    = existingSlot.SLOTNO;
 
-        // Check if menu items already exist for this slot
-        const [existingItems] = await conn.execute(
-          `SELECT COUNT(*) AS count FROM CMS_DAYMENU WHERE DAYSLOTID = ?`,
-          [daySlotId]
-        );
-        const hasExistingItems = (existingItems[0]?.count || 0) > 0;
-
         // Check if any bookings exist for this slot
         const [bookingCheck] = await conn.execute(
           `SELECT COUNT(*) AS bookingCount
@@ -158,8 +187,10 @@ export const bulkCreateMenuForWeek = async ({
         );
         const hasBookings = (bookingCheck[0]?.bookingCount || 0) > 0;
 
-        // If items already exist or slot is published/has bookings: LOCK menu items (NO deletion, NO replacement)
-        if (hasExistingItems || hasBookings || existingSlot.APPRSTATUSID === APPR_STATUS_APPROVED) {
+        // Only APPROVED slots or slots with existing bookings are strictly locked
+        const isLocked = existingSlot.APPRSTATUSID === APPR_STATUS_APPROVED || hasBookings;
+
+        if (isLocked) {
           let timingUpdated = false;
           // Only parent Day Slot timings can be adjusted (compare normalized HH:MM)
           const normStart = (dayStartTime || '').slice(0, 5);
@@ -170,14 +201,14 @@ export const bulkCreateMenuForWeek = async ({
           if (normStart !== slotStart || normEnd !== slotEnd) {
             await conn.execute(
               `UPDATE CMS_DAYSLOT 
-               SET STARTTIME = ?, ENDTIME = ?, UPDATEDBY = ?, UPDATEDAT = CURRENT_TIMESTAMP
+               SET STARTTIME = ?, ENDTIME = ?, UPDATEDAT = CURRENT_TIMESTAMP
                WHERE DAYSLOTID = ?`,
-              [dayStartTime, dayEndTime, createdBy, daySlotId]
+              [dayStartTime, dayEndTime, daySlotId]
             );
 
             await conn.execute(
               `INSERT INTO CMS_SLOTHIST
-                (DAYSLOTID, SLOTNO, SERVICEID, CANTEENID, SERVDATE,
+                (DAYSLOTID, SLOTNO, SERVICEID, CANTEENID, SERVICEDATE,
                  STARTTIME, ENDTIME, STATUSID, APPRSTATUSID, CHANGEDBY, CHGREASON)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Bulk Timing Adjustment')`,
               [daySlotId, slotNo, serviceId, canteenId, servDateStr, dayStartTime, dayEndTime, existingSlot.STATUSID, existingSlot.APPRSTATUSID, createdBy]
@@ -199,6 +230,58 @@ export const bulkCreateMenuForWeek = async ({
           });
           continue;
         }
+
+        // Slot exists in DRAFT, PENDING, or REJECTED state (and has no bookings) -> update it!
+        const normStart = (dayStartTime || '').slice(0, 5);
+        const normEnd   = (dayEndTime || '').slice(0, 5);
+        const slotStart = (existingSlot.STARTTIME || '').slice(0, 5);
+        const slotEnd   = (existingSlot.ENDTIME || '').slice(0, 5);
+
+        const submittedBy = (targetApprStatus === APPR_STATUS_PENDING || targetApprStatus === APPR_STATUS_APPROVED) ? createdBy : null;
+        const submittedAt = (targetApprStatus === APPR_STATUS_PENDING || targetApprStatus === APPR_STATUS_APPROVED) ? new Date() : null;
+        const approvedBy = (targetApprStatus === APPR_STATUS_APPROVED) ? createdBy : null;
+        const approvedAt = (targetApprStatus === APPR_STATUS_APPROVED) ? new Date() : null;
+
+        await conn.execute(
+          `UPDATE CMS_DAYSLOT 
+           SET STARTTIME = ?, ENDTIME = ?, APPRSTATUSID = ?,
+               MENUSUBMITTEDBY = COALESCE(?, MENUSUBMITTEDBY),
+               MENUSUBMITTEDAT = CASE WHEN ? IS NOT NULL THEN ? ELSE MENUSUBMITTEDAT END,
+               MENUAPPROVEDBY = ?,
+               MENUAPPROVEDAT = ?,
+               UPDATEDAT = CURRENT_TIMESTAMP
+           WHERE DAYSLOTID = ?`,
+          [
+            dayStartTime, dayEndTime, targetApprStatus,
+            submittedBy,
+            submittedBy, submittedAt,
+            approvedBy,
+            approvedAt,
+            daySlotId
+          ]
+        );
+
+        const changeReason = action === 'DRAFT'
+          ? 'Bulk Draft Updated'
+          : action === 'SUBMIT'
+          ? 'Bulk Submitted for Approval'
+          : 'Bulk Approved & Published';
+
+        await conn.execute(
+          `INSERT INTO CMS_SLOTHIST
+            (DAYSLOTID, SLOTNO, SERVICEID, CANTEENID, SERVICEDATE,
+             STARTTIME, ENDTIME, STATUSID, APPRSTATUSID, MENUSUBMITTEDBY, MENUSUBMITTEDAT,
+             MENUAPPROVEDBY, MENUAPPROVEDAT, CHANGEDBY, CHGREASON)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            daySlotId, slotNo, serviceId, canteenId, servDateStr, dayStartTime, dayEndTime,
+            STATUS_ACTIVE, targetApprStatus, submittedBy, submittedAt, approvedBy, approvedAt,
+            createdBy, changeReason
+          ]
+        );
+
+        // Delete unapproved draft items to replace with updated batch
+        await conn.execute(`DELETE FROM CMS_DAYMENU WHERE DAYSLOTID = ?`, [daySlotId]);
       }
 
       // ── Skip unconfigured days that have no items ─────────────────────
@@ -219,28 +302,47 @@ export const bulkCreateMenuForWeek = async ({
       if (!existingSlot) {
         slotNo = await genAutoNo(conn, "CMS_DAYSLOT", "SLOTNO");
 
+        const submittedBy = (targetApprStatus === APPR_STATUS_PENDING || targetApprStatus === APPR_STATUS_APPROVED) ? createdBy : null;
+        const submittedAt = (targetApprStatus === APPR_STATUS_PENDING || targetApprStatus === APPR_STATUS_APPROVED) ? new Date() : null;
+        const approvedBy = (targetApprStatus === APPR_STATUS_APPROVED) ? createdBy : null;
+        const approvedAt = (targetApprStatus === APPR_STATUS_APPROVED) ? new Date() : null;
+
         const [insertSlotResult] = await conn.execute(
           `INSERT INTO CMS_DAYSLOT
-            (SLOTNO, CANTEENID, SERVICEID, SERVDATE, STARTTIME, ENDTIME,
-             STATUSID, APPRSTATUSID, CREATEDBY)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [slotNo, canteenId, serviceId, servDateStr, dayStartTime, dayEndTime, STATUS_ACTIVE, APPR_STATUS_APPROVED, createdBy]
+            (SLOTNO, CANTEENID, SERVICEID, SERVICEDATE, STARTTIME, ENDTIME,
+             STATUSID, APPRSTATUSID, MENUSUBMITTEDBY, MENUSUBMITTEDAT, MENUAPPROVEDBY, MENUAPPROVEDAT, CREATEDBY)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            slotNo, canteenId, serviceId, servDateStr, dayStartTime, dayEndTime,
+            STATUS_ACTIVE, targetApprStatus, submittedBy, submittedAt, approvedBy, approvedAt, createdBy
+          ]
         );
         daySlotId = insertSlotResult.insertId;
+
+        const changeReason = action === 'DRAFT'
+          ? 'Bulk Draft Creation'
+          : action === 'SUBMIT'
+          ? 'Bulk Creation - Submitted for Approval'
+          : 'Bulk Creation - Approved & Published';
 
         // Initial audit history row
         await conn.execute(
           `INSERT INTO CMS_SLOTHIST
-            (DAYSLOTID, SLOTNO, SERVICEID, CANTEENID, SERVDATE,
-             STARTTIME, ENDTIME, STATUSID, APPRSTATUSID, CHANGEDBY, CHGREASON)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Bulk Creation')`,
-          [daySlotId, slotNo, serviceId, canteenId, servDateStr, dayStartTime, dayEndTime, STATUS_ACTIVE, APPR_STATUS_APPROVED, createdBy]
+            (DAYSLOTID, SLOTNO, SERVICEID, CANTEENID, SERVICEDATE,
+             STARTTIME, ENDTIME, STATUSID, APPRSTATUSID, MENUSUBMITTEDBY, MENUSUBMITTEDAT,
+             MENUAPPROVEDBY, MENUAPPROVEDAT, CHANGEDBY, CHGREASON)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            daySlotId, slotNo, serviceId, canteenId, servDateStr, dayStartTime, dayEndTime,
+            STATUS_ACTIVE, targetApprStatus, submittedBy, submittedAt, approvedBy, approvedAt,
+            createdBy, changeReason
+          ]
         );
 
         isNewSlot = true;
       }
 
-      // ── 4. Insert each new menu item for this unconfigured day slot ────────────────
+      // ── 4. Insert each new menu item for this day slot ────────────────
       for (const item of items) {
         const dMenuNo = await genAutoNo(conn, "CMS_DAYMENU", "DMENUNO");
 
@@ -272,6 +374,8 @@ export const bulkCreateMenuForWeek = async ({
         isNewSlot,
         itemsInserted: items.length,
         skipped:       false,
+        statusId:      targetApprStatus,
+        action,
       });
     }
 
@@ -306,14 +410,16 @@ export const getDayMenusByIds = async (dayMenuIds) => {
 
 /**
  * Creates Day Slots (upsert) and Day Menu items for 7 consecutive days.
- * Validates that ENDTIME is strictly after STARTTIME before delegating
- * to the service's single atomic transaction.
+ * Enforces role authorization: Assistants can only save as DRAFT or SUBMIT for approval.
+ * Only Canteen Managers and System Admins can publish directly.
  *
  * @param {object} payload - Validated body from bulkCreateDayMenuSchema
- * @param {number} createdBy - USERID of the authenticated user
+ * @param {object|number} userOrId - Authenticated user object or USERID
  */
-export const bulkCreateDayMenu = async (payload, createdBy) => {
-  const { CANTEENID, SERVICEID, STARTDATE, STARTTIME, ENDTIME, DAYS } = payload;
+export const bulkCreateDayMenu = async (payload, userOrId) => {
+  const { CANTEENID, SERVICEID, STARTDATE, STARTTIME, ENDTIME, DAYS, ACTION = "PUBLISH" } = payload;
+  const user = typeof userOrId === "object" ? userOrId : { USERID: userOrId };
+  const createdBy = user.USERID;
 
   // Cross-field time validation (Zod schema can't express this simply)
   if (ENDTIME <= STARTTIME) {
@@ -326,6 +432,33 @@ export const bulkCreateDayMenu = async (payload, createdBy) => {
     throw new BadRequestError("At least one day must have menu items configured");
   }
 
+  const isSysAdmin =
+    (user.SYSTEMROLES || []).includes("SYSADM") ||
+    user.LOGINID === "admin" ||
+    user.USERID === 1;
+
+  const isManager =
+    isSysAdmin ||
+    (user.CANTEENROLES || []).some(
+      (r) => Number(r.CANTEENID) === Number(CANTEENID) && r.ROLECODE === "CNTMGR"
+    );
+
+  const action = String(ACTION).toUpperCase();
+
+  // Assistant cannot publish directly
+  if (action === "PUBLISH" && !isManager) {
+    throw new ForbiddenError(
+      "Canteen Assistants cannot publish menus directly. Menus can only be saved as draft or submitted for manager approval."
+    );
+  }
+
+  let targetApprStatus = APPR_STATUS_APPROVED;
+  if (action === "DRAFT") {
+    targetApprStatus = APPR_STATUS_DRAFT;
+  } else if (action === "SUBMIT") {
+    targetApprStatus = APPR_STATUS_PENDING;
+  }
+
   return await bulkCreateMenuForWeek({
     canteenId: CANTEENID,
     serviceId: SERVICEID,
@@ -334,6 +467,8 @@ export const bulkCreateDayMenu = async (payload, createdBy) => {
     endTime:   ENDTIME,
     days:      DAYS,
     createdBy,
+    targetApprStatus,
+    action,
   });
 };
 

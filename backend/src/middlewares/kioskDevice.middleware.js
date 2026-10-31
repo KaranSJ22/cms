@@ -28,6 +28,11 @@ export function getClientIp(req) {
  * Resolves kiosk device from IP address using database or cache
  */
 export async function resolveKioskFromIp(ip) {
+  // Loopback / PC localhost IPs should never be identified as physical hardware kiosks
+  if (!ip || ip === "127.0.0.1" || ip === "::1" || ip === "localhost") {
+    return null;
+  }
+
   const now = Date.now();
   const cached = kioskCache.get(ip);
   if (cached && cached.expiresAt > now) {

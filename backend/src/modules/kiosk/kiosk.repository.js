@@ -182,10 +182,14 @@ export const getKioskCustomerBookings = async (customerId, limit = 10) => {
         B.TOTALITEMS,
         B.TOTALQTY,
         B.TOTALAMOUNT,
-        B.BOOKEDON,
-        B.CANCELLEDON,
-        B.SERVEDON,
-        B.NOSHOWON
+        B.BOOKEDAT,
+        B.BOOKEDAT AS BOOKEDON,
+        B.CANCELLEDAT,
+        B.CANCELLEDAT AS CANCELLEDON,
+        B.SERVEDAT,
+        B.SERVEDAT AS SERVEDON,
+        B.NOSHOWAT,
+        B.NOSHOWAT AS NOSHOWON
     FROM CMS_BOOKING B
     JOIN CMS_BOOKTYPE BT ON BT.BOOKTYPEID = B.BOOKTYPEID
     JOIN CMS_SERVICE S ON S.SERVICEID = B.SERVICEID
@@ -199,17 +203,9 @@ export const getKioskCustomerBookings = async (customerId, limit = 10) => {
         GROUP BY BI.BOOKID, DS.CANTEENID, C.CANTEENNAME
     ) BK_CAN ON BK_CAN.BOOKID = B.BOOKID
     WHERE B.CUSTOMERID = ?
-    ORDER BY 
-        CASE 
-            WHEN ST.STATUSCODE = 'CRT' AND B.SERVICEDATE >= CURDATE() THEN 0 
-            ELSE 1 
-        END ASC,
-        CASE 
-            WHEN ST.STATUSCODE = 'CRT' AND B.SERVICEDATE >= CURDATE() THEN B.SERVICEDATE 
-            ELSE NULL 
-        END ASC,
-        B.SERVICEDATE DESC,
-        B.BOOKID DESC
+      AND ST.STATUSCODE = 'CRT'
+      AND B.SERVICEDATE >= CURDATE()
+    ORDER BY B.SERVICEDATE ASC, B.BOOKID DESC
     LIMIT ?`,
     [Number(customerId), Number(limit)]
   );
@@ -352,4 +348,42 @@ export const scanSelfServiceAtomic = async (identifier, canteenId = null, kioskI
 export const identifyKioskDevice = async (ip) => {
   const [resultSets] = await pool.query("CALL CMSIDENTIFYKIOSK(?)", [ip]);
   return resultSets?.[0]?.[0] || null;
+};
+
+/**
+ * Registers or updates a hardware kiosk terminal device
+ */
+export const registerKioskDevice = async ({
+  DEVICECODE,
+  DEVICENAME,
+  IPADDRESS,
+  MACADDRESS = null,
+  CANTEENID,
+  KIOSKTYPE,
+  USERID,
+}) => {
+  const [resultSets] = await pool.query(
+    "CALL CMSREGISTERKIOSKDEVICE(?, ?, ?, ?, ?, ?, ?)",
+    [DEVICECODE, DEVICENAME, IPADDRESS, MACADDRESS, CANTEENID, KIOSKTYPE, USERID]
+  );
+  return resultSets[0]?.[0] || null;
+};
+
+/**
+ * Lists all registered kiosk devices, optionally filtered by canteen
+ */
+export const listKioskDevices = async (CANTEENID = null) => {
+  const [resultSets] = await pool.query(
+    "CALL CMSLISTKIOSKDEVICES(?)",
+    [CANTEENID]
+  );
+  return (resultSets[0] || []).map((row) => ({
+    ...row,
+    STATUSID:
+      row.STATUSID != null
+        ? Number(row.STATUSID)
+        : row.ISACTIVE === 1 || row.STATUSCODE === "ACT"
+        ? 10
+        : 11,
+  }));
 };

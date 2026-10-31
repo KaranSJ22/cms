@@ -53,6 +53,7 @@ const ICON_MAP = {
   CreditCardIcon,
   DocumentChartBarIcon,
   ShieldCheckIcon,
+  BuildingOffice2Icon,
   SparklesIcon,
   CubeIcon,
   CheckBadgeIcon,

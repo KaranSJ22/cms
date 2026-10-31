@@ -1,4 +1,6 @@
-export default function DaySlotsTable({ daySlots, onEdit, pagination, onPageChange }) {
+import ServerPagination from '../../../components/common/ServerPagination';
+
+export default function DaySlotsTable({ daySlots, onEdit, pagination, onPageChange, onPageSizeChange }) {
   if (!daySlots || daySlots.length === 0) {
     return (
       <div className="p-8 text-center text-slate-500 bg-white rounded-xl shadow-sm border border-slate-100">
@@ -16,9 +18,6 @@ export default function DaySlotsTable({ daySlots, onEdit, pagination, onPageChan
       day: "numeric",
     });
   };
-
-  const showPagination =
-    pagination && (pagination.totalPages > 1 || pagination.totalRows > pagination.pageSize);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -93,36 +92,15 @@ export default function DaySlotsTable({ daySlots, onEdit, pagination, onPageChan
         </table>
       </div>
 
-      {showPagination && (
-        <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between text-xs text-slate-500">
-          <span>
-            Showing {((pagination.currentPage - 1) * pagination.pageSize) + 1} to{" "}
-            {Math.min(pagination.currentPage * pagination.pageSize, pagination.totalRows)} of{" "}
-            {pagination.totalRows} slots
-          </span>
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => onPageChange(Math.max(1, pagination.currentPage - 1))}
-              disabled={pagination.currentPage <= 1}
-              className="px-3 py-1 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-colors font-medium cursor-pointer"
-            >
-              Previous
-            </button>
-            <span className="px-2 font-bold text-slate-700">
-              {pagination.currentPage} / {pagination.totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={() => onPageChange(Math.min(pagination.totalPages, pagination.currentPage + 1))}
-              disabled={pagination.currentPage >= pagination.totalPages}
-              className="px-3 py-1 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-colors font-medium cursor-pointer"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
+      <ServerPagination
+        currentPage={pagination?.currentPage || 1}
+        totalPages={pagination?.totalPages || 1}
+        totalRows={pagination?.totalRows ?? daySlots.length}
+        pageSize={pagination?.pageSize || 20}
+        pageSizeOptions={[10, 20, 50]}
+        onPageChange={onPageChange}
+        onPageSizeChange={onPageSizeChange}
+      />
     </div>
   );
 }

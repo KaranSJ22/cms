@@ -17,9 +17,15 @@ export function useDragScroll() {
     let animationFrameId = null;
 
     const onPointerDown = (e) => {
-      // Don't drag-scroll on input elements or virtual keyboard keys
-      const tag = e.target?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea") return;
+      // Don't drag-scroll on buttons, interactive inputs, or links
+      if (
+        e.target?.closest("button") ||
+        e.target?.closest("input") ||
+        e.target?.closest("textarea") ||
+        e.target?.closest("a")
+      ) {
+        return;
+      }
 
       isDown = true;
       isDragging = false;
@@ -40,8 +46,8 @@ export function useDragScroll() {
 
       const dy = e.clientY - startY;
 
-      // Threshold of 6px to distinguish a tap from a drag gesture
-      if (!isDragging && Math.abs(dy) > 6) {
+      // Threshold of 14px to distinguish a tap from an intentional drag gesture on touchscreens
+      if (!isDragging && Math.abs(dy) > 14) {
         isDragging = true;
       }
 

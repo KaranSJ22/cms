@@ -363,7 +363,7 @@ export default function AssignedApprovalsPage() {
                 <div className="space-y-1.5">
                   {selectedBooking.ITEMS.map((it) => (
                     <div
-                      key={it.COMBOITEMID}
+                      key={it.OFFCOMBDTID || it.COMBOITEMID || it.MENUITEMID}
                       className="text-xs flex justify-between items-center py-1.5 px-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-100 dark:border-slate-700/50"
                     >
                       <span className="text-slate-700 dark:text-slate-300">{it.MENUNAME}</span>

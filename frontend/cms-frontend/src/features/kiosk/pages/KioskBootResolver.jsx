@@ -20,8 +20,7 @@ export default function KioskBootResolver() {
             setStatus("Directing to Staff Counter Station...");
             setTimeout(() => navigate("/kiosk/serving-terminal", { replace: true }), 500);
           } else {
-            setStatus("Directing to Employee Self-Service Kiosk...");
-            setTimeout(() => navigate("/kiosk/self-service", { replace: true }), 500);
+            setError("This terminal is registered as an Employee Self-Service Kiosk. Please use the dedicated Kiosk frontend application.");
           }
         } else {
           setError(

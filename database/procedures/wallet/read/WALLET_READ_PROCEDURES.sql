@@ -63,7 +63,8 @@ BEGIN
         SELECT
             WT.WALLETTRANID,
             WT.WALLETID,
-            WT.BOOKINGID,
+            WT.BOOKID,
+            WT.BOOKID AS BOOKINGID,
             WT.TRANSTYPE,
             WT.SOURCECODE,
             WT.AMOUNT,
@@ -78,6 +79,7 @@ BEGIN
             WT.REMARKS,
 
             B.SERVICEDATE,
+            B.SERVICEDATE AS SERVDATE,
             B_ST.STATUSCODE AS BOOKINGSTATUSCODE,
             VTOTAL AS TOTALROWS,
             PPAGE AS CURRENTPAGE,
@@ -91,7 +93,7 @@ BEGIN
           ON ST.STATUSID = WT.STATUSID
 
         LEFT JOIN CMS_BOOKING B
-          ON B.BOOKID = WT.BOOKINGID
+          ON B.BOOKID = WT.BOOKID
         LEFT JOIN CMS_STATUS B_ST
           ON B_ST.STATUSID = B.STATUSID
 
@@ -105,7 +107,8 @@ BEGIN
         SELECT
             WT.WALLETTRANID,
             WT.WALLETID,
-            WT.BOOKINGID,
+            WT.BOOKID,
+            WT.BOOKID AS BOOKINGID,
             WT.TRANSTYPE,
             WT.SOURCECODE,
             WT.AMOUNT,
@@ -120,6 +123,7 @@ BEGIN
             WT.REMARKS,
 
             B.SERVICEDATE,
+            B.SERVICEDATE AS SERVDATE,
             B_ST.STATUSCODE AS BOOKINGSTATUSCODE
 
         FROM CMS_WALLETTRAN WT
@@ -129,7 +133,7 @@ BEGIN
           ON ST.STATUSID = WT.STATUSID
 
         LEFT JOIN CMS_BOOKING B
-          ON B.BOOKID = WT.BOOKINGID
+          ON B.BOOKID = WT.BOOKID
         LEFT JOIN CMS_STATUS B_ST
           ON B_ST.STATUSID = B.STATUSID
 

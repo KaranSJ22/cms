@@ -178,7 +178,7 @@ export default function CanteenDashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {pendingMenusCount > 0 && (
             <div
-              onClick={() => navigate("/daymenu")}
+              onClick={() => navigate(`/daymenu?view=pending${selectedCanteen ? `&canteen=${selectedCanteen}` : ''}`)}
               className="bg-white p-3.5 rounded-md border border-orange-200 shadow-sm hover:border-orange-500 transition-colors cursor-pointer flex items-center justify-between group"
             >
               <div className="flex items-center gap-3">

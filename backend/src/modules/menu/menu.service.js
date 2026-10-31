@@ -28,10 +28,10 @@ export const createMenu = async (menuData, createdByUserId) => {
     MENUCODE: menuData.MENUCODE,
     SHORTNAME: menuData.SHORTNAME,
     ITEMNAME: menuData.ITEMNAME,
-    ITEMDESCR: menuData.ITEMDESCR || null,
+    ITEMDESCR: menuData.DESCR || menuData.ITEMDESCR || null,
     ISSPECIAL: menuData.ISSPECIAL ?? 0,
     SERVICEID: menuData.SERVICEID ?? menuData.serviceId ?? null,
-    OFFSER: menuData.OFFSER ?? 0,
+    OFFSER: menuData.ISOFFSER !== undefined ? menuData.ISOFFSER : (menuData.OFFSER ?? 0),
     CREATEDBY: createdByUserId,
   });
 
@@ -60,14 +60,15 @@ export const createMenu = async (menuData, createdByUserId) => {
 };
 
 export const updateMenu = async (MENUITEMID, menuData, changedByUserId) => {
+  const offserVal = menuData.ISOFFSER !== undefined ? menuData.ISOFFSER : (menuData.OFFSER !== undefined ? menuData.OFFSER : null);
   await updateMenuRepository({
     MENUITEMID,
     SHORTNAME: menuData.SHORTNAME,
     ITEMNAME: menuData.ITEMNAME,
-    ITEMDESCR: menuData.ITEMDESCR || null,
+    ITEMDESCR: menuData.DESCR || menuData.ITEMDESCR || null,
     ISSPECIAL: menuData.ISSPECIAL ?? 0,
     SERVICEID: menuData.SERVICEID !== undefined ? menuData.SERVICEID : (menuData.serviceId !== undefined ? menuData.serviceId : null),
-    OFFSER: menuData.OFFSER !== undefined ? menuData.OFFSER : null,
+    OFFSER: offserVal,
     STATUS: menuData.STATUS || 'ACT',
     CHANGEDBY: changedByUserId,
     CHGREASON: menuData.CHGREASON || null,

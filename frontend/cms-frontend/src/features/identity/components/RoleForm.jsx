@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { PrimaryBtn, GhostBtn } from '../../../components/ui/Buttons';
 import { LightInput, FieldLabel, ErrMsg } from '../../../components/ui/FormComponents';
 
-export function RoleForm({ onSubmit, loading, onCancel }) {
+export function RoleForm({ onSubmit, loading, onCancel, roles = [] }) {
   const [formData, setFormData] = useState({
     USERID: '',
     ROLEID: '',
@@ -20,7 +20,7 @@ export function RoleForm({ onSubmit, loading, onCancel }) {
     }
 
     if (!formData.ROLEID || isNaN(parseInt(formData.ROLEID, 10)) || parseInt(formData.ROLEID, 10) <= 0) {
-      newErrors.ROLEID = 'Valid Role ID is required';
+      newErrors.ROLEID = 'Please select or enter a valid Role';
     }
 
     setErrors(newErrors);
@@ -63,13 +63,28 @@ export function RoleForm({ onSubmit, loading, onCancel }) {
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <FieldLabel required>Role ID</FieldLabel>
-        <LightInput 
-          type="number"
-          value={formData.ROLEID} 
-          onChange={(val) => handleChange('ROLEID', val)} 
-          placeholder="Enter numeric Role ID" 
-        />
+        <FieldLabel required>System Role</FieldLabel>
+        {roles && roles.length > 0 ? (
+          <select
+            value={formData.ROLEID}
+            onChange={(e) => handleChange('ROLEID', e.target.value)}
+            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 outline-none focus:ring-2 focus:ring-orange-500/30"
+          >
+            <option value="">-- Select Role --</option>
+            {roles.map((r) => (
+              <option key={r.ROLEID} value={r.ROLEID}>
+                {r.ROLENAME} ({r.ROLECODE})
+              </option>
+            ))}
+          </select>
+        ) : (
+          <LightInput 
+            type="number"
+            value={formData.ROLEID} 
+            onChange={(val) => handleChange('ROLEID', val)} 
+            placeholder="Enter numeric Role ID" 
+          />
+        )}
         {errors.ROLEID && <ErrMsg>{errors.ROLEID}</ErrMsg>}
       </div>
 

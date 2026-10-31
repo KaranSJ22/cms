@@ -1,11 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-
-const KEYBOARD_ROWS = [
-  ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-"],
-  ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
-  ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
-  ["Z", "X", "C", "V", "B", "N", "M"],
-];
+import VirtualKeyboard from "./common/VirtualKeyboard";
 
 export default function KioskScanHero({
   inputRef,
@@ -210,56 +204,17 @@ export default function KioskScanHero({
             </div>
           )}
 
-          {/* Touch QWERTY Keyboard */}
-          <div className="space-y-2 mb-4">
-            {KEYBOARD_ROWS.map((row, rIdx) => (
-              <div key={rIdx} className="flex justify-center gap-1.5 md:gap-2">
-                {row.map((char) => (
-                  <button
-                    key={char}
-                    type="button"
-                    onClick={() => handleCharClick(char)}
-                    className="flex-1 max-w-[58px] h-12 md:h-14 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-mono font-bold text-base md:text-lg rounded-xl border border-slate-700 shadow transition-all cursor-pointer flex items-center justify-center"
-                  >
-                    {char}
-                  </button>
-                ))}
-              </div>
-            ))}
-          </div>
-
-          {/* Control Bar: Clear, Backspace, Submit */}
-          <div className="grid grid-cols-4 gap-2 pt-1">
-            <button
-              type="button"
-              onClick={handleClear}
-              className="h-12 md:h-14 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 font-bold text-xs md:text-sm rounded-xl border border-slate-700 transition-all cursor-pointer uppercase tracking-wider"
-            >
-              Clear
-            </button>
-            <button
-              type="button"
-              onClick={handleBackspace}
-              className="h-12 md:h-14 bg-slate-800 hover:bg-slate-700 active:scale-95 text-amber-300 font-bold text-base md:text-lg rounded-xl border border-slate-700 transition-all cursor-pointer flex items-center justify-center gap-1"
-            >
-              <span>⌫</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={loading || !identifier.trim()}
-              className="col-span-2 h-12 md:h-14 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 active:scale-95 text-slate-950 font-black text-sm md:text-base rounded-xl shadow-lg shadow-emerald-500/20 transition-all cursor-pointer flex items-center justify-center gap-2 uppercase tracking-wide"
-            >
-              {loading ? (
-                <span>Verifying...</span>
-              ) : (
-                <>
-                  <span>Verify & Proceed</span>
-                  <span>➔</span>
-                </>
-              )}
-            </button>
-          </div>
+          {/* Reusable Touch Virtual Keyboard */}
+          <VirtualKeyboard
+            onChar={handleCharClick}
+            onBackspace={handleBackspace}
+            onClear={handleClear}
+            onSubmit={handleSubmit}
+            submitLabel="Verify & Proceed ➔"
+            submitDisabled={!identifier.trim()}
+            loading={loading}
+            uppercaseOnly={true}
+          />
         </div>
       )}
     </div>

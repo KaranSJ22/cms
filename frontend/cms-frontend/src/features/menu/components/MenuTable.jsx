@@ -64,8 +64,8 @@ export function MenuTable({ menus, loading, error, onEdit }) {
                   </span>
                 )}
               </td>
-              <td className="px-4 py-3 text-slate-500 truncate max-w-[250px]" title={menu.ITEMDESCR}>
-                {menu.ITEMDESCR || '-'}
+              <td className="px-4 py-3 text-slate-500 truncate max-w-[250px]" title={menu.DESCR || menu.ITEMDESCR}>
+                {menu.DESCR || menu.ITEMDESCR || '-'}
               </td>
               <td className="px-4 py-3 text-center">
                 <div className="flex flex-wrap items-center justify-center gap-1">
@@ -74,12 +74,12 @@ export function MenuTable({ menus, loading, error, onEdit }) {
                       Special
                     </span>
                   )}
-                  {menu.OFFSER === 1 && (
+                  {(menu.ISOFFSER === 1 || menu.OFFSER === 1) && (
                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[0.65rem] font-bold bg-emerald-100 text-emerald-700 uppercase tracking-wide">
                       Official
                     </span>
                   )}
-                  {menu.ISSPECIAL !== 1 && menu.OFFSER !== 1 && (
+                  {menu.ISSPECIAL !== 1 && menu.ISOFFSER !== 1 && menu.OFFSER !== 1 && (
                     <span className="text-slate-300">-</span>
                   )}
                 </div>

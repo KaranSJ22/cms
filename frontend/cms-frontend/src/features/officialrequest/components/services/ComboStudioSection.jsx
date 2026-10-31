@@ -118,11 +118,6 @@ export default function ComboStudioSection({
             grossTotal={grossTotal}
             handlingCharge={handlingCharge}
             onHandlingChange={onHandlingChange}
-            comboPrice={comboForm.COMBOPRICE}
-            onComboPriceChange={(val) =>
-              setComboForm({ ...comboForm, COMBOPRICE: val })
-            }
-            onSyncSuggested={onSyncSuggestedPrice}
           />
 
           {/* Bottom Action Footer */}

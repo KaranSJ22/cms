@@ -70,7 +70,7 @@ export const assignRoleUsingProcedure = async ({
   VALIDFROM = null,
   VALIDUNTIL = null,
 }) => {
-  await pool.execute("CALL CMSASSIGNCONSROL(?, ?, ?, ?, ?)", [
+  await pool.execute("CALL CMSASSIGNUSERROLE(?, ?, ?, ?, ?)", [
     USERID,
     ROLEID,
     ASSIGNEDBY,
@@ -82,7 +82,7 @@ export const assignRoleUsingProcedure = async ({
 };
 
 export const getUserRolesByUserId = async (USERID) => {
-  const [resultSets] = await pool.execute("CALL CMSLISTCONSROL(?)", [USERID]);
+  const [resultSets] = await pool.execute("CALL CMSLISTUSERROL(?)", [USERID]);
 
   return resultSets[0] || [];
 };

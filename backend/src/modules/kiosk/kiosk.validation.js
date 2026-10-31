@@ -28,11 +28,20 @@ export const kioskBookSchema = z.object({
     SERVICEDATE: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Service date must be in YYYY-MM-DD format"),
     ITEMS: z.array(
       z.object({
-        DAYMENUID: z.coerce.number().int().positive(),
-        MENUITEMID: z.coerce.number().int().positive(),
-        QTY: z.coerce.number().int().min(1).max(10),
+        DAYMENUID: z.coerce.number().int().positive().optional(),
+        dayMenuId: z.coerce.number().int().positive().optional(),
+        MENUITEMID: z.coerce.number().int().positive().optional(),
+        menuItemId: z.coerce.number().int().positive().optional(),
+        QTY: z.coerce.number().int().min(1).max(10).optional(),
+        qty: z.coerce.number().int().min(1).max(10).optional(),
       })
     ).min(1, "At least one menu item is required"),
+    OFFLINEUUID: z.string().optional(),
+    offlineUuid: z.string().optional(),
+    KIOSKCODE: z.string().optional(),
+    kioskCode: z.string().optional(),
+    CANTEENID: z.coerce.number().int().positive().optional(),
+    canteenId: z.coerce.number().int().positive().optional(),
   }),
 });
 export const kioskUpdateBookingSchema = z.object({
@@ -62,5 +71,42 @@ export const kioskCancelSchema = z.object({
 export const kioskHeartbeatSchema = z.object({
   body: z.object({
     KIOSKID: z.coerce.number().int().positive("Kiosk ID is required"),
+  }),
+});
+
+// Hardware Kiosk Fleet Schemas (SYSADM)
+export const listKioskDevicesSchema = z.object({
+  query: z.object({
+    canteenId: z.coerce.number().int().positive().optional(),
+  }),
+});
+
+export const registerKioskDeviceSchema = z.object({
+  body: z.object({
+    DEVICECODE: z.string().trim().min(3).max(30),
+    DEVICENAME: z.string().trim().min(2).max(100),
+    IPADDRESS: z.string().trim().min(7).max(45),
+    MACADDRESS: z.string().trim().max(17).nullable().optional(),
+    CANTEENID: z.coerce.number().int().positive(),
+    KIOSKTYPE: z.enum(["STAFF_COUNTER", "EMP_SELF_SERVICE"], {
+      errorMap: () => ({ message: "Invalid Kiosk Type. Must be STAFF_COUNTER or EMP_SELF_SERVICE" }),
+    }),
+  }),
+});
+
+export const kioskIdParamSchema = z.object({
+  params: z.object({
+    id: z.coerce.number().int().positive("Invalid Kiosk ID"),
+  }),
+});
+
+export const updateKioskStatusSchema = z.object({
+  params: z.object({
+    id: z.coerce.number().int().positive("Invalid Kiosk ID"),
+  }),
+  body: z.object({
+    STATUSID: z.coerce.number().int().refine((val) => [10, 11].includes(val), {
+      message: "Status ID must be 10 (ACT) or 11 (DIS)",
+    }),
   }),
 });
