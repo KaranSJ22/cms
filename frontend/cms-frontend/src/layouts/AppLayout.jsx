@@ -9,7 +9,7 @@ import ISROHeader from '../components/layout/ISROHeader'
 import AppSidebar from '../components/layout/AppSidebar'
 
 export default function AppLayout() {
-  const { user, customer } = useAuth()
+  const { user, customer, activeCanteenId } = useAuth()
   const perms = usePermissions()
   const navigate = useNavigate()
   const location = useLocation()
@@ -47,10 +47,14 @@ export default function AppLayout() {
 
   useEffect(() => {
     if (!hasWalletTab) return
-    fetchWithdrawals({ status: 'REQ' })
+    const params = { status: 'REQ' }
+    if (activeCanteenId) {
+      params.canteenId = activeCanteenId
+    }
+    fetchWithdrawals(params)
       .then((data) => setPendingWithdrawals(Array.isArray(data) ? data.length : 0))
       .catch(() => {})
-  }, [hasWalletTab])
+  }, [hasWalletTab, activeCanteenId])
 
   const handleTab = useCallback(
     (key) => {

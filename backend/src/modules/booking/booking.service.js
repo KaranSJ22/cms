@@ -1,163 +1,7 @@
 import * as bookingRepository from "./booking.repository.js";
 import * as daymenuService from "../daymenu/daymenu.service.js";
-import { pool } from "../../db/connection.js";
 import { BadRequestError, NotFoundError, ForbiddenError } from "../../common/errors/appError.js";
 import { isPastCutoff, toMySQLDate } from "../../utils/dateTime.js";
-
-// ===========================================================================
-// RAW SQL PROTOTYPING & WORKFLOW HELPERS (Pre-Stored Procedure Stage)
-// ===========================================================================
-
-/**
- * Resolves an auto-generated unique number from CMSGENAUTO within an open connection.
- */
-async function genAutoNo(conn, tableName, columnName) {
-  await conn.execute(`CALL CMSGENAUTO(?, ?, @__autono)`, [tableName, columnName]);
-  const [[row]] = await conn.execute(`SELECT @__autono AS AUTONO`);
-  return row.AUTONO;
-}
-
-/**
- * Atomically adjusts wallet balance and creates an immutable audit transaction
- * for pre-booking incremental edits (refunds on cancellations, charges on additions).
- * Zero RESERVEDAMT hold logic is used.
- */
-async function adjustBookingWalletLedger(conn, {
-  customerId,
-  bookingId,
-  amountDiff, // negative = refund, positive = charge
-  userId,
-  remarks,
-}) {
-  if (!amountDiff || amountDiff === 0) return;
-
-  const [[cust]] = await conn.query(
-    `SELECT C.CUSTOMERID, CT.CTYPECODE
-     FROM CMS_CUSTOMER C
-     JOIN CMS_CUSTTYPE CT ON CT.CTYPEID = C.CTYPEID
-     WHERE C.CUSTOMERID = ?`,
-    [customerId]
-  );
-
-  if (!cust || !["CNT", "VIS", "CONTEMP", "VISITOR"].includes(cust.CTYPECODE)) {
-    return;
-  }
-
-  const [[wallet]] = await conn.query(
-    `SELECT W.WALLETID, W.BALANCE
-     FROM CMS_WALLET W
-     JOIN CMS_STATUS ST ON ST.STATUSID = W.STATUSID
-     WHERE W.CUSTOMERID = ? AND ST.STATUSCODE = 'ACT'
-     FOR UPDATE`,
-    [customerId]
-  );
-
-  if (!wallet) {
-    throw new BadRequestError("Active wallet not found for customer");
-  }
-
-  const currentBal = Number(wallet.BALANCE);
-
-  if (amountDiff < 0) {
-    // Refund to wallet balance
-    const refundAmt = Math.abs(amountDiff);
-    const newBal = Number((currentBal + refundAmt).toFixed(2));
-
-    await conn.query(
-      `UPDATE CMS_WALLET SET BALANCE = ? WHERE WALLETID = ?`,
-      [newBal, wallet.WALLETID]
-    );
-
-    const refNo = await genAutoNo(conn, "CMS_WALLETTRAN", "REFNO");
-
-    await conn.query(
-      `INSERT INTO CMS_WALLETTRAN
-       (WALLETID, BOOKINGID, TRANSTYPE, SOURCECODE, AMOUNT, BALBEFORE, BALAFTER,
-        PAYMENTMETHOD, REFNO, STATUSID, CREATEDBY, REMARKS)
-       VALUES (?, ?, 'CREDIT', 'REFUND', ?, ?, ?, 'WALLET', ?, 40, ?, ?)`,
-      [
-        wallet.WALLETID,
-        bookingId,
-        refundAmt,
-        currentBal,
-        newBal,
-        refNo,
-        userId,
-        remarks || "Pre-booking modification refund",
-      ]
-    );
-  } else {
-    // Additional debit from wallet balance
-    const chargeAmt = amountDiff;
-    if (chargeAmt > currentBal) {
-      throw new BadRequestError(
-        `Insufficient available wallet balance (Required: ₹${chargeAmt}, Available: ₹${currentBal})`
-      );
-    }
-
-    const newBal = Number((currentBal - chargeAmt).toFixed(2));
-
-    await conn.query(
-      `UPDATE CMS_WALLET SET BALANCE = ? WHERE WALLETID = ?`,
-      [newBal, wallet.WALLETID]
-    );
-
-    const refNo = await genAutoNo(conn, "CMS_WALLETTRAN", "REFNO");
-
-    await conn.query(
-      `INSERT INTO CMS_WALLETTRAN
-       (WALLETID, BOOKINGID, TRANSTYPE, SOURCECODE, AMOUNT, BALBEFORE, BALAFTER,
-        PAYMENTMETHOD, REFNO, STATUSID, CREATEDBY, REMARKS)
-       VALUES (?, ?, 'DEBIT', 'BOOKING', ?, ?, ?, 'WALLET', ?, 44, ?, ?)`,
-      [
-        wallet.WALLETID,
-        bookingId,
-        chargeAmt,
-        currentBal,
-        newBal,
-        refNo,
-        userId,
-        remarks || "Pre-booking modification additional charge",
-      ]
-    );
-  }
-}
-
-/**
- * Helper to record booking history snapshot inside a transaction.
- */
-async function recordBookingHistory(conn, bookingId, changedBy, changeReason) {
-  const [histResult] = await conn.query(
-    `INSERT INTO CMS_BOOKHIST (
-       BOOKID, BOOKNO, BOOKTYPEID, CUSTOMERID, SERVICEID, SERVICEDATE,
-       STATUSID, BOOKSEQNO, TOTALITEMS, TOTALQTY, TOTALAMOUNT,
-       BOOKEDBY, BOOKEDAT, CANCELLEDBY, CANCELLEDAT, SERVEDBY, SERVEDAT, NOSHOWAT,
-       REMARKS, CREATEDBY, CREATEDAT, UPDATEDBY, UPDATEDAT, CHANGEDBY, CHGREASON
-     )
-     SELECT 
-       BOOKID, BOOKNO, BOOKTYPEID, CUSTOMERID, SERVICEID, SERVICEDATE,
-       STATUSID, BOOKSEQNO, TOTALITEMS, TOTALQTY, TOTALAMOUNT,
-       BOOKEDBY, BOOKEDAT, CANCELLEDBY, CANCELLEDAT, SERVEDBY, SERVEDAT, NOSHOWAT,
-       REMARKS, CREATEDBY, CREATEDAT, UPDATEDBY, UPDATEDAT, ?, ?
-     FROM CMS_BOOKING
-     WHERE BOOKID = ?`,
-    [changedBy, changeReason, bookingId]
-  );
-
-  const bookHistId = histResult.insertId;
-
-  await conn.query(
-    `INSERT INTO CMS_BOOKITMHST (
-       BOOKHISTID, BOOKITEMID, DAYMENUID, MENUITEMID, QTY, RATE, AMOUNT, REMARKS, STATUSID
-     )
-     SELECT ?, BOOKITEMID, DAYMENUID, MENUITEMID, QTY, RATE, AMOUNT, REMARKS, STATUSID
-     FROM CMS_BOOKITEM
-     WHERE BOOKID = ?`,
-    [bookHistId, bookingId]
-  );
-
-  return bookHistId;
-}
 
 /**
  * Finds an active pre-booking (STATUSID = 30 'CRT') for a customer in a specific canteen + service + serving date.
@@ -168,60 +12,12 @@ export const getActiveBookingForContext = async ({
   serviceId,
   serviceDate,
 }) => {
-  const [headers] = await pool.query(
-    `SELECT 
-       B.BOOKID, B.BOOKNO, B.BOOKTYPEID, BT.BOOKTYPECODE, BT.BOOKTYPENAME,
-       B.CUSTOMERID, CT.CTYPECODE, C.DISPNAME AS CUSTOMERNAME,
-       B.SERVICEID, S.SERVNAME, B.SERVICEDATE,
-       B.STATUSID, ST.STATUSCODE, B.TOTALITEMS, B.TOTALQTY, B.TOTALAMOUNT,
-       B.BOOKEDBY, B.BOOKEDAT, B.BOOKEDAT AS BOOKEDON, B.REMARKS,
-       DS.CANTEENID, CAN.CANTEENNAME,
-       MIN(DM.BOOKUNTIL) AS MIN_BOOKUNTIL,
-       MAX(DM.BOOKUNTIL) AS MAX_BOOKUNTIL
-     FROM CMS_BOOKING B
-     JOIN CMS_BOOKTYPE BT ON BT.BOOKTYPEID = B.BOOKTYPEID
-     JOIN CMS_STATUS ST ON ST.STATUSID = B.STATUSID
-     JOIN CMS_CUSTOMER C ON C.CUSTOMERID = B.CUSTOMERID
-     JOIN CMS_CUSTTYPE CT ON CT.CTYPEID = C.CTYPEID
-     JOIN CMS_SERVICE S ON S.SERVICEID = B.SERVICEID
-     JOIN CMS_BOOKITEM BI ON BI.BOOKID = B.BOOKID
-     JOIN CMS_DAYMENU DM ON DM.DAYMENUID = BI.DAYMENUID
-     JOIN CMS_DAYSLOT DS ON DS.DAYSLOTID = DM.DAYSLOTID
-     JOIN CMS_CANTEEN CAN ON CAN.CANTEENID = DS.CANTEENID
-     WHERE B.CUSTOMERID = ?
-       AND DS.CANTEENID = ?
-       AND B.SERVICEID = ?
-       AND B.SERVICEDATE = ?
-       AND ST.STATUSCODE = 'CRT'
-     GROUP BY B.BOOKID, BT.BOOKTYPECODE, BT.BOOKTYPENAME, CT.CTYPECODE, C.DISPNAME, S.SERVNAME, ST.STATUSCODE, DS.CANTEENID, CAN.CANTEENNAME
-     LIMIT 1`,
-    [customerId, canteenId, serviceId, serviceDate]
-  );
-
-  if (!headers || headers.length === 0) {
-    return null;
-  }
-
-  const header = headers[0];
-
-  const [items] = await pool.query(
-    `SELECT 
-       BI.BOOKITEMID, BI.BOOKID, BI.DAYMENUID, BI.MENUITEMID, MI.MENUCODE, MI.ITEMNAME, MI.SHORTNAME,
-       BI.QTY, BI.RATE, BI.AMOUNT, BI.REMARKS, BI.STATUSID, ST.STATUSCODE,
-       DM.BOOKUNTIL, DM.CANCELUNTIL, DM.MAXQTY, DM.AVAILQTY
-     FROM CMS_BOOKITEM BI
-     JOIN CMS_MENUITEM MI ON MI.MENUITEMID = BI.MENUITEMID
-     JOIN CMS_STATUS ST ON ST.STATUSID = BI.STATUSID
-     JOIN CMS_DAYMENU DM ON DM.DAYMENUID = BI.DAYMENUID
-     WHERE BI.BOOKID = ?
-     ORDER BY BI.BOOKITEMID ASC`,
-    [header.BOOKID]
-  );
-
-  return {
-    HEADER: header,
-    ITEMS: items || [],
-  };
+  return await bookingRepository.getActiveBookingContext({
+    customerId,
+    canteenId,
+    serviceId,
+    serviceDate: toMySQLDate(serviceDate),
+  });
 };
 
 /**
@@ -235,193 +31,38 @@ export const addBookingItemIncremental = async ({
   customerId,
   ctypeCode,
 }) => {
-  const conn = await pool.getConnection();
-  try {
-    await conn.beginTransaction();
-
-    // 1. Lock and validate booking header
-    const [[booking]] = await conn.query(
-      `SELECT B.*, ST.STATUSCODE, BT.BOOKTYPECODE
-       FROM CMS_BOOKING B
-       JOIN CMS_STATUS ST ON ST.STATUSID = B.STATUSID
-       JOIN CMS_BOOKTYPE BT ON BT.BOOKTYPEID = B.BOOKTYPEID
-       WHERE B.BOOKID = ? FOR UPDATE`,
-      [bookingId]
-    );
-
-    if (!booking) {
-      throw new NotFoundError("Booking not found");
-    }
-
-    if (customerId && booking.CUSTOMERID !== customerId) {
-      throw new ForbiddenError("You do not have permission to modify this booking");
-    }
-
-    if (booking.BOOKTYPECODE !== "PB") {
-      throw new BadRequestError("Only pre-bookings can be updated");
-    }
-
-    if (booking.STATUSCODE !== "CRT") {
-      throw new BadRequestError("Booking is not in an editable state");
-    }
-
-    // 2. Lock and validate DayMenu item
-    const [[dayMenu]] = await conn.query(
-      `SELECT DM.*, MI.ITEMNAME, DS.SERVICEID, DS.SERVICEDATE AS SERVDATE, DS.SERVICEDATE, DS.CANTEENID,
-              DM_ST.STATUSCODE AS DM_STATUS, DS_ST.STATUSCODE AS DS_STATUS, DS_AST.STATUSCODE AS DS_APPRSTATUS
-       FROM CMS_DAYMENU DM
-       JOIN CMS_DAYSLOT DS ON DS.DAYSLOTID = DM.DAYSLOTID
-       JOIN CMS_MENUITEM MI ON MI.MENUITEMID = DM.MENUITEMID
-       JOIN CMS_STATUS DM_ST ON DM_ST.STATUSID = DM.STATUSID
-       JOIN CMS_STATUS DS_ST ON DS_ST.STATUSID = DS.STATUSID
-       JOIN CMS_STATUS DS_AST ON DS_AST.STATUSID = DS.APPRSTATUSID
-       WHERE DM.DAYMENUID = ? FOR UPDATE`,
-      [dayMenuId]
-    );
-
-    if (!dayMenu) {
-      throw new NotFoundError("Day menu item not found");
-    }
-
-    if (dayMenu.DM_STATUS !== "ACT" || dayMenu.DS_STATUS !== "ACT" || dayMenu.DS_APPRSTATUS !== "APR" || dayMenu.ISPREBOOK !== 1) {
-      throw new BadRequestError("This item is not available for pre-booking");
-    }
-
-    const dmDate = dayMenu.SERVICEDATE || dayMenu.SERVDATE;
-    const dmDateStr = toMySQLDate(dmDate);
-    const bkDateStr = toMySQLDate(booking.SERVICEDATE);
-    if (dayMenu.SERVICEID !== booking.SERVICEID || dmDateStr !== bkDateStr) {
-      throw new BadRequestError("Item does not match the service and date of this booking");
-    }
-
-    // Check BOOKUNTIL cutoff
-    if (isPastCutoff(dayMenu.BOOKUNTIL)) {
-      throw new BadRequestError(`Booking window has closed for item: ${dayMenu.ITEMNAME}`);
-    }
-
-    if (qty < 1 || qty > dayMenu.MAXQTY) {
-      throw new BadRequestError(`Quantity must be between 1 and ${dayMenu.MAXQTY}`);
-    }
-
-    // 3. Capacity check
-    if (dayMenu.AVAILQTY !== null) {
-      const [[capacity]] = await conn.query(
-        `SELECT COALESCE(SUM(BI.QTY), 0) AS BOOKEDQTY
-         FROM CMS_BOOKITEM BI
-         JOIN CMS_BOOKING B ON B.BOOKID = BI.BOOKID
-         JOIN CMS_STATUS BST ON BST.STATUSID = B.STATUSID
-         WHERE BI.DAYMENUID = ?
-           AND BI.STATUSID IN (30, 32, 34)
-           AND BST.STATUSCODE IN ('CRT', 'SRV', 'NOS')
-           AND B.BOOKID <> ?`,
-        [dayMenuId, bookingId]
-      );
-
-      if (Number(capacity.BOOKEDQTY) + qty > dayMenu.AVAILQTY) {
-        throw new BadRequestError(`Insufficient available capacity for item: ${dayMenu.ITEMNAME}`);
-      }
-    }
-
-    // 4. Resolve item price
-    const [[priceRow]] = await conn.query(
-      `SELECT d.PRICE
-       FROM CMS_ITEMPRICE p
-       JOIN CMS_STATUS IP_ST ON IP_ST.STATUSID = p.STATUSID
-       JOIN CMS_ITMPRICDT d ON d.ITEMPRICEID = p.ITEMPRICEID
-       JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = d.CTYPEID
-       WHERE p.MENUITEMID = ?
-         AND (ct.CTYPECODE = ? OR ct.CTYPECODE = 'VIS')
-         AND p.EFFFROM <= ?
-         AND IP_ST.STATUSCODE = 'ACT'
-       ORDER BY p.EFFFROM DESC, CASE WHEN ct.CTYPECODE = ? THEN 1 ELSE 2 END
-       LIMIT 1`,
-      [dayMenu.MENUITEMID, ctypeCode, booking.SERVICEDATE, ctypeCode]
-    );
-
-    const rate = priceRow ? Number(priceRow.PRICE) : 0;
-    const amount = Number((qty * rate).toFixed(2));
-
-    // 5. Check if item already exists in booking (active or cancelled)
-    const [[existingItem]] = await conn.query(
-      `SELECT BI.*, ST.STATUSCODE
-       FROM CMS_BOOKITEM BI
-       JOIN CMS_STATUS ST ON ST.STATUSID = BI.STATUSID
-       WHERE BI.BOOKID = ? AND BI.DAYMENUID = ? FOR UPDATE`,
-      [bookingId, dayMenuId]
-    );
-
-    if (existingItem && existingItem.STATUSCODE === "CRT") {
-      throw new BadRequestError("This item already exists in the booking; use quantity update instead");
-    }
-
-    // 6. Handle wallet balance deduction for CNT / VIS
-    await adjustBookingWalletLedger(conn, {
-      customerId: booking.CUSTOMERID,
-      bookingId,
-      amountDiff: amount,
-      userId,
-      remarks: `Pre-booking item added: ${dayMenu.ITEMNAME}`,
-    });
-
-    let bookItemId;
-    if (existingItem) {
-      // Reactivate previously cancelled item with new quantity and rate
-      await conn.query(
-        `UPDATE CMS_BOOKITEM
-         SET QTY = ?, RATE = ?, AMOUNT = ?, STATUSID = 30, UPDATEDAT = CURRENT_TIMESTAMP
-         WHERE BOOKITEMID = ?`,
-        [qty, rate, amount, existingItem.BOOKITEMID]
-      );
-      bookItemId = existingItem.BOOKITEMID;
-    } else {
-      // Insert new booking item
-      const [insertRes] = await conn.query(
-        `INSERT INTO CMS_BOOKITEM (BOOKID, DAYMENUID, MENUITEMID, QTY, RATE, AMOUNT, STATUSID)
-         VALUES (?, ?, ?, ?, ?, ?, 30)`,
-        [bookingId, dayMenuId, dayMenu.MENUITEMID, qty, rate, amount]
-      );
-      bookItemId = insertRes.insertId;
-    }
-
-    // 7. Recalculate header totals for all active items
-    const [[totals]] = await conn.query(
-      `SELECT COUNT(*) AS TOTALITEMS, COALESCE(SUM(QTY), 0) AS TOTALQTY, COALESCE(SUM(AMOUNT), 0) AS TOTALAMOUNT
-       FROM CMS_BOOKITEM
-       WHERE BOOKID = ? AND STATUSID = 30`,
-      [bookingId]
-    );
-
-    await conn.query(
-      `UPDATE CMS_BOOKING
-       SET TOTALITEMS = ?, TOTALQTY = ?, TOTALAMOUNT = ?, UPDATEDBY = ?, UPDATEDAT = CURRENT_TIMESTAMP
-       WHERE BOOKID = ?`,
-      [totals.TOTALITEMS, totals.TOTALQTY, totals.TOTALAMOUNT, userId, bookingId]
-    );
-
-    // 8. Log audit history
-    await recordBookingHistory(conn, bookingId, userId, `Added item: ${dayMenu.ITEMNAME} (Qty: ${qty})`);
-
-    await conn.commit();
-
-    return {
-      BOOKITEMID: bookItemId,
-      BOOKID: bookingId,
-      DAYMENUID: dayMenuId,
-      QTY: qty,
-      RATE: rate,
-      AMOUNT: amount,
-      STATUSID: 30,
-      STATUSCODE: "CRT",
-      TOTALITEMS: totals.TOTALITEMS,
-      TOTALQTY: totals.TOTALQTY,
-      TOTALAMOUNT: totals.TOTALAMOUNT,
-    };
-  } catch (error) {
-    await conn.rollback();
-    throw error;
-  } finally {
-    conn.release();
+  const bookingInfo = await bookingRepository.getBooking(bookingId);
+  if (!bookingInfo || !bookingInfo.HEADER) {
+    throw new NotFoundError("Booking not found");
   }
+  if (customerId && Number(bookingInfo.HEADER.CUSTOMERID) !== Number(customerId)) {
+    throw new ForbiddenError("You do not have permission to modify this booking");
+  }
+
+  await bookingRepository.addBookingItemIncremental({
+    bookingId: Number(bookingId),
+    dayMenuId: Number(dayMenuId),
+    qty: Number(qty),
+    userId: Number(userId),
+    remarks: `Added item (Qty: ${qty})`,
+  });
+
+  const refreshed = await bookingRepository.getBooking(bookingId);
+  const addedItem = (refreshed.ITEMS || []).find((i) => Number(i.DAYMENUID) === Number(dayMenuId));
+
+  return {
+    BOOKITEMID: addedItem?.BOOKITEMID,
+    BOOKID: Number(bookingId),
+    DAYMENUID: Number(dayMenuId),
+    QTY: addedItem?.QTY || Number(qty),
+    RATE: Number(addedItem?.RATE || 0),
+    AMOUNT: Number(addedItem?.AMOUNT || 0),
+    STATUSID: 30,
+    STATUSCODE: "CRT",
+    TOTALITEMS: refreshed.HEADER.TOTALITEMS,
+    TOTALQTY: refreshed.HEADER.TOTALQTY,
+    TOTALAMOUNT: refreshed.HEADER.TOTALAMOUNT,
+  };
 };
 
 /**
@@ -435,155 +76,36 @@ export const updateBookingItemQtyIncremental = async ({
   customerId,
   ctypeCode,
 }) => {
-  const conn = await pool.getConnection();
-  try {
-    await conn.beginTransaction();
-
-    // 1. Lock and validate booking header
-    const [[booking]] = await conn.query(
-      `SELECT B.*, ST.STATUSCODE, BT.BOOKTYPECODE
-       FROM CMS_BOOKING B
-       JOIN CMS_STATUS ST ON ST.STATUSID = B.STATUSID
-       JOIN CMS_BOOKTYPE BT ON BT.BOOKTYPEID = B.BOOKTYPEID
-       WHERE B.BOOKID = ? FOR UPDATE`,
-      [bookingId]
-    );
-
-    if (!booking) {
-      throw new NotFoundError("Booking not found");
-    }
-
-    if (customerId && booking.CUSTOMERID !== customerId) {
-      throw new ForbiddenError("You do not have permission to modify this booking");
-    }
-
-    if (booking.BOOKTYPECODE !== "PB") {
-      throw new BadRequestError("Only pre-bookings can be updated");
-    }
-
-    if (booking.STATUSCODE !== "CRT") {
-      throw new BadRequestError("Booking is not in an editable state");
-    }
-
-    // 2. Lock and validate booking item
-    const [[item]] = await conn.query(
-      `SELECT BI.*, ST.STATUSCODE, DM.BOOKUNTIL, DM.MAXQTY, DM.AVAILQTY, MI.ITEMNAME
-       FROM CMS_BOOKITEM BI
-       JOIN CMS_STATUS ST ON ST.STATUSID = BI.STATUSID
-       JOIN CMS_DAYMENU DM ON DM.DAYMENUID = BI.DAYMENUID
-       JOIN CMS_MENUITEM MI ON MI.MENUITEMID = BI.MENUITEMID
-       WHERE BI.BOOKITEMID = ? AND BI.BOOKID = ? FOR UPDATE`,
-      [itemId, bookingId]
-    );
-
-    if (!item) {
-      throw new NotFoundError("Booking item not found");
-    }
-
-    if (item.STATUSCODE !== "CRT") {
-      throw new BadRequestError("Cannot modify quantity of a cancelled or served item");
-    }
-
-    // Check BOOKUNTIL cutoff
-    if (isPastCutoff(item.BOOKUNTIL)) {
-      throw new BadRequestError(`Booking window has closed for item: ${item.ITEMNAME}`);
-    }
-
-    if (qty < 1 || qty > item.MAXQTY) {
-      throw new BadRequestError(`Quantity must be between 1 and ${item.MAXQTY}`);
-    }
-
-    const qtyDiff = qty - item.QTY;
-    if (qtyDiff === 0) {
-      await conn.rollback();
-      return {
-        BOOKITEMID: item.BOOKITEMID,
-        BOOKID: bookingId,
-        QTY: item.QTY,
-        RATE: item.RATE,
-        AMOUNT: item.AMOUNT,
-        STATUSID: item.STATUSID,
-        STATUSCODE: item.STATUSCODE,
-      };
-    }
-
-    // 3. Capacity check if increasing quantity
-    if (qtyDiff > 0 && item.AVAILQTY !== null) {
-      const [[capacity]] = await conn.query(
-        `SELECT COALESCE(SUM(BI.QTY), 0) AS BOOKEDQTY
-         FROM CMS_BOOKITEM BI
-         JOIN CMS_BOOKING B ON B.BOOKID = BI.BOOKID
-         JOIN CMS_STATUS BST ON BST.STATUSID = B.STATUSID
-         WHERE BI.DAYMENUID = ?
-           AND BI.STATUSID IN (30, 32, 34)
-           AND BST.STATUSCODE IN ('CRT', 'SRV', 'NOS')
-           AND B.BOOKID <> ?`,
-        [item.DAYMENUID, bookingId]
-      );
-
-      if (Number(capacity.BOOKEDQTY) + qty > item.AVAILQTY) {
-        throw new BadRequestError(`Insufficient available capacity for item: ${item.ITEMNAME}`);
-      }
-    }
-
-    const newAmount = Number((qty * Number(item.RATE)).toFixed(2));
-    const amountDiff = Number((qtyDiff * Number(item.RATE)).toFixed(2));
-
-    // 4. Handle wallet balance adjustment
-    await adjustBookingWalletLedger(conn, {
-      customerId: booking.CUSTOMERID,
-      bookingId,
-      amountDiff: amountDiff,
-      userId,
-      remarks: `Pre-booking item qty updated (${item.QTY} -> ${qty}): ${item.ITEMNAME}`,
-    });
-
-    // 5. Update item
-    await conn.query(
-      `UPDATE CMS_BOOKITEM
-       SET QTY = ?, AMOUNT = ?, UPDATEDAT = CURRENT_TIMESTAMP
-       WHERE BOOKITEMID = ?`,
-      [qty, newAmount, itemId]
-    );
-
-    // 6. Recalculate header totals
-    const [[totals]] = await conn.query(
-      `SELECT COUNT(*) AS TOTALITEMS, COALESCE(SUM(QTY), 0) AS TOTALQTY, COALESCE(SUM(AMOUNT), 0) AS TOTALAMOUNT
-       FROM CMS_BOOKITEM
-       WHERE BOOKID = ? AND STATUSID = 30`,
-      [bookingId]
-    );
-
-    await conn.query(
-      `UPDATE CMS_BOOKING
-       SET TOTALITEMS = ?, TOTALQTY = ?, TOTALAMOUNT = ?, UPDATEDBY = ?, UPDATEDAT = CURRENT_TIMESTAMP
-       WHERE BOOKID = ?`,
-      [totals.TOTALITEMS, totals.TOTALQTY, totals.TOTALAMOUNT, userId, bookingId]
-    );
-
-    // 7. History logging
-    await recordBookingHistory(conn, bookingId, userId, `Updated ${item.ITEMNAME} quantity: ${item.QTY} -> ${qty}`);
-
-    await conn.commit();
-
-    return {
-      BOOKITEMID: item.BOOKITEMID,
-      BOOKID: bookingId,
-      QTY: qty,
-      RATE: item.RATE,
-      AMOUNT: newAmount,
-      STATUSID: item.STATUSID,
-      STATUSCODE: item.STATUSCODE,
-      TOTALITEMS: totals.TOTALITEMS,
-      TOTALQTY: totals.TOTALQTY,
-      TOTALAMOUNT: totals.TOTALAMOUNT,
-    };
-  } catch (error) {
-    await conn.rollback();
-    throw error;
-  } finally {
-    conn.release();
+  const bookingInfo = await bookingRepository.getBooking(bookingId);
+  if (!bookingInfo || !bookingInfo.HEADER) {
+    throw new NotFoundError("Booking not found");
   }
+  if (customerId && Number(bookingInfo.HEADER.CUSTOMERID) !== Number(customerId)) {
+    throw new ForbiddenError("You do not have permission to modify this booking");
+  }
+
+  await bookingRepository.updateBookingItemQtyIncremental({
+    itemId: Number(itemId),
+    qty: Number(qty),
+    userId: Number(userId),
+    remarks: `Updated quantity to ${qty}`,
+  });
+
+  const refreshed = await bookingRepository.getBooking(bookingId);
+  const updatedItem = (refreshed.ITEMS || []).find((i) => Number(i.BOOKITEMID) === Number(itemId));
+
+  return {
+    BOOKITEMID: Number(itemId),
+    BOOKID: Number(bookingId),
+    QTY: updatedItem?.QTY || Number(qty),
+    RATE: Number(updatedItem?.RATE || 0),
+    AMOUNT: Number(updatedItem?.AMOUNT || 0),
+    STATUSID: updatedItem?.STATUSID || 30,
+    STATUSCODE: updatedItem?.STATUSCODE || "CRT",
+    TOTALITEMS: refreshed.HEADER.TOTALITEMS,
+    TOTALQTY: refreshed.HEADER.TOTALQTY,
+    TOTALAMOUNT: refreshed.HEADER.TOTALAMOUNT,
+  };
 };
 
 /**
@@ -598,214 +120,47 @@ export const cancelBookingItemIncremental = async ({
   customerId,
   ctypeCode,
 }) => {
-  const conn = await pool.getConnection();
-  try {
-    await conn.beginTransaction();
-
-    // 1. Lock and validate booking header
-    const [[booking]] = await conn.query(
-      `SELECT B.*, ST.STATUSCODE, BT.BOOKTYPECODE
-       FROM CMS_BOOKING B
-       JOIN CMS_STATUS ST ON ST.STATUSID = B.STATUSID
-       JOIN CMS_BOOKTYPE BT ON BT.BOOKTYPEID = B.BOOKTYPEID
-       WHERE B.BOOKID = ? FOR UPDATE`,
-      [bookingId]
-    );
-
-    if (!booking) {
-      throw new NotFoundError("Booking not found");
-    }
-
-    if (customerId && booking.CUSTOMERID !== customerId) {
-      throw new ForbiddenError("You do not have permission to modify this booking");
-    }
-
-    if (booking.STATUSCODE !== "CRT") {
-      throw new BadRequestError("Booking is not in an editable state");
-    }
-
-    // 2. Lock and validate booking item
-    const [[item]] = await conn.query(
-      `SELECT BI.*, ST.STATUSCODE, DM.BOOKUNTIL, MI.ITEMNAME
-       FROM CMS_BOOKITEM BI
-       JOIN CMS_STATUS ST ON ST.STATUSID = BI.STATUSID
-       JOIN CMS_DAYMENU DM ON DM.DAYMENUID = BI.DAYMENUID
-       JOIN CMS_MENUITEM MI ON MI.MENUITEMID = BI.MENUITEMID
-       WHERE BI.BOOKITEMID = ? AND BI.BOOKID = ? FOR UPDATE`,
-      [itemId, bookingId]
-    );
-
-    if (!item) {
-      throw new NotFoundError("Booking item not found");
-    }
-
-    if (item.STATUSCODE !== "CRT") {
-      throw new BadRequestError("Item is already cancelled or served");
-    }
-
-    // Check BOOKUNTIL cutoff
-    if (isPastCutoff(item.BOOKUNTIL)) {
-      throw new BadRequestError(`Cancellation window has closed for item: ${item.ITEMNAME}`);
-    }
-
-    // 3. Soft-cancel the item (STATUSID = 33 'CAN')
-    await conn.query(
-      `UPDATE CMS_BOOKITEM
-       SET STATUSID = 33, REMARKS = COALESCE(?, REMARKS), UPDATEDAT = CURRENT_TIMESTAMP
-       WHERE BOOKITEMID = ?`,
-      [cancelReason || "Cancelled by customer", itemId]
-    );
-
-    // 4. Release / refund wallet balance for this item
-    await adjustBookingWalletLedger(conn, {
-      customerId: booking.CUSTOMERID,
-      bookingId,
-      amountDiff: -Number(item.AMOUNT),
-      userId,
-      remarks: `Pre-booking item cancelled refund: ${item.ITEMNAME}`,
-    });
-
-    // 5. Check remaining active items in booking
-    const [[activeTotals]] = await conn.query(
-      `SELECT COUNT(*) AS ACTIVECOUNT, COALESCE(SUM(QTY), 0) AS TOTALQTY, COALESCE(SUM(AMOUNT), 0) AS TOTALAMOUNT
-       FROM CMS_BOOKITEM
-       WHERE BOOKID = ? AND STATUSID = 30`,
-      [bookingId]
-    );
-
-    let bookingCancelled = false;
-
-    if (Number(activeTotals.ACTIVECOUNT) === 0) {
-      // All items have been cancelled -> cancel the whole booking
-      bookingCancelled = true;
-      await conn.query(
-        `UPDATE CMS_BOOKING
-         SET STATUSID = 33, TOTALITEMS = 0, TOTALQTY = 0, TOTALAMOUNT = 0,
-             CANCELLEDBY = ?, CANCELLEDAT = CURRENT_TIMESTAMP,
-             REMARKS = COALESCE(?, REMARKS), UPDATEDBY = ?, UPDATEDAT = CURRENT_TIMESTAMP
-         WHERE BOOKID = ?`,
-        [userId, cancelReason || "All items cancelled", userId, bookingId]
-      );
-
-      await conn.query(
-        `DELETE FROM CMS_PBACTIVE WHERE BOOKID = ?`,
-        [bookingId]
-      );
-    } else {
-      // Update header totals with remaining items
-      await conn.query(
-        `UPDATE CMS_BOOKING
-         SET TOTALITEMS = ?, TOTALQTY = ?, TOTALAMOUNT = ?, UPDATEDBY = ?, UPDATEDAT = CURRENT_TIMESTAMP
-         WHERE BOOKID = ?`,
-        [activeTotals.ACTIVECOUNT, activeTotals.TOTALQTY, activeTotals.TOTALAMOUNT, userId, bookingId]
-      );
-    }
-
-    // 6. History logging
-    await recordBookingHistory(conn, bookingId, userId, `Cancelled item: ${item.ITEMNAME}`);
-
-    await conn.commit();
-
-    return {
-      BOOKITEMID: item.BOOKITEMID,
-      BOOKID: bookingId,
-      STATUSID: 33,
-      STATUSCODE: "CAN",
-      BOOKING_CANCELLED: bookingCancelled,
-      TOTALITEMS: activeTotals.ACTIVECOUNT,
-      TOTALQTY: activeTotals.TOTALQTY,
-      TOTALAMOUNT: activeTotals.TOTALAMOUNT,
-    };
-  } catch (error) {
-    await conn.rollback();
-    throw error;
-  } finally {
-    conn.release();
+  const bookingInfo = await bookingRepository.getBooking(bookingId);
+  if (!bookingInfo || !bookingInfo.HEADER) {
+    throw new NotFoundError("Booking not found");
   }
+  if (customerId && Number(bookingInfo.HEADER.CUSTOMERID) !== Number(customerId)) {
+    throw new ForbiddenError("You do not have permission to modify this booking");
+  }
+
+  const result = await bookingRepository.cancelBookingItemIncremental({
+    itemId: Number(itemId),
+    userId: Number(userId),
+    remarks: cancelReason || "Cancelled by customer",
+  });
+
+  const refreshed = await bookingRepository.getBooking(bookingId);
+  const isBookingCancelled = result?.RESULT === "BOOKING_CANCELLED" || refreshed?.HEADER?.STATUSCODE === "CAN";
+
+  return {
+    BOOKITEMID: Number(itemId),
+    BOOKID: Number(bookingId),
+    STATUSID: 33,
+    STATUSCODE: "CAN",
+    BOOKING_CANCELLED: isBookingCancelled,
+    TOTALITEMS: isBookingCancelled ? 0 : refreshed?.HEADER?.TOTALITEMS || 0,
+    TOTALQTY: isBookingCancelled ? 0 : refreshed?.HEADER?.TOTALQTY || 0,
+    TOTALAMOUNT: isBookingCancelled ? 0 : refreshed?.HEADER?.TOTALAMOUNT || 0,
+  };
 };
 
 /**
  * Fetches published menu items and holidays for a weekly date range.
  */
 export const getWeeklyPublishedMenuRaw = async ({ canteenId, startDate, endDate, ctypeCode }) => {
-  const menuQuery = `
-    SELECT
-        DS.CANTEENID,
-        C.CANTEENNAME,
-        DS.DAYSLOTID,
-        S.SERVICEID,
-        S.SERVCODE,
-        S.SERVNAME,
-        DATE_FORMAT(DS.SERVICEDATE, '%Y-%m-%d') AS SERVDATE,
-        DATE_FORMAT(DS.SERVICEDATE, '%Y-%m-%d') AS SERVICEDATE,
-        DS.STARTTIME,
-        DS.ENDTIME,
-        DM.DAYMENUID,
-        DM.DMENUNO,
-        MI.MENUITEMID,
-        MI.MENUCODE,
-        MI.SHORTNAME,
-        MI.ITEMNAME,
-        MI.DESCR AS ITEMDESCR,
-        MI.DESCR,
-        DM.ISBASE,
-        DM.ISSPECIAL,
-        DM.ISPREBOOK,
-        DM.ISKIOSK,
-        DM.AVAILQTY,
-        DM.MAXQTY,
-        DM.BOOKUNTIL,
-        DM.CANCELUNTIL,
-        (
-            SELECT IPD.PRICE
-            FROM   CMS_ITEMPRICE IP
-            JOIN   CMS_ITMPRICDT IPD ON IPD.ITEMPRICEID = IP.ITEMPRICEID
-            JOIN   CMS_CUSTTYPE CT ON CT.CTYPEID = IPD.CTYPEID
-            JOIN   CMS_STATUS IPST ON IPST.STATUSID = IP.STATUSID
-            WHERE  IP.MENUITEMID  = MI.MENUITEMID
-              AND  IP.EFFFROM    <= DS.SERVICEDATE
-              AND  IPST.STATUSCODE = 'ACT'
-              AND  (CT.CTYPECODE = ? OR CT.CTYPECODE = 'VIS')
-            ORDER BY 
-              IP.EFFFROM DESC,
-              CASE WHEN CT.CTYPECODE = ? THEN 1 ELSE 2 END
-            LIMIT 1
-        ) AS DISPLAYPRICE
-    FROM CMS_DAYMENU DM
-    JOIN CMS_DAYSLOT DS  ON DS.DAYSLOTID  = DM.DAYSLOTID
-    JOIN CMS_SERVICE S   ON S.SERVICEID   = DS.SERVICEID
-    JOIN CMS_CANTEEN C   ON C.CANTEENID   = DS.CANTEENID
-    JOIN CMS_MENUITEM MI ON MI.MENUITEMID = DM.MENUITEMID
-    JOIN CMS_STATUS DS_ST ON DS_ST.STATUSID = DS.STATUSID
-    JOIN CMS_STATUS DS_AST ON DS_AST.STATUSID = DS.APPRSTATUSID
-    JOIN CMS_STATUS DM_ST ON DM_ST.STATUSID = DM.STATUSID
-    JOIN CMS_STATUS S_ST ON S_ST.STATUSID = S.STATUSID
-    JOIN CMS_STATUS MI_ST ON MI_ST.STATUSID = MI.STATUSID
-    WHERE DS.CANTEENID  = ?
-      AND DS.SERVICEDATE >= ?
-      AND DS.SERVICEDATE <= ?
-      AND DS_AST.STATUSCODE = 'APR'
-      AND DM_ST.STATUSCODE  = 'ACT'
-      AND DS_ST.STATUSCODE  = 'ACT'
-      AND S_ST.STATUSCODE   = 'ACT'
-      AND MI_ST.STATUSCODE  = 'ACT'
-      AND DM.ISPREBOOK      = 1
-    ORDER BY DS.SERVICEDATE, DS.STARTTIME, S.SERVNAME, DM.ISBASE DESC, MI.ITEMNAME
-  `;
-
-  const holidayQuery = `
-    SELECT HOLIDAYID, HOLIDAYNAME, DATE_FORMAT(HOLIDAYDATE, '%Y-%m-%d') AS HOLIDAYDATE, ISRECURRING
-    FROM CMS_HOLIDAY
-    WHERE STATUSID = 10
-      AND (
-        (HOLIDAYDATE >= ? AND HOLIDAYDATE <= ?)
-        OR ISRECURRING = 1
-      )
-  `;
-
-  const [[menuRows], [holidayRows]] = await Promise.all([
-    pool.query(menuQuery, [ctypeCode || "VIS", ctypeCode || "VIS", canteenId, startDate, endDate]),
-    pool.query(holidayQuery, [startDate, endDate]),
+  const [menuRows, holidayRows] = await Promise.all([
+    bookingRepository.getWeeklyMenuRange({
+      canteenId,
+      startDate,
+      endDate,
+      ctypeCode: ctypeCode || "VIS",
+    }),
+    bookingRepository.getHolidaysInRange(startDate, endDate),
   ]);
 
   return {
@@ -818,18 +173,11 @@ export const getWeeklyPublishedMenuRaw = async ({ canteenId, startDate, endDate,
  * Fetches existing bookings for a customer in a date range.
  */
 export const getExistingBookingsInRange = async ({ customerId, startDate, endDate }) => {
-  const [rows] = await pool.query(
-    `SELECT B.BOOKID, B.BOOKNO, B.SERVICEID, S.SERVNAME, DATE_FORMAT(B.SERVICEDATE, '%Y-%m-%d') AS SERVICEDATE, B.TOTALITEMS, B.TOTALQTY, B.TOTALAMOUNT, ST.STATUSCODE
-     FROM CMS_BOOKING B
-     JOIN CMS_SERVICE S ON S.SERVICEID = B.SERVICEID
-     JOIN CMS_STATUS ST ON ST.STATUSID = B.STATUSID
-     WHERE B.CUSTOMERID = ?
-       AND B.SERVICEDATE >= ?
-       AND B.SERVICEDATE <= ?
-       AND ST.STATUSCODE <> 'CAN'`,
-    [customerId, startDate, endDate]
-  );
-  return rows || [];
+  return await bookingRepository.getExistingBookingsInRange({
+    customerId,
+    startDate,
+    endDate,
+  });
 };
 
 /**
@@ -837,33 +185,13 @@ export const getExistingBookingsInRange = async ({ customerId, startDate, endDat
  */
 export const getBookingsByRfid = async (rfidHash, serviceId = null) => {
   // 1. Validate the RFID access key to get the customer
-  const [keyRows] = await pool.query("CALL CMSVALIDATEACCKEY(?)", [rfidHash]);
-  const customer = keyRows[0]?.[0];
+  const customer = await bookingRepository.validateAccessKey(rfidHash);
   if (!customer?.CUSTOMERID) {
     return [];
   }
 
   // 2. Fetch active ('CRT') bookings for today
-  let query = `
-    SELECT B.BOOKID, B.BOOKNO, B.CUSTOMERID, B.SERVICEID, B.SERVICEDATE,
-           B.STATUSID, ST.STATUSCODE, B.TOTALITEMS, B.TOTALQTY, B.TOTALAMOUNT
-    FROM CMS_BOOKING B
-    JOIN CMS_STATUS ST ON ST.STATUSID = B.STATUSID
-    WHERE B.CUSTOMERID = ?
-      AND B.SERVICEDATE = CURDATE()
-      AND ST.STATUSCODE = 'CRT'
-  `;
-  const params = [customer.CUSTOMERID];
-
-  if (serviceId) {
-    query += ` AND B.SERVICEID = ?`;
-    params.push(Number(serviceId));
-  }
-
-  query += ` ORDER BY B.BOOKID DESC`;
-
-  const [bookings] = await pool.query(query, params);
-  return bookings;
+  return await bookingRepository.getTodayActiveBookings(customer.CUSTOMERID, serviceId);
 };
 
 // ===========================================================================
@@ -894,56 +222,8 @@ export const getActiveBooking = async ({ customerId, canteenId, serviceId, servi
   return activeBooking;
 };
 
-/**
- * Prototyping query for listing bookings with strictly scoped Canteen filtering.
- * Returns customer LOGINID and canteen metadata for operational audit.
- */
-async function fetchBookingsWithCanteenFilter({
-  PCUSTOMERID = null,
-  PSERVICEID = null,
-  PSTARTDATE = null,
-  PENDDATE = null,
-  PSTATUS = null,
-  PCANTEENID = null,
-}) {
-  const [rows] = await pool.query(
-    `SELECT 
-        B.BOOKID, B.BOOKNO, BT.BOOKTYPECODE, 
-        B.CUSTOMERID, C.DISPNAME AS CUSTOMERNAME, CU.LOGINID,
-        BK_CAN.CANTEENID, BK_CAN.CANTEENNAME,
-        B.SERVICEID, S.SERVNAME, B.SERVICEDATE,
-        B.STATUSID, ST.STATUSCODE AS STATUSCODE, B.TOTALITEMS, B.TOTALQTY, B.TOTALAMOUNT
-    FROM CMS_BOOKING B
-    INNER JOIN CMS_BOOKTYPE BT ON BT.BOOKTYPEID = B.BOOKTYPEID
-    INNER JOIN CMS_STATUS ST ON ST.STATUSID = B.STATUSID
-    INNER JOIN CMS_CUSTOMER C ON C.CUSTOMERID = B.CUSTOMERID
-    LEFT JOIN CMS_USER CU ON CU.USERID = C.USERID
-    INNER JOIN CMS_SERVICE S ON S.SERVICEID = B.SERVICEID
-    LEFT JOIN (
-        SELECT BI.BOOKID, DS.CANTEENID, C.CANTEENNAME
-        FROM CMS_BOOKITEM BI
-        JOIN CMS_DAYMENU DM ON DM.DAYMENUID = BI.DAYMENUID
-        JOIN CMS_DAYSLOT DS ON DS.DAYSLOTID = DM.DAYSLOTID
-        JOIN CMS_CANTEEN C  ON C.CANTEENID  = DS.CANTEENID
-        GROUP BY BI.BOOKID, DS.CANTEENID, C.CANTEENNAME
-    ) BK_CAN ON BK_CAN.BOOKID = B.BOOKID
-    WHERE (? IS NULL OR B.CUSTOMERID = ?)
-      AND (? IS NULL OR B.SERVICEID = ?)
-      AND (? IS NULL OR B.SERVICEDATE >= ?)
-      AND (? IS NULL OR B.SERVICEDATE <= ?)
-      AND (? IS NULL OR ST.STATUSCODE = ?)
-      AND (? IS NULL OR BK_CAN.CANTEENID = ?)
-    ORDER BY B.SERVICEDATE DESC, B.BOOKNO DESC`,
-    [
-      PCUSTOMERID, PCUSTOMERID,
-      PSERVICEID, PSERVICEID,
-      PSTARTDATE, PSTARTDATE,
-      PENDDATE, PENDDATE,
-      PSTATUS, PSTATUS,
-      PCANTEENID, PCANTEENID,
-    ]
-  );
-  return rows || [];
+async function fetchBookingsWithCanteenFilter(filters) {
+  return await bookingRepository.listBookings(filters);
 }
 
 export const listBookings = async (filters, user = null) => {
@@ -973,14 +253,32 @@ export const listBookings = async (filters, user = null) => {
   if (finalFilters.page || finalFilters.pageSize) {
     const customerId = finalFilters.PCUSTOMERID || finalFilters.customerId;
     if (customerId) {
-      return await bookingRepository.listBookingHistory({
+      const pageNum = Number(finalFilters.page) || 1;
+      const pageSizeNum = Number(finalFilters.pageSize) || 10;
+
+      const rows = await bookingRepository.listBookingHistory({
         customerId,
         startDate: finalFilters.PSTARTDATE || finalFilters.startDate || null,
         endDate: finalFilters.PENDDATE || finalFilters.endDate || null,
         statusCode: finalFilters.PSTATUS || finalFilters.status || null,
-        page: finalFilters.page || 1,
-        pageSize: finalFilters.pageSize || 10,
+        page: pageNum,
+        pageSize: pageSizeNum,
       });
+
+      const totalRows = Number(rows[0]?.TOTALROWS || 0);
+      const limit = Number(rows[0]?.PAGESIZE || pageSizeNum);
+      const totalPages = Number(rows[0]?.TOTALPAGES || (totalRows > 0 ? Math.ceil(totalRows / limit) : 1));
+      const currentPage = Number(rows[0]?.CURRENTPAGE || pageNum);
+
+      return {
+        rows,
+        pagination: {
+          totalRows,
+          currentPage,
+          pageSize: limit,
+          totalPages,
+        },
+      };
     }
   }
 
@@ -1196,17 +494,7 @@ export const resolveBooking = async (identifier, canteenId = null, serviceId = n
   // If identifier is a 10-digit phone number, resolve to CUSTOMERID first (Supports visitors without RFID)
   const isPhoneNumber = /^[6-9]\d{9}$/.test(targetIdentifier);
   if (isPhoneNumber) {
-    const [[matchedCustomer]] = await pool.query(
-      `SELECT c.CUSTOMERID 
-       FROM CMS_CUSTOMER c
-       LEFT JOIN CMS_VISITOR v ON v.CUSTOMERID = c.CUSTOMERID
-       LEFT JOIN CMS_USER u ON u.USERID = c.USERID
-       WHERE (v.MOBILENO = ? OR u.MOBILENO = ?)
-         AND c.STATUSID = 10
-       LIMIT 1`,
-      [targetIdentifier, targetIdentifier]
-    );
-
+    const matchedCustomer = await bookingRepository.findCustomerByPhone(targetIdentifier);
     if (matchedCustomer?.CUSTOMERID) {
       targetIdentifier = String(matchedCustomer.CUSTOMERID);
     }

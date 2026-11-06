@@ -91,7 +91,14 @@ export class WalletController {
     const { paymentMethod, refNo, remarks } = req.validated.body;
     const processedBy = req.user.USERID;
 
-    const data = await WalletService.approveWithdrawal(walletWdId, processedBy, paymentMethod, refNo, remarks);
+    const data = await WalletService.approveWithdrawal(
+      walletWdId,
+      processedBy,
+      paymentMethod,
+      refNo,
+      remarks,
+      req.user
+    );
     return sendSuccess(res, data, "Withdrawal approved successfully");
   });
 
@@ -100,14 +107,24 @@ export class WalletController {
     const { remarks } = req.validated.body;
     const processedBy = req.user.USERID;
 
-    const data = await WalletService.rejectWithdrawal(walletWdId, processedBy, remarks);
+    const data = await WalletService.rejectWithdrawal(walletWdId, processedBy, remarks, req.user);
     return sendSuccess(res, data, "Withdrawal rejected successfully");
   });
 
   static fetchWithdrawals = asyncHandler(async (req, res) => {
-    const { customerId, status } = req.validated.query || {};
+    const { customerId, status, canteenId } = req.validated.query || {};
 
-    const data = await WalletService.listWithdrawals(customerId ?? null, status ?? null);
+    const effectiveCanteenId =
+      canteenId ||
+      req.kiosk?.canteenId ||
+      (req.headers["x-canteen-id"] ? Number(req.headers["x-canteen-id"]) : null);
+
+    const data = await WalletService.listWithdrawals(
+      customerId ?? null,
+      status ?? null,
+      effectiveCanteenId ? Number(effectiveCanteenId) : null,
+      req.user
+    );
     return sendSuccess(res, data, "Withdrawal requests fetched successfully");
   });
 

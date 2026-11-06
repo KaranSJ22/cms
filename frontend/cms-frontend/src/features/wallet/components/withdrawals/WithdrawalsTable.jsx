@@ -44,6 +44,7 @@ export default function WithdrawalsTable({
               <tr>
                 <th className="p-3.5">Req ID</th>
                 <th className="p-3.5">Customer Name</th>
+                <th className="p-3.5">Default Canteen</th>
                 <th className="p-3.5">Requested Amount</th>
                 <th className="p-3.5">Requested On</th>
                 <th className="p-3.5">Remarks</th>
@@ -60,14 +61,24 @@ export default function WithdrawalsTable({
                       #{wid}
                     </td>
                     <td className="p-3.5 font-bold text-slate-800">
-                      {w.CUSTOMERNAME || w.DISPNAME || `Customer #${w.CUSTOMERID}`}
+                      <div>{w.CUSTOMERNAME || w.DISPNAME || `Customer #${w.CUSTOMERID}`}</div>
+                      {w.CONTCODE && (
+                        <div className="text-[0.68rem] text-slate-400 font-mono font-normal">
+                          {w.CONTCODE}
+                        </div>
+                      )}
+                    </td>
+                    <td className="p-3.5">
+                      <span className="px-2.5 py-1 rounded-full text-[0.7rem] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                        {w.CANTEENNAME || `Canteen #${w.CANTEENID || "—"}`}
+                      </span>
                     </td>
                     <td className="p-3.5 font-mono font-black text-rose-600">
                       {formatINR(w.AMOUNT || w.WITHDRAWAMT)}
                     </td>
                     <td className="p-3.5 text-slate-500 font-mono">
-                      {w.CREATEDAT
-                        ? new Date(w.CREATEDAT).toLocaleDateString()
+                      {w.REQUESTEDAT || w.CREATEDAT
+                        ? new Date(w.REQUESTEDAT || w.CREATEDAT).toLocaleDateString()
                         : "—"}
                     </td>
                     <td className="p-3.5 text-slate-600 max-w-xs truncate">

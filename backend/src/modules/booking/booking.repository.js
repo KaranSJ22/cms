@@ -1,11 +1,5 @@
 import { pool } from "../../db/connection.js";
 
-/**
- * Booking Repository
- * Centralized data access layer for customer meal bookings.
- * 100% Stored Procedures (SPs).
- */
-
 export const getBooking = async (bookingId) => {
   const [resultSets] = await pool.query("CALL CMSGETBOOK(?)", [bookingId]);
   return {
@@ -27,29 +21,15 @@ export const listBookings = async ({
   PSTATUS = null,
   PCANTEENID = null,
 }) => {
-  try {
-    const [resultSets] = await pool.query("CALL CMSLISTBOOK(?, ?, ?, ?, ?, ?)", [
-      PCUSTOMERID,
-      PSERVICEID,
-      PSTARTDATE,
-      PENDDATE,
-      PSTATUS,
-      PCANTEENID,
-    ]);
-    return resultSets[0] || [];
-  } catch (err) {
-    if (err.code === "ER_SP_WRONG_NO_OF_ARGS" || err.errno === 1318) {
-      const [resultSets] = await pool.query("CALL CMSLISTBOOK(?, ?, ?, ?, ?)", [
-        PCUSTOMERID,
-        PSERVICEID,
-        PSTARTDATE,
-        PENDDATE,
-        PSTATUS,
-      ]);
-      return resultSets[0] || [];
-    }
-    throw err;
-  }
+  const [resultSets] = await pool.query("CALL CMSLISTBOOK(?, ?, ?, ?, ?, ?)", [
+    PCUSTOMERID,
+    PSERVICEID,
+    PSTARTDATE,
+    PENDDATE,
+    PSTATUS,
+    PCANTEENID,
+  ]);
+  return resultSets[0] || [];
 };
 
 export const listBookingHistory = async ({
@@ -60,69 +40,18 @@ export const listBookingHistory = async ({
   page = 1,
   pageSize = 10,
 }) => {
-  let resultSets;
-  let isLegacySp = false;
-
-  try {
-    const [res] = await pool.query(
-      "CALL CMSLISTBOOKHISTORY(?, ?, ?, ?, ?, ?)",
-      [
-        customerId,
-        startDate,
-        endDate,
-        statusCode,
-        Number(page) || 1,
-        Number(pageSize) || 10,
-      ]
-    );
-    resultSets = res;
-  } catch (err) {
-    if (err.code === "ER_SP_WRONG_NO_OF_ARGS" || err.errno === 1318) {
-      const [res] = await pool.query(
-        "CALL CMSLISTBOOKHISTORY(?, ?, ?, ?)",
-        [customerId, startDate, endDate, statusCode]
-      );
-      resultSets = res;
-      isLegacySp = true;
-    } else {
-      throw err;
-    }
-  }
-
-  const rows = resultSets[0] || [];
-  if (isLegacySp) {
-    const totalRows = rows.length;
-    const limit = Number(pageSize) || 10;
-    const currentPage = Number(page) || 1;
-    const totalPages = totalRows > 0 ? Math.ceil(totalRows / limit) : 1;
-    const offset = (currentPage - 1) * limit;
-    const pagedRows = rows.slice(offset, offset + limit);
-
-    return {
-      rows: pagedRows,
-      pagination: {
-        totalRows,
-        currentPage,
-        pageSize: limit,
-        totalPages,
-      },
-    };
-  }
-
-  const totalRows = rows[0]?.TOTALROWS || 0;
-  const totalPages = rows[0]?.TOTALPAGES || (totalRows > 0 ? Math.ceil(totalRows / (Number(pageSize) || 10)) : 1);
-  const currentPage = rows[0]?.CURRENTPAGE || Number(page) || 1;
-  const limit = rows[0]?.PAGESIZE || Number(pageSize) || 10;
-
-  return {
-    rows,
-    pagination: {
-      totalRows: Number(totalRows),
-      currentPage: Number(currentPage),
-      pageSize: Number(limit),
-      totalPages: Number(totalPages),
-    },
-  };
+  const [resultSets] = await pool.query(
+    "CALL CMSLISTBOOKHISTORY(?, ?, ?, ?, ?, ?)",
+    [
+      customerId,
+      startDate,
+      endDate,
+      statusCode,
+      Number(page) || 1,
+      Number(pageSize) || 10,
+    ]
+  );
+  return resultSets[0] || [];
 };
 
 export const createBooking = async ({
@@ -277,4 +206,156 @@ export const resolveBookingByIdentifier = async (
     HEADER: results[0][0],
     ITEMS: results[1] || [],
   };
+};
+
+/**
+ * Finds an active confirmed pre-booking header and items in a meal slot context
+ */
+export const getActiveBookingContext = async ({
+  customerId,
+  canteenId = null,
+  serviceId,
+  serviceDate,
+}) => {
+  const [results] = await pool.query(
+    "CALL CMSGETACTIVEBOOKINGCTX(?, ?, ?, ?)",
+    [
+      Number(customerId),
+      canteenId ? Number(canteenId) : null,
+      Number(serviceId),
+      serviceDate,
+    ]
+  );
+
+  if (!results || !results[0] || results[0].length === 0) {
+    return null;
+  }
+
+  return {
+    HEADER: results[0][0],
+    ITEMS: results[1] || [],
+  };
+};
+
+/**
+ * Atomically adds an item to an active booking with price check, capacity check, and wallet settlement
+ */
+export const addBookingItemIncremental = async ({
+  bookingId,
+  dayMenuId,
+  qty,
+  userId,
+  remarks = null,
+}) => {
+  const [results] = await pool.query(
+    "CALL CMSADDBOOKINGITEM(?, ?, ?, ?, ?)",
+    [Number(bookingId), Number(dayMenuId), Number(qty), Number(userId), remarks || null]
+  );
+  return results[0]?.[0] || null;
+};
+
+/**
+ * Atomically updates quantity of an item in an active booking with capacity check and wallet delta
+ */
+export const updateBookingItemQtyIncremental = async ({
+  itemId,
+  qty,
+  userId,
+  remarks = null,
+}) => {
+  const [results] = await pool.query(
+    "CALL CMSUPDBOOKINGITEMQTY(?, ?, ?, ?)",
+    [Number(itemId), Number(qty), Number(userId), remarks || null]
+  );
+  return results[0]?.[0] || null;
+};
+
+/**
+ * Atomically cancels an item in an active booking with cutoff check and wallet refund
+ */
+export const cancelBookingItemIncremental = async ({
+  itemId,
+  userId,
+  remarks = null,
+}) => {
+  const [results] = await pool.query(
+    "CALL CMSCANCELBOOKINGITEM(?, ?, ?)",
+    [Number(itemId), Number(userId), remarks || null]
+  );
+  return results[0]?.[0] || null;
+};
+
+/**
+ * Fetches published menu items for a weekly date range with customer pricing
+ */
+export const getWeeklyMenuRange = async ({
+  canteenId,
+  startDate,
+  endDate,
+  ctypeCode = "VIS",
+}) => {
+  const [results] = await pool.query(
+    "CALL CMSVIEWMENURANGE(?, ?, ?, ?)",
+    [Number(canteenId), startDate, endDate, ctypeCode || "VIS"]
+  );
+  return results[0] || [];
+};
+
+/**
+ * Fetches holidays within a date range (including recurring holidays)
+ */
+export const getHolidaysInRange = async (startDate, endDate) => {
+  const [results] = await pool.query(
+    "CALL CMSLISTHOLIDAYSRANGE(?, ?)",
+    [startDate, endDate]
+  );
+  return results[0] || [];
+};
+
+/**
+ * Fetches existing non-cancelled bookings for a customer in a date range
+ */
+export const getExistingBookingsInRange = async ({
+  customerId,
+  startDate,
+  endDate,
+}) => {
+  const [results] = await pool.query(
+    "CALL CMSLISTBOOKINGSOFRANGE(?, ?, ?)",
+    [Number(customerId), startDate, endDate]
+  );
+  return results[0] || [];
+};
+
+/**
+ * Fetches active confirmed bookings for today for a customer (used by RFID scanning)
+ */
+export const getTodayActiveBookings = async (customerId, serviceId = null) => {
+  const [results] = await pool.query(
+    "CALL CMSGETTODAYACTIVEBOOKINGS(?, ?)",
+    [Number(customerId), serviceId ? Number(serviceId) : null]
+  );
+  return results[0] || [];
+};
+
+/**
+ * Resolves a customer ID from user or visitor 10-digit mobile phone number
+ */
+export const findCustomerByPhone = async (phone) => {
+  const [results] = await pool.query(
+    "CALL CMSFINDCUSTBYPHONE(?)",
+    [String(phone).trim()]
+  );
+  return results[0]?.[0] || null;
+};
+
+/**
+ * Validates RFID access key value
+ */
+export const validateAccessKey = async (rfidHash) => {
+  const [results] = await pool.query(
+    "CALL CMSVALIDATEACCKEY(?)",
+    [String(rfidHash).trim()]
+  );
+  return results[0]?.[0] || null;
 };

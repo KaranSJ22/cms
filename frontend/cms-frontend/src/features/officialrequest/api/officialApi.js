@@ -145,3 +145,20 @@ export async function getOfficialKitchenPrepSummary(canteenId, date) {
   });
   return res.data.DATA;
 }
+
+export async function updateOfficialBookingFulfillment(bookingId, status) {
+  const res = await api.put(`/official-requests/kitchen-prep/bookings/${bookingId}/fulfillment`, {
+    STATUS: status,
+  });
+  return res.data.DATA;
+}
+
+export async function updateDishPrepStatus({ canteenId, date, menuItemId, status }) {
+  const res = await api.put("/official-requests/kitchen-prep/dishes/prep-status", {
+    CANTEENID: canteenId,
+    DATE: date,
+    MENUITEMID: menuItemId,
+    STATUS: status,
+  });
+  return res.data.DATA;
+}

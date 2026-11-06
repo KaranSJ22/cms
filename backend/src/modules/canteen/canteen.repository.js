@@ -1,12 +1,12 @@
 import { pool } from "../../db/connection.js";
 
 export const getCanteens = async ({ CENTERID = null } = {}) => {
-  const [resultSets] = await pool.execute("CALL CMSLISTCANTEEN(?)", [CENTERID]);
+  const [resultSets] = await pool.query("CALL CMSLISTCANTEEN(?)", [CENTERID]);
   return resultSets[0] || [];
 };
 
 export const getCanteenById = async (CANTEENID) => {
-  const [resultSets] = await pool.execute("CALL CMSGETCANTEEN(?)", [CANTEENID]);
+  const [resultSets] = await pool.query("CALL CMSGETCANTEEN(?)", [CANTEENID]);
   return resultSets[0]?.[0] || null;
 };
 
@@ -17,7 +17,7 @@ export const createCanteen = async ({
   LOCATION = null,
   USERID,
 }) => {
-  const [resultSets] = await pool.execute(
+  const [resultSets] = await pool.query(
     "CALL CMSADDCANTEEN(?, ?, ?, ?, ?)",
     [CENTERID, CANTEENCODE, CANTEENNAME, LOCATION, USERID]
   );
@@ -30,7 +30,7 @@ export const updateCanteen = async ({
   LOCATION = null,
   STATUSCODE = "ACT",
 }) => {
-  const [resultSets] = await pool.execute(
+  const [resultSets] = await pool.query(
     "CALL CMSUPDCANTEEN(?, ?, ?, ?)",
     [CANTEENID, CANTEENNAME, LOCATION, STATUSCODE]
   );
@@ -38,19 +38,27 @@ export const updateCanteen = async ({
 };
 
 export const deactivateCanteen = async (CANTEENID) => {
-  const [resultSets] = await pool.execute("CALL CMSDEACTCANTEEN(?)", [CANTEENID]);
+  const [resultSets] = await pool.query("CALL CMSDEACTCANTEEN(?)", [CANTEENID]);
   return resultSets[0]?.[0] || null;
 };
 
 export const listCenters = async () => {
-  const [resultSets] = await pool.execute("CALL CMSLISTCENTER()");
+  const [resultSets] = await pool.query("CALL CMSLISTCENTER()");
   return resultSets[0] || [];
 };
 
 export const createCenter = async ({ CENTERCODE, CENTERNAME, LOCATION = null }) => {
-  const [resultSets] = await pool.execute(
+  const [resultSets] = await pool.query(
     "CALL CMSADDCENTER(?, ?, ?)",
     [CENTERCODE, CENTERNAME, LOCATION]
   );
   return resultSets[0]?.[0] || null;
+};
+
+export const getResourceCanteenId = async (resourceType, id) => {
+  const [resultSets] = await pool.query(
+    "CALL CMSGETRESOURCECANTEEN(?, ?)",
+    [resourceType, Number(id)]
+  );
+  return resultSets[0]?.[0]?.CANTEENID || null;
 };

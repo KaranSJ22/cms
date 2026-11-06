@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import request from "supertest";
 import app from "../../../app.js";
 import { pool } from "../../../db/connection.js";
-import { getAuthHeader } from "../../../test/testHelpers.js";
+import { getAuthHeader, getFutureDate, getFutureDateTime } from "../../../test/testHelpers.js";
 
 describe("Day Menu Module: Security & RBAC Guards", () => {
   let sharedSlotId = 1;
@@ -49,8 +49,8 @@ describe("Day Menu Module: Security & RBAC Guards", () => {
             ISPREBOOK: 1,
             ISKIOSK: 1,
             MAXQTY: 10,
-            BOOKUNTIL: "2028-11-20T23:59:59",
-            CANCELUNTIL: "2028-11-20T22:00:00",
+            BOOKUNTIL: getFutureDateTime(14, "23:59:59"),
+            CANCELUNTIL: getFutureDateTime(14, "22:00:00"),
           },
         ],
       });
@@ -197,9 +197,9 @@ describe("Day Menu Module: Dynamic Lifecycle & Multi-Customer-Type Published Pri
   let testMenuItemId;
   let testDaySlotId;
 
-  const targetDate = "2028-11-20";
-  const bookUntil = "2028-11-20T23:59:59";
-  const cancelUntil = "2028-11-20T22:00:00";
+  const targetDate = getFutureDate(14);
+  const bookUntil = getFutureDateTime(14, "23:59:59");
+  const cancelUntil = getFutureDateTime(14, "22:00:00");
 
   beforeAll(async () => {
     managerAuth = await getAuthHeader("mgr1");
@@ -425,6 +425,93 @@ describe("Day Menu Module: Dynamic Lifecycle & Multi-Customer-Type Published Pri
       expect(publishedItem).toBeDefined();
       expect(Number(publishedItem.DISPLAYPRICE)).toBe(50.00);
     });
+
+    it("should allow Canteen Manager to bulk create weekly day menus with ISO-8601 timestamps (including Z) with HTTP 200", async () => {
+      const bulkStartDate = getFutureDate(21);
+      const res = await request(app)
+        .post("/api/day-menus/bulk")
+        .set(managerAuth)
+        .send({
+          CANTEENID: testCanteenId,
+          SERVICEID: testServiceId,
+          STARTDATE: bulkStartDate,
+          STARTTIME: "12:00",
+          ENDTIME: "14:30",
+          ACTION: "PUBLISH",
+          DAYS: [
+            {
+              DAYINDEX: 0,
+              STARTTIME: "12:00",
+              ENDTIME: "14:30",
+              OVERRIDEHOLIDAY: true,
+              ITEMS: [
+                {
+                  MENUITEMID: testMenuItemId,
+                  ISBASE: 1,
+                  ISSPECIAL: 0,
+                  ISPREBOOK: 1,
+                  ISKIOSK: 1,
+                  MAXQTY: 5,
+                  AVAILQTY: 100,
+                  BOOKUNTIL: `${bulkStartDate}T06:30:00.000Z`,
+                  CANCELUNTIL: `${bulkStartDate}T06:30:00.000Z`,
+                },
+              ],
+            },
+          ],
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.SUCCESS).toBe(true);
+      expect(Array.isArray(res.body.DATA)).toBe(true);
+      expect(res.body.DATA.length).toBe(1);
+      expect(res.body.DATA[0].itemsInserted).toBe(1);
+    });
+
+    it("should create day menus across all 7 days in a week without prematurely terminating after single day", async () => {
+      const bulkStartDate = getFutureDate(28);
+      const daysPayload = Array.from({ length: 7 }, (_, idx) => {
+        const dayDate = getFutureDate(28 + idx);
+        return {
+          DAYINDEX: idx,
+          STARTTIME: "12:00",
+          ENDTIME: "14:30",
+          OVERRIDEHOLIDAY: true,
+          ITEMS: [
+            {
+              MENUITEMID: testMenuItemId,
+              ISBASE: 1,
+              ISSPECIAL: 0,
+              ISPREBOOK: 1,
+              ISKIOSK: 1,
+              MAXQTY: 5,
+              AVAILQTY: 100,
+              BOOKUNTIL: `${dayDate}T06:30:00.000Z`,
+              CANCELUNTIL: `${dayDate}T06:30:00.000Z`,
+            },
+          ],
+        };
+      });
+
+      const res = await request(app)
+        .post("/api/day-menus/bulk")
+        .set(managerAuth)
+        .send({
+          CANTEENID: testCanteenId,
+          SERVICEID: testServiceId,
+          STARTDATE: bulkStartDate,
+          STARTTIME: "12:00",
+          ENDTIME: "14:30",
+          ACTION: "PUBLISH",
+          DAYS: daysPayload,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.SUCCESS).toBe(true);
+      expect(Array.isArray(res.body.DATA)).toBe(true);
+      expect(res.body.DATA.length).toBe(7);
+      expect(res.body.DATA.every((d) => d.itemsInserted === 1)).toBe(true);
+    });
   });
 });
 
@@ -435,9 +522,9 @@ describe("Day Menu Module: Business Rule Invariants", () => {
   let testSideItemId;
   let noBaseSlotId;
 
-  const targetDate = "2028-11-25";
-  const bookUntil = "2028-11-25T23:59:59";
-  const cancelUntil = "2028-11-25T22:00:00";
+  const targetDate = getFutureDate(15);
+  const bookUntil = getFutureDateTime(15, "23:59:59");
+  const cancelUntil = getFutureDateTime(15, "22:00:00");
 
   beforeAll(async () => {
     managerAuth = await getAuthHeader("mgr1");

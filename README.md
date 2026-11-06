@@ -1,235 +1,100 @@
-# ISRO Internal Canteen Management System
+# CanteenMitra - Canteen Management System for ISRO
 
-## Modules: Backend Foundation, Identity, Menu & Service, Booking, and Wallet
-
-This repository contains the backend implementation for the **ISRO Internal Canteen Management System (CMS)**.
-
-The current branch includes the foundational backend setup along with identity management, menu & service management, bookings, and wallet payments.
+CanteenMitra is an enterprise-grade canteen management system designed for ISRO centers. It provides advance meal pre-booking, multi-tiered customer pricing, menu planning, wallet management, official catering workflows, and paperless counter operations via RFID kiosks.
 
 ---
 
-## Project Overview
+## Architecture and Container Setup
 
-The ISRO Internal Canteen Management System is designed to manage canteen users, access control, service/menu configuration, day-wise menu availability, bookings, and wallet transactions.
+The entire central application runs in isolated Docker containers:
 
-The system follows a modular and scalable design suitable for an organizational environment.
-
-The database design separates:
-
-- `CMS_USER` — login identity
-- `CMS_CUSTOMER` — canteen identity
-- `CMS_USRROLE` — role assignment
-- Employee-specific profile tables such as `CMS_PERMEMP`, `CMS_CONTEMP`, and `CMS_OCEEMP`
-
-This separation allows a person to be only a system user, only a canteen customer, or both.
-
----
-
-## Current Scope
-
-This backend implementation includes:
-
-```txt
-Backend foundation
-Authentication & JWT authorization
-Role-based access control
-Common master APIs
-Identity and access read/write APIs
-User and Profile creation
-Menu and Service Management
-Day Slot and Day Menu Management
-Booking and Prebooking APIs
-Wallet and Top-up APIs
-Swagger API documentation
-```
+- **Frontend Container (`cms_frontend`):** React 19 SPA served via Nginx on port 80.
+- **Backend Container (`cms_backend`):** Node.js Express 5 application running on port 8080 under PM2.
+- **Database Container (`cms_db`):** MySQL 8.0 server running on port 3306, automatically migrated and seeded by the `cms_init_db` container on first startup.
 
 ---
 
 ## Tech Stack
 
-### Backend
-
-```txt
-Node.js
-Express.js
-JavaScript
-MySQL
-```
-
-### Backend Libraries
-
-```txt
-express              API framework
-dotenv               Environment variable management
-cors                 Frontend-backend communication
-helmet               Security headers
-mysql2               MySQL connection and stored procedure execution
-bcrypt               Password hashing
-jsonwebtoken         JWT authentication
-zod                  Input validation
-pino                 Application logging
-express-rate-limit   Login/API rate limiting
-dayjs                Date and time handling
-swagger-ui-express   Swagger API documentation
-swagger-jsdoc        OpenAPI documentation generation
-```
+| Component | Technology | Version | Description |
+| :--- | :--- | :--- | :--- |
+| **Frontend** | React | 19.2.8 | Single Page Application built with Vite 8 and TailwindCSS 4 |
+| **Routing** | React Router DOM | 7.18.2 | Declarative client-side routing with role-based route guards |
+| **Backend** | Express.js | 5.2.1 | REST API framework running on Node.js 18+ (ESM) |
+| **Database** | MySQL | 8.0 | InnoDB storage engine with strict stored procedure boundary |
+| **Database Driver** | mysql2/promise | 3.22.5 | Connection pool with parameterized stored procedure execution |
+| **Validation** | Zod | 4.4.3 | Type-safe runtime schema validation for request payloads |
+| **Authentication** | JWT & bcrypt | 9.0.3 / 6.0.0 | Stateless Bearer token verification and password hashing |
+| **Logging** | Pino | 10.3.1 | Structured JSON application and HTTP request logging |
+| **API Docs** | Swagger / OpenAPI | 5.0.1 / 6.3.0 | Interactive API documentation rendered at `/api-docs` |
+| **Kiosk Subsystem**| Python & SQLite | 3.10+ / 11.8.1 | Raspberry Pi 5 RFID hardware daemon and offline edge agent |
+| **DevOps** | Docker Compose | 24+ / v2+ | Multi-container stack running on Rocky Linux 9 base images |
 
 ---
 
-## Project Structure
+## Quickstart: Run Project on Docker
 
-```txt
-CMS/
-│
-├── backend/
-│   ├── src/
-│   │   ├── config/
-│   │   ├── db/
-│   │   ├── docs/
-│   │   ├── middlewares/
-│   │   ├── modules/
-│   │   │   ├── auth/
-│   │   │   ├── booking/
-│   │   │   ├── common/
-│   │   │   ├── daymenu/
-│   │   │   ├── dayslot/
-│   │   │   ├── identity/
-│   │   │   ├── menu/
-│   │   │   ├── pricing/
-│   │   │   ├── service/
-│   │   │   └── wallet/
-│   │   ├── routes/
-│   │   │   └── index.routes.js
-│   │   ├── utils/
-│   │   ├── app.js
-│   │   └── server.js
-│   ├── .env.example
-│   ├── package.json
-│   └── package-lock.json
-│
-├── database/
-│   ├── schema/
-│   ├── procedures/V1/
-│   └── seed/
-│
-├── frontend/
-├── Document/
-├── ERD/
-└── README.md
-```
+### Prerequisites
+- Docker Engine 24.0+
+- Docker Compose v2.0+
+- Git
 
----
-
-## Environment Variables
-
-Create a `.env` file inside the `backend/` folder.
-
-Use `.env.example` as reference:
-
-```env
-NODE_ENV=development
-PORT=8080
-FRONTEND_URL=http://localhost:3000
-LOG_LEVEL=debug
-
-DB_HOST=
-DB_PORT=3306
-DB_USER=
-DB_PASSWORD=
-DB_NAME=
-
-JWT_SECRET=
-JWT_EXPIRES_IN=1d
-```
-
----
-
-## Database Setup
-
-The database scripts are organized into:
-
-```txt
-database/schema/
-database/procedures/V1/
-database/seed/
-```
-
-Recommended execution order for procedures (after schemas):
-
-```txt
-1. 00_COMMON_PROCEDURES.sql
-2. 01_IDENTITY_ACCESS_PROCEDURES.sql
-3. 02_MENU_SERVICE_PROCEDURES.sql
-4. 03_BOOKING_PROCEDURES.sql
-5. 04_WALLET_PROCEDURES.sql
-```
-
----
-
-## Implemented APIs
-
-The backend has functional routes for the following domains (view complete endpoints in Swagger at `/api-docs`):
-
-### Core & Identity
-- **Health:** System health and DB checks
-- **Auth:** Login (`/api/auth/login`) and current user (`/api/me`)
-- **Common:** Master data, screens, status, customer types
-- **Identity:** Users, roles, customers, and employee profiles
-
-### Menu & Services
-- **Services:** Manage canteen services
-- **Menu Items:** Manage individual menu items
-- **Pricing:** Dynamic pricing rules
-- **Day Slots:** Manage operating slots per day
-- **Day Menus:** Day-wise menu assignments and approvals
-
-### Bookings & Wallet
-- **Bookings:** Make bookings, fetch booking history
-- **Wallets:** Topups, wallet balance, and transactions
-
----
-
-## Security Notes
-
-The project currently implements:
-
-```txt
-Password hashing using bcrypt
-JWT-based authentication
-Role-based authorization
-Zod input validation
-Helmet security headers
-CORS configuration
-Login rate limiting
-Prepared SQL queries and stored procedure calls
-Sensitive log redaction
-Environment variable protection
-```
-
----
-
-## Running the Backend
-
-Move into backend folder:
-
+### 1. Clone the Repository
 ```bash
-cd backend
+git clone https://github.com/KaranSJ22/cms.git
+cd cms
 ```
 
-Install dependencies:
-
+### 2. Start the Stack
+Run the following command to build and launch all containers:
 ```bash
-npm install
+docker compose up -d --build
 ```
 
-Start development server:
+The database container will initialize, execute all schema migrations, create stored procedures, register scheduled events, and insert seed data automatically.
 
+### 3. Application Access Points
+
+| Service | URL | Details |
+| :--- | :--- | :--- |
+| **Frontend Web App** | http://localhost | Main user and administrative portal |
+| **Backend Health** | http://localhost/health | Service uptime probe |
+| **Database Health** | http://localhost/health/db | Live database connectivity verification |
+| **Swagger API Docs** | http://localhost/api-docs | Interactive OpenAPI documentation |
+| **MySQL Server** | localhost:3306 | User: `root` / Password: `RootPassword@123` |
+
+### 4. Default Test Credentials
+All test accounts are pre-configured with the default password: **`admin123`**
+
+| Role | Username | Password | Purpose |
+| :--- | :--- | :--- | :--- |
+| **System Administrator** | `admin` | `admin123` | Center, canteen, role, and kiosk device administration |
+| **Canteen Manager** | `mgr1` | `admin123` | Menu planning, tariffs, day slots, and wallet top-ups |
+| **Permanent Employee** | `perm1` | `admin123` | Advance meal pre-booking and official catering requests |
+
+### 5. Stopping the Stack
+To stop all running containers:
 ```bash
-npm run dev
+docker compose down
 ```
 
-Backend runs on:
-
-```txt
-http://localhost:8080
+To stop containers and remove persistent database volumes:
+```bash
+docker compose down -v
 ```
+
+---
+
+## Documentation Links
+
+Complete project documentation is available in the repository:
+
+- [System Architecture Overview](documents/architecture/system_overview.md) - End-to-end system topology, sequence diagrams, and module responsibilities.
+- [Backend Architecture Specification](documents/architecture/backend-architecture.md) - Deep dive into backend layers, middleware pipeline, modules, and database gateway.
+- [Frontend Architecture Specification](documents/architecture/frontend-architecture.md) - Feature-driven React architecture, route configurations, and state handling.
+- [Database Architecture](documents/DATABASE_ARCHITECTURE.md) - Database schema organization, 25 normalized tables, views, and execution order.
+- [ISRO CMS Project Specification](documents/ISRO_CMS_Project_Specification.md) - Authoritative organizational business rules, customer types, and requirements.
+- [Docker Deployment Guide](DOCKER.md) - Detailed container instructions, production PM2 setup, and troubleshooting.
+- [Offline Kiosk Architecture Plan](kiosk/offline_kiosk_architecture_plan.md) - Edge kiosk hardware driver, local SQLite cache, and outbox sync engine.
+
+---

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import request from "supertest";
 import app from "../../../app.js";
 import { pool } from "../../../db/connection.js";
-import { getAuthHeader } from "../../../test/testHelpers.js";
+import { getAuthHeader, getFutureDate, getFutureDateTime } from "../../../test/testHelpers.js";
 import { getTodayIST } from "../../../utils/dateTime.js";
 
 describe("Booking Module: Security & RBAC Guards", () => {
@@ -20,7 +20,7 @@ describe("Booking Module: Security & RBAC Guards", () => {
         PBOOKTYPECODE: "PB",
         PCUSTOMERID: 1,
         PSERVICEID: 1,
-        PSERVICEDATE: "2028-11-20",
+        PSERVICEDATE: getFutureDate(7),
         PITEMSJSON: [{ DAYMENUID: 1, QTY: 1 }],
       });
 
@@ -96,7 +96,7 @@ describe("Booking Module: Input Validation", () => {
         PBOOKTYPECODE: "PB",
         PCUSTOMERID: 1,
         PSERVICEID: 1,
-        PSERVICEDATE: "2028-11-20",
+        PSERVICEDATE: getFutureDate(7),
         PITEMSJSON: [],
       });
 
@@ -132,7 +132,7 @@ describe("Booking Module: Input Validation", () => {
         PBOOKTYPECODE: "INVALID_TYPE",
         PCUSTOMERID: 1,
         PSERVICEID: 1,
-        PSERVICEDATE: "2028-11-20",
+        PSERVICEDATE: getFutureDate(7),
         PITEMSJSON: [{ DAYMENUID: 1, QTY: 1 }],
       });
 
@@ -151,7 +151,7 @@ describe("Booking Module: End-to-End Multi-Customer Lifecycle & Billing", () => 
   let futureServiceId;
   let futureDaySlotId;
   let futureDayMenuId;
-  const futureDate = "2029-05-15";
+  const futureDate = getFutureDate(30);
 
   let todayServiceId;
   let todayDaySlotId;
@@ -237,8 +237,8 @@ describe("Booking Module: End-to-End Multi-Customer Lifecycle & Billing", () => 
             ISKIOSK: 1,
             AVAILQTY: 100,
             MAXQTY: 5,
-            BOOKUNTIL: "2029-05-15T23:59:59",
-            CANCELUNTIL: "2029-05-15T22:00:00",
+            BOOKUNTIL: getFutureDateTime(30, "23:59:59"),
+            CANCELUNTIL: getFutureDateTime(30, "22:00:00"),
           },
         ],
       });
@@ -501,5 +501,15 @@ describe("Booking Module: End-to-End Multi-Customer Lifecycle & Billing", () => 
     const prepEntry = res.body.DATA.find((entry) => entry.DAYMENUID === todayDayMenuId || entry.MENUITEMID === todayItemId);
     expect(prepEntry).toBeDefined();
     expect(Number(prepEntry.TOTAL_BOOKED || prepEntry.TOTALPORTIONS || prepEntry.PLANNED_QTY)).toBeGreaterThanOrEqual(1);
+  });
+
+  it("should fetch weekly published menu without SQL ordering errors with HTTP 200", async () => {
+    const res = await request(app)
+      .get(`/api/bookings/weekly-menu?canteenId=${testCanteenId}&startDate=${futureDate}&endDate=${futureDate}`)
+      .set(permAuth);
+
+    expect(res.status).toBe(200);
+    expect(res.body.SUCCESS).toBe(true);
+    expect(res.body.DATA).toBeDefined();
   });
 });

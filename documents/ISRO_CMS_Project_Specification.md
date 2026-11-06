@@ -157,21 +157,23 @@ Current CMS roles:
 
 | Role                 | Code     | Responsibility                                                  |
 | -------------------- | -------- | --------------------------------------------------------------- |
-| System Administrator | `SYSADM` | Identity/access administration                                  |
+| System Administrator | `SYSADM` | High Level System Configuuration                                |
 | Canteen Manager      | `CTNMGR` | Canteen configuration, menu management, approval and operations |
 | Canteen Assistant    | `CTNAST` | Canteen configuration and menu preparation                      |
 | Canteen Staff        | `CTNSTF` | Serving operations                                              |
 
 
-Consumer and user role assignments are maintained through `CMS_USERROLE` (with `CMS_CONSUMERROLE` provided as a backward-compatibility view). Consumer role codes must come from the current database definition; do not invent role codes.
+Consumer and user role assignments are maintained through `CMS_USERROLE`  Consumer role codes must come from the current database definition.
 
 ### `SYSADM`
 
-- Create/manage users.
-- Manage identity/access.
-- Assign consumer roles.
+
 - Assign canteen roles.
-- Assign authorized users to canteens.
+- Manage Kiosk Devices.
+- Manage Centres.
+- Manage Canteens.
+- Manage Role Governence
+
 
 ### `CTNMGR`
 
@@ -280,7 +282,7 @@ CMS_PERMEMP
 CMS_CONTEMP
 CMS_OCEEMP
 CMS_VISITOR
-CMS_USERROLE          (Compatibility View: CMS_CONSUMERROLE)
+CMS_USERROLE          
 CMS_CANTEENROLE
 CMS_ACCKEY
 ```
@@ -292,9 +294,7 @@ CMS_CENTER
 CMS_CANTEEN
 CMS_AUTONOS
 CMS_STATUS
-CMS_SCREEN
-CMS_SCRNROLE          (Compatibility View: CMS_ROLESCN)
-CMS_KIOSK             (Compatibility View: CMS_KIOSK_DEVICE)
+CMS_KIOSK             
 ```
 
 ### Menu and Service

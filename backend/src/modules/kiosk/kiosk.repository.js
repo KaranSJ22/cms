@@ -5,12 +5,16 @@ import { pool } from "../../db/connection.js";
  */
 export const getLoginInfo = async (identifier) => {
   const trimmed = (identifier || "").trim();
+  if (!trimmed) {
+    return { USER: null, CUSTOMER: null };
+  }
 
   // 1. Try direct CMSLOGININFO by username/loginId
-  let [resultSets] = await pool.query("CALL CMSLOGININFO(?)", [trimmed]);
-  let raw = resultSets[0]?.[0];
-  let user = raw
-    ? {
+  const [resultSets] = await pool.query("CALL CMSLOGININFO(?)", [trimmed]);
+  const raw = resultSets[0]?.[0];
+  if (raw) {
+    return {
+      USER: {
         USERID: raw.USERID,
         LOGINID: raw.LOGINID,
         FULLNAME: raw.FULLNAME,
@@ -19,76 +23,46 @@ export const getLoginInfo = async (identifier) => {
         AUTHPROV: raw.AUTHPROV,
         AUTHID: raw.AUTHID,
         ISACTIVE: raw.ISACTIVE,
-      }
-    : null;
-
-  let customer = raw?.CUSTOMERID
-    ? {
-        CUSTOMERID: raw.CUSTOMERID,
-        CTYPECODE: raw.CTYPECODE,
-        DISPNAME: raw.DISPNAME,
-        STATUSID: raw.CUSTOMERSTATUS,
-        LOGINID: raw.LOGINID,
-      }
-    : null;
-
-  // 2. If not found, check if it's an RFID / Access Key in CMS_ACCKEY
-  if (!user && !customer) {
-    try {
-      const [keySets] = await pool.query("CALL CMSVALIDATEACCKEY(?)", [trimmed]);
-      const keyIdentity = keySets[0]?.[0];
-      if (keyIdentity && keyIdentity.LOGINID) {
-        [resultSets] = await pool.query("CALL CMSLOGININFO(?)", [keyIdentity.LOGINID]);
-        const rawKey = resultSets[0]?.[0];
-        if (rawKey) {
-          user = {
-            USERID: rawKey.USERID,
-            LOGINID: rawKey.LOGINID,
-            FULLNAME: rawKey.FULLNAME,
-            EMAIL: rawKey.EMAIL,
-            MOBILENO: rawKey.MOBILENO,
-            AUTHPROV: rawKey.AUTHPROV,
-            AUTHID: rawKey.AUTHID,
-            ISACTIVE: rawKey.ISACTIVE,
-          };
-          customer = rawKey.CUSTOMERID
-            ? {
-                CUSTOMERID: rawKey.CUSTOMERID,
-                CTYPECODE: rawKey.CTYPECODE,
-                DISPNAME: rawKey.DISPNAME,
-                STATUSID: rawKey.CUSTOMERSTATUS,
-                LOGINID: rawKey.LOGINID,
-              }
-            : null;
-        }
-      } else if (keyIdentity && keyIdentity.CUSTOMERID) {
-        customer = {
-          CUSTOMERID: keyIdentity.CUSTOMERID,
-          CTYPECODE: keyIdentity.CTYPECODE,
-          DISPNAME: keyIdentity.DISPNAME,
-          LOGINID: keyIdentity.LOGINID || null,
-        };
-      }
-    } catch (e) {
-      // Not a registered access key
-    }
+      },
+      CUSTOMER: raw.CUSTOMERID
+        ? {
+            CUSTOMERID: raw.CUSTOMERID,
+            CTYPECODE: raw.CTYPECODE,
+            DISPNAME: raw.DISPNAME,
+            STATUSID: raw.CUSTOMERSTATUS,
+            LOGINID: raw.LOGINID,
+          }
+        : null,
+    };
   }
 
-  // 3. Lookup customer directly by user's USERID if customer was missing
-  if (user && !customer) {
-    try {
-      const [custSets] = await pool.query("CALL CMSGETCUSTBYUSER(?)", [user.USERID]);
-      if (custSets[0]?.[0]) {
-        customer = custSets[0][0];
-      }
-    } catch (e) {
-      // Customer lookup failed
-    }
+  // 2. Fallback to CMSFINDCUSTBYIDENTIFIER (matches RFID key, emp code, cont code, customerId)
+  const [identSets] = await pool.query("CALL CMSFINDCUSTBYIDENTIFIER(?)", [trimmed]);
+  const custRaw = identSets[0]?.[0];
+  if (custRaw) {
+    return {
+      USER: custRaw.USERID
+        ? {
+            USERID: custRaw.USERID,
+            LOGINID: custRaw.LOGINID,
+            FULLNAME: custRaw.FULLNAME,
+            EMAIL: custRaw.EMAIL,
+            MOBILENO: custRaw.MOBILENO,
+          }
+        : null,
+      CUSTOMER: {
+        CUSTOMERID: custRaw.CUSTOMERID,
+        CTYPECODE: custRaw.CTYPECODE,
+        DISPNAME: custRaw.DISPNAME,
+        STATUSID: custRaw.STATUSID,
+        LOGINID: custRaw.LOGINID || null,
+      },
+    };
   }
 
   return {
-    USER: user || null,
-    CUSTOMER: customer || null,
+    USER: null,
+    CUSTOMER: null,
   };
 };
 
@@ -102,29 +76,15 @@ export const listBookings = async (
   endDate = null,
   canteenId = null
 ) => {
-  try {
-    const [resultSets] = await pool.query("CALL CMSLISTBOOK(?, ?, ?, ?, ?, ?)", [
-      customerId,
-      serviceId || null,
-      startDate || null,
-      endDate || null,
-      null, // status
-      canteenId || null,
-    ]);
-    return resultSets[0] || [];
-  } catch (err) {
-    if (err.code === "ER_SP_WRONG_NO_OF_ARGS" || err.errno === 1318) {
-      const [resultSets] = await pool.query("CALL CMSLISTBOOK(?, ?, ?, ?, ?)", [
-        customerId,
-        serviceId || null,
-        startDate || null,
-        endDate || null,
-        null, // status
-      ]);
-      return resultSets[0] || [];
-    }
-    throw err;
-  }
+  const [resultSets] = await pool.query("CALL CMSLISTBOOK(?, ?, ?, ?, ?, ?)", [
+    customerId,
+    serviceId || null,
+    startDate || null,
+    endDate || null,
+    null, // status
+    canteenId || null,
+  ]);
+  return resultSets[0] || [];
 };
 
 /**
@@ -138,78 +98,29 @@ export const listBookingsHistory = async (
   page = 1,
   pageSize = 10
 ) => {
-  try {
-    const [resultSets] = await pool.query(
-      "CALL CMSLISTBOOKHISTORY(?, ?, ?, ?, ?, ?)",
-      [
-        customerId,
-        startDate || null,
-        endDate || null,
-        statusCode || null,
-        Number(page) || 1,
-        Number(pageSize) || 10,
-      ]
-    );
-    return resultSets[0] || [];
-  } catch (err) {
-    if (err.code === "ER_SP_WRONG_NO_OF_ARGS" || err.errno === 1318) {
-      const [resultSets] = await pool.query(
-        "CALL CMSLISTBOOKHISTORY(?, ?, ?, ?)",
-        [customerId, startDate || null, endDate || null, statusCode || null]
-      );
-      return (resultSets[0] || []).slice(0, Number(pageSize) || 10);
-    }
-    throw err;
-  }
+  const [resultSets] = await pool.query(
+    "CALL CMSLISTBOOKHISTORY(?, ?, ?, ?, ?, ?)",
+    [
+      customerId,
+      startDate || null,
+      endDate || null,
+      statusCode || null,
+      Number(page) || 1,
+      Number(pageSize) || 10,
+    ]
+  );
+  return resultSets[0] || [];
 };
 
 /**
  * Retrieves the last N bookings for self-service kiosk with active upcoming bookings nearest to current date first
  */
 export const getKioskCustomerBookings = async (customerId, limit = 10) => {
-  const [rows] = await pool.query(
-    `SELECT
-        B.BOOKID,
-        B.BOOKNO,
-        BT.BOOKTYPECODE,
-        BK_CAN.CANTEENID,
-        BK_CAN.CANTEENNAME,
-        B.SERVICEID,
-        S.SERVNAME,
-        B.SERVICEDATE,
-        B.STATUSID,
-        ST.STATUSCODE AS STATUSCODE,
-        B.TOTALITEMS,
-        B.TOTALQTY,
-        B.TOTALAMOUNT,
-        B.BOOKEDAT,
-        B.BOOKEDAT AS BOOKEDON,
-        B.CANCELLEDAT,
-        B.CANCELLEDAT AS CANCELLEDON,
-        B.SERVEDAT,
-        B.SERVEDAT AS SERVEDON,
-        B.NOSHOWAT,
-        B.NOSHOWAT AS NOSHOWON
-    FROM CMS_BOOKING B
-    JOIN CMS_BOOKTYPE BT ON BT.BOOKTYPEID = B.BOOKTYPEID
-    JOIN CMS_SERVICE S ON S.SERVICEID = B.SERVICEID
-    JOIN CMS_STATUS ST ON ST.STATUSID = B.STATUSID
-    LEFT JOIN (
-        SELECT BI.BOOKID, DS.CANTEENID, C.CANTEENNAME
-        FROM CMS_BOOKITEM BI
-        JOIN CMS_DAYMENU DM ON DM.DAYMENUID = BI.DAYMENUID
-        JOIN CMS_DAYSLOT DS ON DS.DAYSLOTID = DM.DAYSLOTID
-        JOIN CMS_CANTEEN C ON C.CANTEENID = DS.CANTEENID
-        GROUP BY BI.BOOKID, DS.CANTEENID, C.CANTEENNAME
-    ) BK_CAN ON BK_CAN.BOOKID = B.BOOKID
-    WHERE B.CUSTOMERID = ?
-      AND ST.STATUSCODE = 'CRT'
-      AND B.SERVICEDATE >= CURDATE()
-    ORDER BY B.SERVICEDATE ASC, B.BOOKID DESC
-    LIMIT ?`,
-    [Number(customerId), Number(limit)]
+  const [resultSets] = await pool.query(
+    "CALL CMSKIOSKGETCUSTOMERBOOKINGS(?, ?)",
+    [Number(customerId), Number(limit) || 10]
   );
-  return rows || [];
+  return resultSets[0] || [];
 };
 
 /**
@@ -255,38 +166,12 @@ export const getCurrentSlot = async (canteenId = null, kioskId = null) => {
  */
 export const resolveKioskBooking = async (identifier, canteenId = null, kioskId = null, daySlotId = null) => {
   const trimmed = (identifier || "").trim();
-  const isBookNo = trimmed.toUpperCase().startsWith("PB") || trimmed.toUpperCase().startsWith("BK");
-  let results;
-  try {
-    [results] = await pool.query("CALL CMSKIOSKRESOLVEBOOKING(?, ?, ?, ?)", [
-      trimmed,
-      canteenId ? Number(canteenId) : null,
-      kioskId ? Number(kioskId) : null,
-      daySlotId ? Number(daySlotId) : null,
-    ]);
-  } catch (err) {
-    if (err.code === "ER_SP_DOES_NOT_EXIST") {
-      try {
-        [results] = await pool.query("CALL CMSGETBOOKFORSERVING(?, ?, ?, ?)", [
-          isBookNo ? null : trimmed,
-          isBookNo ? trimmed : null,
-          canteenId ? Number(canteenId) : null,
-          null,
-        ]);
-      } catch (err2) {
-        if (err2.code === "ER_WRONG_PARAMCOUNT_TO_PROCEDURE") {
-          [results] = await pool.query("CALL CMSGETBOOKFORSERVING(?, ?)", [
-            isBookNo ? null : trimmed,
-            isBookNo ? trimmed : null,
-          ]);
-        } else {
-          throw err2;
-        }
-      }
-    } else {
-      throw err;
-    }
-  }
+  const [results] = await pool.query("CALL CMSKIOSKRESOLVEBOOKING(?, ?, ?, ?)", [
+    trimmed,
+    canteenId ? Number(canteenId) : null,
+    kioskId ? Number(kioskId) : null,
+    daySlotId ? Number(daySlotId) : null,
+  ]);
 
   if (!results || results.length < 2 || !results[0] || results[0].length === 0) {
     return null;
@@ -302,23 +187,12 @@ export const resolveKioskBooking = async (identifier, canteenId = null, kioskId 
  * Marks booking as served at a kiosk terminal with audit and wallet settlement
  */
 export const serveKioskBooking = async (bookingId, userId, kioskId = null) => {
-  try {
-    const [results] = await pool.query("CALL CMSKIOSKSERVEBOOKING(?, ?, ?)", [
-      Number(bookingId),
-      Number(userId),
-      kioskId ? Number(kioskId) : null,
-    ]);
-    return results[0]?.[0] || null;
-  } catch (err) {
-    if (err.code === "ER_SP_DOES_NOT_EXIST") {
-      const [results] = await pool.query("CALL CMSMARKBOOKINGSERVED(?, ?)", [
-        Number(bookingId),
-        Number(userId),
-      ]);
-      return results[0]?.[0] || { BOOKID: bookingId, RESULT: "SUCCESS" };
-    }
-    throw err;
-  }
+  const [results] = await pool.query("CALL CMSKIOSKSERVEBOOKING(?, ?, ?)", [
+    Number(bookingId),
+    Number(userId),
+    kioskId ? Number(kioskId) : null,
+  ]);
+  return results[0]?.[0] || null;
 };
 
 /**
@@ -386,4 +260,117 @@ export const listKioskDevices = async (CANTEENID = null) => {
         ? 10
         : 11,
   }));
+};
+
+/**
+ * Gets tomorrow's available meal services for a canteen
+ */
+export const getNextDayServices = async (canteenId, serviceDate) => {
+  const [resultSets] = await pool.query(
+    "CALL CMSKIOSKGETNEXTDAYSERVICES(?, ?)",
+    [Number(canteenId), serviceDate]
+  );
+  return resultSets[0] || [];
+};
+
+/**
+ * Gets next day menu published for a canteen where ISKIOSK = 1
+ */
+export const getNextDayKioskMenu = async (canteenId, serviceDate, serviceId = null) => {
+  const [resultSets] = await pool.query(
+    "CALL CMSGETKIOSKPUBLISHEDMENU(?, ?, ?)",
+    [Number(canteenId), serviceDate, serviceId ? Number(serviceId) : null]
+  );
+  return resultSets[0] || [];
+};
+
+/**
+ * Resolves USERID and CUSTOMERID from customer record
+ */
+export const getCustomerUser = async (customerId) => {
+  const [resultSets] = await pool.query("CALL CMSGETCUST(?)", [Number(customerId)]);
+  const customer = resultSets[0]?.[0];
+  if (!customer) return null;
+  return {
+    CUSTOMERID: customer.CUSTOMERID,
+    USERID: customer.USERID,
+  };
+};
+
+/**
+ * Retrieves basic booking metadata for validation and authorization
+ */
+export const getBookingBasic = async (bookingId) => {
+  const [resultSets] = await pool.query("CALL CMSGETBOOKINGBASIC(?)", [Number(bookingId)]);
+  return resultSets[0]?.[0] || null;
+};
+
+/**
+ * Checks for existing booking (by offline UUID pattern or by customer + service + date)
+ */
+export const checkBookingExists = async ({
+  customerId = null,
+  serviceId = null,
+  serviceDate = null,
+  remarks = null,
+}) => {
+  const [resultSets] = await pool.query(
+    "CALL CMSCHECKBOOKINGEXISTS(?, ?, ?, ?)",
+    [
+      customerId ? Number(customerId) : null,
+      serviceId ? Number(serviceId) : null,
+      serviceDate || null,
+      remarks && remarks.trim() ? remarks.trim() : null,
+    ]
+  );
+  return resultSets[0]?.[0] || null;
+};
+
+/**
+ * Retrieves all active canteens
+ */
+export const getActiveCanteens = async () => {
+  const [resultSets] = await pool.query("CALL CMSLISTCANTEEN(?)", [null]);
+  return (resultSets[0] || []).filter(
+    (c) => c.STATUSID === 10 || c.STATUSCODE === "ACT"
+  );
+};
+
+/**
+ * Retrieves all meal slots scheduled for today at a canteen
+ */
+export const getTodaySlots = async (canteenId) => {
+  const [resultSets] = await pool.query("CALL CMSLISTTODAYMEALSLOTS(?)", [Number(canteenId)]);
+  return resultSets[0] || [];
+};
+
+/**
+ * Master data bootstrap package snapshot for offline kiosk terminals
+ */
+export const getBootstrapPackage = async (canteenId = 1, today = null) => {
+  const [resultSets] = await pool.query(
+    "CALL CMSKIOSKGETBOOTSTRAP(?, ?)",
+    [Number(canteenId) || 1, today || null]
+  );
+  return {
+    lastChange: resultSets[0]?.[0]?.LAST_CHANGE || null,
+    customers: resultSets[1] || [],
+    wallets: resultSets[2] || [],
+    daySlots: resultSets[3] || [],
+    menuItems: resultSets[4] || [],
+    activeBookings: resultSets[5] || [],
+    todayBookings: resultSets[6] || [],
+    todayBookItems: resultSets[7] || [],
+  };
+};
+
+/**
+ * Updates a kiosk device's operational status
+ */
+export const updateKioskDeviceStatus = async (kioskId, statusId, userId) => {
+  const [resultSets] = await pool.query(
+    "CALL CMSUPDATEKIOSKSTATUS(?, ?, ?)",
+    [Number(kioskId), Number(statusId), Number(userId)]
+  );
+  return resultSets[0]?.[0] || null;
 };

@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useEffect, useMemo, useCallback } from "react";
 import api from "../../../config/axios";
 import { useAuth } from "../../../hooks/useAuth";
 import {
@@ -41,7 +42,9 @@ export default function OfficialKitchenPrepPage() {
 
   // 1. Fetch Canteens accessible to the current user
   useEffect(() => {
+    let ignore = false;
     api.get("/canteens").then((res) => {
+      if (ignore) return;
       const list = res.data.DATA || [];
       const userCanteenIds = (user?.CANTEENROLES || []).map((r) => r.CANTEENID);
       const hasAdminRole = (user?.SYSTEMROLES || []).includes("SYSADM");
@@ -53,35 +56,38 @@ export default function OfficialKitchenPrepPage() {
       setCanteens(allowed);
 
       if (allowed.length > 0) {
-        const isCurrentValid = allowed.some(
-          (c) => c.CANTEENID === Number(selectedCanteenId)
-        );
-        if (!isCurrentValid) {
+        setSelectedCanteenId((prev) => {
+          const isValid = allowed.some((c) => c.CANTEENID === Number(prev));
+          if (isValid) return prev;
           const matched = allowed.find(
             (c) => c.CANTEENID === Number(activeCanteenId)
           );
           const targetId = matched ? matched.CANTEENID : allowed[0].CANTEENID;
-          setSelectedCanteenId(targetId);
-          if (!activeCanteenId) {
+          if (!activeCanteenId && setActiveCanteenId) {
             setActiveCanteenId(targetId);
           }
-        }
+          return targetId;
+        });
       }
     });
-  }, [user]);
+    return () => {
+      ignore = true;
+    };
+  }, [user, activeCanteenId, setActiveCanteenId]);
 
   // Keep selectedCanteenId in sync when activeCanteenId changes externally
   useEffect(() => {
-    if (
-      activeCanteenId &&
-      canteens.some((c) => c.CANTEENID === Number(activeCanteenId))
-    ) {
-      setSelectedCanteenId(Number(activeCanteenId));
+    if (activeCanteenId) {
+      setSelectedCanteenId((prev) => {
+        if (Number(prev) === Number(activeCanteenId)) return prev;
+        const exists = canteens.some((c) => c.CANTEENID === Number(activeCanteenId));
+        return exists ? Number(activeCanteenId) : prev;
+      });
     }
   }, [activeCanteenId, canteens]);
 
   // 2. Load kitchen summary and confirmed bookings
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!selectedCanteenId) return;
     try {
       setLoading(true);
@@ -96,13 +102,36 @@ export default function OfficialKitchenPrepPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    loadData();
   }, [selectedCanteenId, selectedDate]);
 
-  // Filtered dishes for Tab 1
+  useEffect(() => {
+    let ignore = false;
+    if (!selectedCanteenId) return;
+
+    setLoading(true);
+    Promise.all([
+      getOfficialKitchenPrepSummary(selectedCanteenId, selectedDate),
+      getConfirmedOfficialBookings(selectedCanteenId, { date: selectedDate }),
+    ])
+      .then(([summaryRes, ordersRes]) => {
+        if (!ignore) {
+          setSummaryData(summaryRes || null);
+          setConfirmedOrders(ordersRes || []);
+        }
+      })
+      .catch((err) => {
+        if (!ignore) console.error("Failed to load official kitchen prep data", err);
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [selectedCanteenId, selectedDate]);
+
+  // Filtered dishes for Tab 1 (Batch Cooking)
   const filteredDishes = useMemo(() => {
     const list = summaryData?.DISHES || [];
     return list.filter((d) => {
@@ -115,9 +144,48 @@ export default function OfficialKitchenPrepPage() {
     });
   }, [summaryData, searchQuery]);
 
-  // Filtered orders for Tab 2
+  // Fast mapping of dish breakdown items by booking ID
+  const bookingItemsFromSummary = useMemo(() => {
+    const dishes = summaryData?.DISHES || [];
+    const map = new Map();
+    for (const dish of dishes) {
+      for (const ord of dish.ORDERS || []) {
+        if (!map.has(ord.OFFBOOKID)) {
+          map.set(ord.OFFBOOKID, []);
+        }
+        map.get(ord.OFFBOOKID).push({
+          MENUITEMID: dish.MENUITEMID,
+          ITEMNAME: dish.ITEMNAME,
+          CATNAME: dish.CATNAME,
+          CATCODE: dish.CATCODE,
+          COMBO_ITEM_QTY: ord.COMBO_ITEM_QTY,
+          PREP_QTY: ord.PREP_QTY,
+        });
+      }
+    }
+    return map;
+  }, [summaryData]);
+
+  // Enrich confirmedOrders so items are guaranteed to be present for the packing slips
+  const enrichedOrders = useMemo(() => {
+    return (confirmedOrders || []).map((ord) => {
+      if (ord.ITEMS && ord.ITEMS.length > 0) return ord;
+      const fallback = bookingItemsFromSummary.get(ord.OFFBOOKID) || [];
+      return {
+        ...ord,
+        ITEMS: fallback.map((it) => ({
+          MENUITEMID: it.MENUITEMID,
+          ITEMNAME: it.ITEMNAME,
+          QTY: it.COMBO_ITEM_QTY || 1,
+          TOTAL_PREP_QTY: it.PREP_QTY || (it.COMBO_ITEM_QTY || 1) * (ord.QUANTITY || 1),
+        })),
+      };
+    });
+  }, [confirmedOrders, bookingItemsFromSummary]);
+
+  // Filtered orders for Tab 2 (Delivery Timeline & Slips)
   const filteredOrders = useMemo(() => {
-    return confirmedOrders.filter((ord) => {
+    return enrichedOrders.filter((ord) => {
       const q = searchQuery.toLowerCase();
       const reqName = ord.REQUESTER_NAME || ord.REQ_NAME || "";
       return (
@@ -125,73 +193,11 @@ export default function OfficialKitchenPrepPage() {
         ord.VENUE?.toLowerCase().includes(q) ||
         ord.PURPOSE?.toLowerCase().includes(q) ||
         reqName.toLowerCase().includes(q) ||
-        ord.COMBONAME?.toLowerCase().includes(q)
+        ord.COMBONAME?.toLowerCase().includes(q) ||
+        (ord.ITEMS || []).some((it) => it.ITEMNAME?.toLowerCase().includes(q))
       );
     });
-  }, [confirmedOrders, searchQuery]);
-
-  // Pivot DISHES[].ORDERS[] into a booking-centric grouped structure for Tab 1,
-  // enriching with confirmed booking metadata (Official Service name, Combo name, etc.)
-  const groupedByBooking = useMemo(() => {
-    const dishes = summaryData?.DISHES || [];
-    const bookingMap = new Map();
-
-    // Fast lookup map for booking metadata (SERVNAME, COMBONAME, etc.) from confirmedOrders
-    const confirmedMap = new Map(
-      (confirmedOrders || []).map((o) => [o.OFFBOOKID, o])
-    );
-
-    for (const dish of dishes) {
-      for (const order of (dish.ORDERS || [])) {
-        if (!bookingMap.has(order.OFFBOOKID)) {
-          const meta = confirmedMap.get(order.OFFBOOKID) || {};
-          bookingMap.set(order.OFFBOOKID, {
-            OFFBOOKID: order.OFFBOOKID,
-            BOOKNO: order.BOOKNO || meta.BOOKNO,
-            PURPOSE: order.PURPOSE || meta.PURPOSE,
-            VENUE: order.VENUE || meta.VENUE,
-            EVENTDATETIME: order.EVENTDATETIME || meta.EVENTDATETIME,
-            BOOKING_SERVINGS: order.BOOKING_SERVINGS || meta.QUANTITY,
-            REQUESTER_NAME: order.REQUESTER_NAME || meta.REQUESTER_NAME || meta.REQ_NAME,
-            REQUESTER_PHONE: order.REQUESTER_PHONE || meta.REQUESTER_PHONE || meta.REQ_PHONE,
-            REQUESTER_EMPCODE: order.REQUESTER_EMPCODE || meta.REQUESTER_EMPCODE,
-            REQUESTER_DEPT: order.REQUESTER_DEPT || meta.REQUESTER_DEPT || meta.DEPTNAME,
-            REQUESTER_DESIG: order.REQUESTER_DESIG || meta.REQUESTER_DESIG,
-            SERVNAME: meta.SERVNAME || "Official Service",
-            COMBONAME: meta.COMBONAME || "Standard Package",
-            items: [],
-          });
-        }
-        bookingMap.get(order.OFFBOOKID).items.push({
-          MENUITEMID: dish.MENUITEMID,
-          ITEMNAME: dish.ITEMNAME,
-          CATNAME: dish.CATNAME,
-          CATCODE: dish.CATCODE,
-          COMBO_ITEM_QTY: order.COMBO_ITEM_QTY,
-          PREP_QTY: order.PREP_QTY,
-        });
-      }
-    }
-
-    return Array.from(bookingMap.values()).sort(
-      (a, b) => new Date(a.EVENTDATETIME) - new Date(b.EVENTDATETIME)
-    );
-  }, [summaryData, confirmedOrders]);
-
-  const filteredGroupedByBooking = useMemo(() => {
-    if (!searchQuery) return groupedByBooking;
-    const q = searchQuery.toLowerCase();
-    return groupedByBooking.filter(
-      (b) =>
-        b.BOOKNO?.toLowerCase().includes(q) ||
-        b.PURPOSE?.toLowerCase().includes(q) ||
-        b.VENUE?.toLowerCase().includes(q) ||
-        b.SERVNAME?.toLowerCase().includes(q) ||
-        b.COMBONAME?.toLowerCase().includes(q) ||
-        (b.REQUESTER_NAME || "").toLowerCase().includes(q) ||
-        b.items.some((it) => it.ITEMNAME?.toLowerCase().includes(q))
-    );
-  }, [groupedByBooking, searchQuery]);
+  }, [enrichedOrders, searchQuery]);
 
   const totalDishesCount = summaryData?.DISHES?.length || 0;
   const selectedCanteenObj = canteens.find(
@@ -247,7 +253,7 @@ export default function OfficialKitchenPrepPage() {
               Official Kitchen Prep & Schedule
             </h1>
             <p className="mt-1 text-xs sm:text-sm text-blue-100/80 max-w-xl">
-              Aggregated dish production quantities & delivery timeline for confirmed official orders.
+              Consolidated kitchen cooking batch quantities & event delivery timeline for confirmed catering orders.
             </p>
           </div>
 
@@ -288,7 +294,7 @@ export default function OfficialKitchenPrepPage() {
               className="flex items-center gap-1.5 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-xl shadow-md shadow-orange-500/20 transition-all cursor-pointer"
             >
               <PrinterIcon className="w-4 h-4" />
-              <span>Print Sheet</span>
+              <span>{activeTab === "prep" ? "Print Batch Sheet" : "Print Delivery Slips"}</span>
             </button>
           </div>
         </div>
@@ -310,7 +316,9 @@ export default function OfficialKitchenPrepPage() {
       {/* ── Print Header Banner ── */}
       <div className="hidden print:block mb-4 p-4 border border-black">
         <h2 className="text-xl font-bold uppercase">
-          Kitchen Production Sheet — {selectedCanteenObj?.CANTEENNAME || "Canteen"}
+          {activeTab === "prep"
+            ? `Kitchen Batch Production Sheet — ${selectedCanteenObj?.CANTEENNAME || "Canteen"}`
+            : `Official Event Assembly & Dispatch Slips — ${selectedCanteenObj?.CANTEENNAME || "Canteen"}`}
         </h2>
         <div className="flex justify-between text-sm mt-2">
           <span>Target Date: <strong>{selectedDate}</strong></span>
@@ -347,9 +355,10 @@ export default function OfficialKitchenPrepPage() {
               setSearchQuery={setSearchQuery}
               filteredDishes={filteredDishes}
               totalDishesCount={totalDishesCount}
-              filteredGroupedByBooking={filteredGroupedByBooking}
               formatEventTime={formatEventTime}
-              formatEventDate={formatEventDate}
+              selectedCanteenId={selectedCanteenId}
+              selectedDate={selectedDate}
+              onDishStatusUpdated={loadData}
             />
           )}
 
@@ -360,6 +369,7 @@ export default function OfficialKitchenPrepPage() {
               filteredOrders={filteredOrders}
               formatEventDate={formatEventDate}
               formatEventTime={formatEventTime}
+              onBookingUpdated={loadData}
             />
           )}
         </>

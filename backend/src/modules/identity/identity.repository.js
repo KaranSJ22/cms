@@ -188,3 +188,11 @@ export const createPermanentEmployeeUsingProcedure = async ({
   const rows = resultSets[0];
   return rows?.[0] || null;
 };
+
+export const findCustomerByIdentifier = async (identifier) => {
+  const [resultSets] = await pool.execute("CALL CMSFINDCUSTBYIDENTIFIER(?)", [
+    String(identifier).trim(),
+  ]);
+
+  return resultSets[0]?.[0] || null;
+};

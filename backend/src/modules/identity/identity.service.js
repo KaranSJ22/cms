@@ -18,10 +18,10 @@ import {
   assignCanteenRoleUsingProcedure,
   removeCanteenRoleUsingProcedure,
   getCanteenRolesByUserId,
+  findCustomerByIdentifier as findCustomerByIdentifierRepository,
 } from "./identity.repository.js";
 
 import bcrypt from "bcrypt";
-import { pool } from "../../db/connection.js";
 import {
   BadRequestError,
   NotFoundError,
@@ -218,48 +218,11 @@ export const fetchCanteenRoles = async (userId) => {
 
 /**
  * Look up a customer profile by Employee ID (CONTCODE / EMPCODE), Login ID (LOGINID), or Customer ID.
- * (Raw SQL feature query maintained in service layer until mapped to stored procedure)
  */
 export const findCustomerByIdentifier = async (identifier) => {
   if (!identifier) return null;
   const cleanId = String(identifier).trim();
-  const numericId = /^\d+$/.test(cleanId) ? Number(cleanId) : null;
+  if (!cleanId) return null;
 
-  const [rows] = await pool.query(
-    `SELECT 
-        c.CUSTOMERID,
-        c.USERID,
-        u.LOGINID,
-        u.FULLNAME,
-        u.EMAIL,
-        u.MOBILENO,
-        ct.CTYPECODE,
-        ct.CTYPENAME,
-        c.DISPNAME,
-        c.STATUSID,
-        st.STATUSCODE,
-        ce.CONTCODE,
-        ce.VENDORNAME,
-        ce.DEFAULTCANTEENID,
-        pe.EMPCODE,
-        pe.DEPT,
-        pe.DESIG,
-        COALESCE(ce.CONTCODE, pe.EMPCODE, oe.EMPCODE, u.LOGINID) AS EMPLOYEE_CODE
-     FROM CMS_CUSTOMER c
-     LEFT JOIN CMS_USER u ON u.USERID = c.USERID
-     LEFT JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = c.CTYPEID
-     LEFT JOIN CMS_STATUS st ON st.STATUSID = c.STATUSID
-     LEFT JOIN CMS_CONTEMP ce ON ce.CUSTOMERID = c.CUSTOMERID
-     LEFT JOIN CMS_PERMEMP pe ON pe.CUSTOMERID = c.CUSTOMERID
-     LEFT JOIN CMS_OCEEMP oe ON oe.CUSTOMERID = c.CUSTOMERID
-     WHERE LOWER(ce.CONTCODE) = LOWER(?)
-        OR LOWER(pe.EMPCODE) = LOWER(?)
-        OR LOWER(oe.EMPCODE) = LOWER(?)
-        OR LOWER(u.LOGINID) = LOWER(?)
-        OR (? IS NOT NULL AND c.CUSTOMERID = ?)
-     LIMIT 1`,
-    [cleanId, cleanId, cleanId, cleanId, numericId, numericId]
-  );
-
-  return rows?.[0] || null;
+  return await findCustomerByIdentifierRepository(cleanId);
 };

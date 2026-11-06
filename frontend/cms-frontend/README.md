@@ -1,16 +1,56 @@
-# React + Vite
+# CanteenMitra Frontend (`cms-frontend`)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Single Page Application (SPA) for the Canteen Management System built for the Indian Space Research Organisation (ISRO).
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Quick Start (Local Development)
 
-## React Compiler
+### 1. Install Dependencies
+```bash
+npm install
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 2. Configure Environment
+Create a `.env` file from the provided example:
+```bash
+cp .env.example .env
+```
+Ensure `VITE_API_BASE_URL` is configured:
+```env
+VITE_API_BASE_URL=/api
+```
 
-## Expanding the ESLint configuration
+### 3. Run Development Server
+```bash
+npm run dev
+```
+The application will start at `http://localhost:5173`.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+---
+
+## Build and Code Quality
+
+```bash
+# Lint source code
+npm run lint
+
+# Compile production bundle to dist/
+npm run build
+
+# Preview production build locally
+npm run preview
+```
+
+---
+
+## Canonical Architecture Documentation
+
+To avoid documentation fragmentation, the comprehensive architectural specifications, state management flows, RBAC guides, and design tokens are maintained in the central architecture repository:
+
+* **Primary Architecture Specification:** [Frontend Architecture](file:///e:/CMS/Code/cms/documents/architecture/frontend-architecture.md)
+* **Full System Overview:** [System Overview](file:///e:/CMS/Code/cms/documents/architecture/system-overview.md)
+* **Backend Architecture:** [Backend Architecture](file:///e:/CMS/Code/cms/documents/architecture/backend-architecture.md)
+* **Docker Deployment Guide:** [Docker Setup Guide](file:///e:/CMS/Code/cms/DOCKER.md)
+
+Developed for ISRO Canteen Management System.

@@ -18,7 +18,9 @@ RUN npm ci
 
 COPY . .
 
-# Build production bundle (outputs to /app/dist)
+# Build production bundle (defaults to /api reverse-proxied by Nginx)
+ARG VITE_API_BASE_URL=/api
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN npm run build
 
 # ── Stage 2: Serve via Nginx on Rocky Linux 9 ──

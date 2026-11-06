@@ -55,3 +55,28 @@ export async function getAuthHeader(loginId = "perm1", password = "admin123") {
   const token = await getAuthToken(loginId, password);
   return { Authorization: `Bearer ${token}` };
 }
+
+/**
+ * Calculates a future date formatted as 'YYYY-MM-DD' offset from current date.
+ * @param {number} daysAhead
+ * @returns {string}
+ */
+export function getFutureDate(daysAhead = 7) {
+  const d = new Date();
+  d.setDate(d.getDate() + daysAhead);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Calculates a future ISO/MySQL datetime string offset from current date.
+ * @param {number} daysAhead
+ * @param {string} timeStr - default "23:59:59"
+ * @returns {string}
+ */
+export function getFutureDateTime(daysAhead = 7, timeStr = "23:59:59") {
+  const dStr = getFutureDate(daysAhead);
+  return `${dStr}T${timeStr}`;
+}

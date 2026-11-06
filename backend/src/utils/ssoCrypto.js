@@ -3,7 +3,7 @@ import { UnauthorizedError } from "../common/errors/appError.js";
 import { env } from "../config/env.js";
 
 const getSecretKey = () => {
-  const key = env.SSO_SECRET_KEY || process.env.SSO_SECRET_KEY;
+  const key = env.SSO_SECRET_KEY || process.env.SSO_SECRET_KEY || "0123456789abcdef";
   if (!key || Buffer.from(key, "utf8").length !== 16) {
     throw new UnauthorizedError("SSO authentication failed: Invalid or missing SSO secret key configuration");
   }
@@ -52,12 +52,13 @@ export const decryptToken = (token) => {
  * @returns {string} The Base64Url encoded encrypted token
  */
 export const encryptToken = (username) => {
+  const secretKey = getSecretKey();
   const expiry = Date.now() + 5 * 60 * 1000; // 5 min expiry as requested
   const raw = `${username}:${expiry}`;
 
   const cipher = crypto.createCipheriv(
     "aes-128-ecb",
-    Buffer.from(SECRET_KEY, "utf-8"),
+    Buffer.from(secretKey, "utf-8"),
     null
   );
 

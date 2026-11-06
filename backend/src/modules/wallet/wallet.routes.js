@@ -3,9 +3,25 @@ import { WalletController } from "./wallet.controller.js";
 import { walletValidation } from "./wallet.validation.js";
 import { validate } from "../../middlewares/validate.middleware.js";
 import { authenticate } from "../../middlewares/auth.middleware.js";
-import { authorizeAnyCanteenRole } from "../../middlewares/role.middleware.js";
+import {
+  authorizeAnyCanteenRole,
+  authorizeCanteenRoles,
+  getResourceCanteenId,
+} from "../../middlewares/role.middleware.js";
 
 const router = Router();
+
+const getCanteenFromWalletWd = async (req) => {
+  const targetCanteenId = await getResourceCanteenId("WALLETWD", req.params.walletWdId || req.params.id);
+  if (targetCanteenId) return targetCanteenId;
+
+  // Fallback for visitors who do not have an assigned default canteen in CMS_CONTEMP
+  return (
+    req.user?.CANTEENROLES?.find((r) => r.ISDEFAULT)?.CANTEENID ||
+    req.user?.CANTEENROLES?.[0]?.CANTEENID ||
+    null
+  );
+};
 
 // Guard: Exclusively SYSADM or Canteen Staff (CNTMGR / CNTAST / CMGR)
 const isManager = (req) => {
@@ -174,18 +190,20 @@ router.post(
   WalletController.requestWithdrawal
 );
 
-// Approve a withdrawal (Canteen Manager)
+// Approve a withdrawal (Canteen Manager of the employee's default canteen)
 router.post(
   "/withdraw/:walletWdId/approve",
   ...canteenManagerOnly,
+  authorizeCanteenRoles(["CNTMGR"], getCanteenFromWalletWd),
   validate(walletValidation.approveWithdrawal),
   WalletController.approveWithdrawal
 );
 
-// Reject a withdrawal (Canteen Manager)
+// Reject a withdrawal (Canteen Manager of the employee's default canteen)
 router.post(
   "/withdraw/:walletWdId/reject",
   ...canteenManagerOnly,
+  authorizeCanteenRoles(["CNTMGR"], getCanteenFromWalletWd),
   validate(walletValidation.rejectWithdrawal),
   WalletController.rejectWithdrawal
 );

@@ -13,17 +13,27 @@ export const addWallet = async (customerId, openAmount, createdBy, remarks) => {
 
 /**
  * Adds money to an existing wallet (Top-Up).
+ * Atomic transaction execution via Stored Procedure CMSADDWALLETAMT.
  */
-export const addWalletAmount = async (customerId, amount, paymentMethod, refNo, createdBy, remarks) => {
+export const addWalletAmount = async ({
+  customerId,
+  amount,
+  paymentMethod = "CASH",
+  refNo = null,
+  createdBy,
+  remarks = null,
+  canteenId = null,
+}) => {
   const [rows] = await pool.query(
-    "CALL CMSADDWALLETAMT(?, ?, ?, ?, ?, ?)",
+    "CALL CMSADDWALLETAMT(?, ?, ?, ?, ?, ?, ?)",
     [
       customerId,
       amount,
-      paymentMethod ?? "CASH",
-      refNo ?? null,
+      paymentMethod,
+      refNo,
       createdBy,
-      remarks ?? null,
+      remarks,
+      canteenId,
     ]
   );
   return rows[0]?.[0];
@@ -50,72 +60,17 @@ export const listWalletTransactions = async (
   page = null,
   pageSize = null
 ) => {
-  let rows;
-  let isLegacySp = false;
-
-  try {
-    const [res] = await pool.query(
-      "CALL CMSLISTWALLETTRAN(?, ?, ?, ?, ?)",
-      [
-        customerId,
-        fromDate ?? null,
-        toDate ?? null,
-        page ? Number(page) : null,
-        pageSize ? Number(pageSize) : null,
-      ]
-    );
-    rows = res;
-  } catch (err) {
-    if (err.code === "ER_SP_WRONG_NO_OF_ARGS" || err.errno === 1318) {
-      const [res] = await pool.query(
-        "CALL CMSLISTWALLETTRAN(?, ?, ?)",
-        [customerId, fromDate ?? null, toDate ?? null]
-      );
-      rows = res;
-      isLegacySp = true;
-    } else {
-      throw err;
-    }
-  }
-
-  const resultRows = rows[0] || [];
-  if (page && pageSize) {
-    if (isLegacySp) {
-      const totalRows = resultRows.length;
-      const limit = Number(pageSize) || 20;
-      const currentPage = Number(page) || 1;
-      const totalPages = totalRows > 0 ? Math.ceil(totalRows / limit) : 1;
-      const offset = (currentPage - 1) * limit;
-      const pagedRows = resultRows.slice(offset, offset + limit);
-
-      return {
-        rows: pagedRows,
-        pagination: {
-          totalRows,
-          currentPage,
-          pageSize: limit,
-          totalPages,
-        },
-      };
-    }
-
-    const totalRows = resultRows[0]?.TOTALROWS || 0;
-    const totalPages = resultRows[0]?.TOTALPAGES || (totalRows > 0 ? Math.ceil(totalRows / Number(pageSize)) : 1);
-    const currentPage = resultRows[0]?.CURRENTPAGE || Number(page) || 1;
-    const limit = resultRows[0]?.PAGESIZE || Number(pageSize) || 20;
-
-    return {
-      rows: resultRows,
-      pagination: {
-        totalRows: Number(totalRows),
-        currentPage: Number(currentPage),
-        pageSize: Number(limit),
-        totalPages: Number(totalPages),
-      },
-    };
-  }
-
-  return resultRows;
+  const [rows] = await pool.query(
+    "CALL CMSLISTWALLETTRAN(?, ?, ?, ?, ?)",
+    [
+      customerId,
+      fromDate ?? null,
+      toDate ?? null,
+      page ? Number(page) : null,
+      pageSize ? Number(pageSize) : null,
+    ]
+  );
+  return rows[0] || [];
 };
 
 /**
@@ -170,11 +125,12 @@ export const cancelWalletWithdrawal = async (walletWdId, customerId, remarks = n
 
 /**
  * Lists withdrawal requests.
+ * Supports customer-scoped history, canteen-scoped manager queue, and global admin view.
  */
-export const listWalletWithdrawals = async (customerId = null, status = null) => {
+export const listWalletWithdrawals = async (customerId = null, status = null, canteenId = null) => {
   const [rows] = await pool.query(
-    "CALL CMSLISTWALLETWD(?, ?)",
-    [customerId ?? null, status ?? null]
+    "CALL CMSLISTWALLETWD(?, ?, ?)",
+    [customerId ?? null, status ?? null, canteenId ?? null]
   );
-  return rows[0];
+  return rows[0] || [];
 };

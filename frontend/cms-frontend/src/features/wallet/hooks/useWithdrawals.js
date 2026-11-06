@@ -7,9 +7,9 @@ import {
 
 /**
  * Custom hook to manage contract employee cash withdrawal requests,
- * approval disbursement, and rejection workflow.
+ * approval disbursement, and rejection workflow scoped to a specific canteen.
  */
-export function useWithdrawals() {
+export function useWithdrawals(canteenId = null) {
   const [withdrawals, setWithdrawals] = useState([]);
   const [withdrawalsLoading, setWithdrawalsLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(null); // id being approved/rejected
@@ -21,14 +21,18 @@ export function useWithdrawals() {
     setFeedbackMsg(null);
     setWithdrawalsLoading(true);
     try {
-      const data = await fetchWithdrawals({ status: "REQ" });
+      const params = { status: "REQ" };
+      if (canteenId) {
+        params.canteenId = canteenId;
+      }
+      const data = await fetchWithdrawals(params);
       setWithdrawals(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Failed to load withdrawals", err);
     } finally {
       setWithdrawalsLoading(false);
     }
-  }, []);
+  }, [canteenId]);
 
   // Approve withdrawal
   const handleApprove = async (withdrawalId) => {

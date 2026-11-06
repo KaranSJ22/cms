@@ -64,8 +64,10 @@ services:
       DB_SSL: "false"
       JWT_SECRET: ${JWT_SECRET:-isro_cms_secure_jwt_secret_production_key_2026}
       JWT_EXPIRES_IN: 8h
-      FRONTEND_URL: http://localhost,http://frontend
+      FRONTEND_URL: http://localhost,http://frontend,http://127.0.0.1,http://localhost:8080,http://127.0.0.1:8080
       LOG_LEVEL: info
+    ports:
+      - "8080:8080"
     volumes:
       - ./database:/app/database:ro
     depends_on:

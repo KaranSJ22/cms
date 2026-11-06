@@ -22,6 +22,10 @@ app.use(helmet());
 
 const allowedOrigins = [
   ...((env.FRONTEND_URL || "").split(",").map((o) => o.trim()).filter(Boolean)),
+  "http://localhost",
+  "http://127.0.0.1",
+  "http://localhost:80",
+  "http://127.0.0.1:80",
   "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:5174",

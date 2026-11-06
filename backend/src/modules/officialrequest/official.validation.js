@@ -188,3 +188,25 @@ export const kitchenPrepSummaryQuerySchema = z.object({
     date: z.string().min(10, "Date (YYYY-MM-DD) is required"),
   }),
 });
+
+export const updateFulfillmentSchema = z.object({
+  params: z.object({
+    id: z.coerce.number().int().positive("Invalid booking ID"),
+  }),
+  body: z.object({
+    STATUS: z.enum(["CONFIRMED", "READY", "DISPATCHED", "DELIVERED"], {
+      errorMap: () => ({ message: "Status must be CONFIRMED, READY, DISPATCHED, or DELIVERED" }),
+    }),
+  }),
+});
+
+export const updateDishPrepSchema = z.object({
+  body: z.object({
+    CANTEENID: z.coerce.number().int().positive("Valid Canteen ID is required"),
+    DATE: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Target Date must be in YYYY-MM-DD format"),
+    MENUITEMID: z.coerce.number().int().positive("Valid Menu Item ID is required"),
+    STATUS: z.enum(["PENDING", "COOKING", "READY"], {
+      errorMap: () => ({ message: "Status must be PENDING, COOKING, or READY" }),
+    }),
+  }),
+});

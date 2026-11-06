@@ -147,7 +147,8 @@ END$$
 /* ============================================================
    PROCEDURE: CMSADDWALLETAMT
    ------------------------------------------------------------
-   Adds money to an existing wallet.
+   Adds money to an existing wallet (or auto-initializes wallet if missing).
+   Supports CASH and UPI top-ups with canteen attribution.
    ============================================================ */
 CREATE PROCEDURE CMSADDWALLETAMT
 (
@@ -156,14 +157,16 @@ CREATE PROCEDURE CMSADDWALLETAMT
     IN PPAYMENTMETHOD VARCHAR(20),
     IN PREFNO VARCHAR(80),
     IN PCREATEDBY INT,
-    IN PREMARKS VARCHAR(500)
+    IN PREMARKS VARCHAR(500),
+    IN PCANTEENID INT
 )
 BEGIN
-    DECLARE VWALLETID INT;
-    DECLARE VBALANCE DECIMAL(12,2);
+    DECLARE VWALLETID INT DEFAULT NULL;
+    DECLARE VBALANCE DECIMAL(12,2) DEFAULT 0.00;
     DECLARE VNEWBALANCE DECIMAL(12,2);
     DECLARE VSTATUSCODE VARCHAR(20);
     DECLARE VAUTOREFNO VARCHAR(80);
+    DECLARE VCTYPECODE VARCHAR(30);
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -171,18 +174,31 @@ BEGIN
         RESIGNAL;
     END;
 
-    IF PAMOUNT < 100.00 THEN
+    IF PAMOUNT <= 0.00 THEN
         SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'Top-up amount must be at least 100.00';
+            SET MESSAGE_TEXT = 'Top-up amount must be greater than zero';
+    END IF;
+
+    -- Validate Customer Type & Status (10 = ACT)
+    SELECT CT.CTYPECODE
+      INTO VCTYPECODE
+      FROM CMS_CUSTOMER C
+      JOIN CMS_CUSTTYPE CT ON CT.CTYPEID = C.CTYPEID
+     WHERE C.CUSTOMERID = PCUSTOMERID AND C.STATUSID = 10;
+
+    IF VCTYPECODE IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Customer not found or inactive';
+    END IF;
+
+    -- Contract employees have 100.00 minimum; Visitors have no minimum
+    IF VCTYPECODE IN ('CNT', 'CONTEMP', 'CONT') AND PAMOUNT < 100.00 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Contract employee top-up amount must be at least 100.00';
     END IF;
 
     IF PPAYMENTMETHOD IS NULL OR PPAYMENTMETHOD = '' THEN
         SET PPAYMENTMETHOD = 'CASH';
-    END IF;
-
-    IF PPAYMENTMETHOD <> 'CASH' THEN
-        SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'Only CASH payment method is enabled in the MVP';
     END IF;
 
     START TRANSACTION;
@@ -200,9 +216,13 @@ BEGIN
     WHERE W.CUSTOMERID = PCUSTOMERID
     FOR UPDATE;
 
+    -- Auto-initialize wallet if it does not exist yet (Status 10 = ACT)
     IF VWALLETID IS NULL THEN
-        SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'Wallet does not exist';
+        INSERT INTO CMS_WALLET (CUSTOMERID, BALANCE, RESERVEDAMT, STATUSID)
+        VALUES (PCUSTOMERID, 0.00, 0.00, 10);
+        SET VWALLETID = LAST_INSERT_ID();
+        SET VBALANCE = 0.00;
+        SET VSTATUSCODE = 'ACT';
     END IF;
 
     IF VSTATUSCODE <> 'ACT' THEN
@@ -210,23 +230,24 @@ BEGIN
             SET MESSAGE_TEXT = 'Wallet is not active';
     END IF;
 
-    SET VNEWBALANCE = VBALANCE + PAMOUNT;
+    SET VNEWBALANCE = ROUND(VBALANCE + PAMOUNT, 2);
 
     UPDATE CMS_WALLET
        SET BALANCE = VNEWBALANCE
      WHERE WALLETID = VWALLETID;
 
-    IF PREFNO IS NULL THEN
+    IF PREFNO IS NULL OR TRIM(PREFNO) = '' THEN
         CALL CMSGENAUTO('CMS_WALLETTRAN', 'REFNO', VAUTOREFNO);
     ELSE
-        SET VAUTOREFNO = PREFNO;
+        SET VAUTOREFNO = TRIM(PREFNO);
     END IF;
 
-    -- 40 = 'DEP'
+    -- 40 = 'DEP' / Deposit
     INSERT INTO CMS_WALLETTRAN
     (
         WALLETID,
         BOOKID,
+        CANTEENID,
         TRANSTYPE,
         SOURCECODE,
         AMOUNT,
@@ -242,6 +263,7 @@ BEGIN
     (
         VWALLETID,
         NULL,
+        PCANTEENID,
         'CREDIT',
         'TOPUP',
         PAMOUNT,
@@ -259,6 +281,12 @@ BEGIN
     SELECT
         W.WALLETID,
         W.CUSTOMERID,
+        PAMOUNT AS AMOUNT,
+        VBALANCE AS BALBEFORE,
+        VNEWBALANCE AS BALAFTER,
+        PCANTEENID AS CANTEENID,
+        VAUTOREFNO AS REFNO,
+        PPAYMENTMETHOD AS PAYMENTMETHOD,
         W.BALANCE,
         W.RESERVEDAMT,
         (W.BALANCE - W.RESERVEDAMT) AS AVAILABLEBALANCE,
@@ -289,6 +317,8 @@ BEGIN
     DECLARE VSTATUSCODE VARCHAR(20);
     DECLARE VWALLETWDID INT;
     DECLARE VWDSTATUSID INT;
+    DECLARE VCTYPECODE VARCHAR(30);
+    DECLARE VDEFAULTCANTEENID INT;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -299,6 +329,30 @@ BEGIN
     IF PAMOUNT <= 0.00 THEN
         SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'Withdrawal amount must be greater than zero';
+    END IF;
+
+    -- Validate Customer Type & Default Canteen for contract employees
+    SELECT CT.CTYPECODE
+      INTO VCTYPECODE
+      FROM CMS_CUSTOMER C
+      JOIN CMS_CUSTTYPE CT ON CT.CTYPEID = C.CTYPEID
+     WHERE C.CUSTOMERID = PCUSTOMERID;
+
+    IF VCTYPECODE IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Customer does not exist';
+    END IF;
+
+    IF VCTYPECODE IN ('CNT', 'CONTEMP', 'CONT') THEN
+        SELECT CE.DEFAULTCANTEENID
+          INTO VDEFAULTCANTEENID
+          FROM CMS_CONTEMP CE
+         WHERE CE.CUSTOMERID = PCUSTOMERID;
+
+        IF VDEFAULTCANTEENID IS NULL THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'Contract employee does not have an assigned default canteen for withdrawal processing';
+        END IF;
     END IF;
 
     SELECT STATUSID INTO VWDSTATUSID 
@@ -417,6 +471,7 @@ BEGIN
     DECLARE VSTATUSCODE VARCHAR(20);
     DECLARE VAUTOREFNO VARCHAR(80);
     DECLARE VCOMSTATUSID INT;
+    DECLARE VCANTEENID INT DEFAULT NULL;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -500,11 +555,44 @@ BEGIN
         SET VAUTOREFNO = PREFNO;
     END IF;
 
+    -- Resolve disbursement canteen from employee's default canteen
+    SELECT CE.DEFAULTCANTEENID
+      INTO VCANTEENID
+      FROM CMS_WALLET W
+      LEFT JOIN CMS_CONTEMP CE ON CE.CUSTOMERID = W.CUSTOMERID
+     WHERE W.WALLETID = VWALLETID;
+
+    -- Enforce that approver manages the employee's default canteen (or is SYSADM)
+    IF VCANTEENID IS NOT NULL AND PPROCESSEDBY IS NOT NULL THEN
+        IF NOT EXISTS (
+            SELECT 1
+            FROM CMS_USER U
+            LEFT JOIN CMS_USERROLE UR ON UR.USERID = U.USERID AND UR.ISACTIVE = 1
+            LEFT JOIN CMS_ROLE R ON R.ROLEID = UR.ROLEID AND R.ROLECODE = 'SYSADM'
+            WHERE U.USERID = PPROCESSEDBY
+              AND (R.ROLECODE = 'SYSADM' OR U.LOGINID = 'admin' OR U.USERID = 1)
+        ) AND NOT EXISTS (
+            SELECT 1
+            FROM CMS_CANTEENROLE CR
+            JOIN CMS_ROLE R ON R.ROLEID = CR.ROLEID
+            WHERE CR.USERID = PPROCESSEDBY
+              AND CR.CANTEENID = VCANTEENID
+              AND CR.ISACTIVE = 1
+              AND R.ROLECODE IN ('CNTMGR', 'CNTAST', 'CMGR')
+              AND (CR.VALIDFROM IS NULL OR CURRENT_TIMESTAMP >= CR.VALIDFROM)
+              AND (CR.VALIDUNTIL IS NULL OR CURRENT_TIMESTAMP <= CR.VALIDUNTIL)
+        ) THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'Approver is not authorized as Canteen Manager for the employee default canteen';
+        END IF;
+    END IF;
+
     -- 41 = 'WTH' (Withdrawal transaction state)
     INSERT INTO CMS_WALLETTRAN
     (
         WALLETID,
         BOOKID,
+        CANTEENID,
         TRANSTYPE,
         SOURCECODE,
         AMOUNT,
@@ -520,6 +608,7 @@ BEGIN
     (
         VWALLETID,
         NULL,
+        VCANTEENID,
         'WITHDRAWAL',
         'WITHDRAWAL',
         VWITHDRAWALAMOUNT,
@@ -575,6 +664,7 @@ BEGIN
     DECLARE VSTATUSCODE VARCHAR(20);
     DECLARE VRESERVED DECIMAL(12,2);
     DECLARE VREJSTATUSID INT;
+    DECLARE VCANTEENID INT DEFAULT NULL;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -617,6 +707,38 @@ BEGIN
     IF VSTATUSCODE <> 'REQ' THEN
         SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'Only requested withdrawals can be rejected';
+    END IF;
+
+    -- Resolve disbursement canteen from employee's default canteen
+    SELECT CE.DEFAULTCANTEENID
+      INTO VCANTEENID
+      FROM CMS_WALLET W
+      LEFT JOIN CMS_CONTEMP CE ON CE.CUSTOMERID = W.CUSTOMERID
+     WHERE W.WALLETID = VWALLETID;
+
+    -- Enforce that rejector manages the employee's default canteen (or is SYSADM)
+    IF VCANTEENID IS NOT NULL AND PPROCESSEDBY IS NOT NULL THEN
+        IF NOT EXISTS (
+            SELECT 1
+            FROM CMS_USER U
+            LEFT JOIN CMS_USERROLE UR ON UR.USERID = U.USERID AND UR.ISACTIVE = 1
+            LEFT JOIN CMS_ROLE R ON R.ROLEID = UR.ROLEID AND R.ROLECODE = 'SYSADM'
+            WHERE U.USERID = PPROCESSEDBY
+              AND (R.ROLECODE = 'SYSADM' OR U.LOGINID = 'admin' OR U.USERID = 1)
+        ) AND NOT EXISTS (
+            SELECT 1
+            FROM CMS_CANTEENROLE CR
+            JOIN CMS_ROLE R ON R.ROLEID = CR.ROLEID
+            WHERE CR.USERID = PPROCESSEDBY
+              AND CR.CANTEENID = VCANTEENID
+              AND CR.ISACTIVE = 1
+              AND R.ROLECODE IN ('CNTMGR', 'CNTAST', 'CMGR')
+              AND (CR.VALIDFROM IS NULL OR CURRENT_TIMESTAMP >= CR.VALIDFROM)
+              AND (CR.VALIDUNTIL IS NULL OR CURRENT_TIMESTAMP <= CR.VALIDUNTIL)
+        ) THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'Rejector is not authorized as Canteen Manager for the employee default canteen';
+        END IF;
     END IF;
 
     SELECT RESERVEDAMT

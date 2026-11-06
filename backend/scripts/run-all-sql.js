@@ -334,7 +334,7 @@ async function run() {
     // -------------------------------------------------------------
     if (runSchemas) {
       console.log("=========================================================");
-      console.log(" PHASE 1: Executing Schemas (22 files)");
+      console.log(" PHASE 1: Executing Schemas (21 files)");
       console.log("=========================================================");
 
       const execOrderCandidates = [
@@ -444,7 +444,7 @@ async function run() {
     // -------------------------------------------------------------
     if (runSeeds) {
       console.log("=========================================================");
-      console.log(" PHASE 4: Executing Seed Data (4 files)");
+      console.log(" PHASE 4: Executing Seed Data (6 files)");
       console.log("=========================================================");
 
       const seedFiles = [
@@ -452,6 +452,8 @@ async function run() {
         "SEED_AUTONO.sql",
         "SEED_DATA.sql",
         "SEED_HOLIDAYS.sql",
+        "SEED_SERVICE.sql",
+        "SEED_MENUITEM.sql",
       ];
 
       for (let i = 0; i < seedFiles.length; i++) {
@@ -462,8 +464,11 @@ async function run() {
           continue;
         }
         process.stdout.write(`[${String(i + 1).padStart(2, "0")}/${seedFiles.length}] Seed: ${file}... `);
-        const sql = sanitizeSql(fs.readFileSync(filePath, "utf-8"));
-        await connection.query(sql);
+        const content = fs.readFileSync(filePath, "utf-8");
+        const stmts = parseSqlStatements(content);
+        for (const stmt of stmts) {
+          await connection.query(stmt);
+        }
         console.log("OK");
       }
       console.log(`Phase 4 Complete: ${seedFiles.length} seed files executed.\n`);

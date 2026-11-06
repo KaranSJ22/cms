@@ -37,7 +37,7 @@ CREATE TABLE CMS_CONTEMP (
 ) ENGINE=InnoDB;
 
 /* ============================================================
-   CMS_OCEEMP -- Other Centre Employees (Outstation Canteen Eligible)
+   CMS_OCEEMP -- Other Centre Employees 
    ============================================================ */
 CREATE TABLE CMS_OCEEMP (
     OCEEMPID INT AUTO_INCREMENT PRIMARY KEY,

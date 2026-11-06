@@ -10,7 +10,7 @@ import {
 import { formatINR } from "../../../utils/formatters";
 
 export default function EmployeeWalletPage() {
-  const { customer } = useAuth();
+  const { customer, user } = useAuth();
 
   const [wallet, setWallet] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -33,10 +33,15 @@ export default function EmployeeWalletPage() {
   const [wdFeedback, setWdFeedback] = useState(null);
   const [cancellingWdId, setCancellingWdId] = useState(null);
 
-  const isEligibleCustomer =
+  const defaultCanteenId = customer?.DEFAULTCANTEENID || user?.DEFAULTCANTEENID;
+  const isContractEmp =
     customer?.CTYPECODE === "CNT" ||
     customer?.CTYPECODE === "CONTEMP" ||
-    customer?.CTYPECODE === "CONT" ||
+    customer?.CTYPECODE === "CONT";
+  const hasDefaultCanteen = !isContractEmp || Boolean(defaultCanteenId);
+
+  const isEligibleCustomer =
+    isContractEmp ||
     customer?.CTYPECODE === "VIS" ||
     customer?.CTYPECODE === "VISITOR";
 
@@ -198,10 +203,13 @@ export default function EmployeeWalletPage() {
 
           <button
             onClick={() => {
+              if (!hasDefaultCanteen) return;
               setIsWdModalOpen(true);
               setWdFeedback(null);
             }}
-            className="px-5 py-2.5 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-slate-900 transition-all shadow-md flex items-center gap-2"
+            disabled={!hasDefaultCanteen}
+            className="px-5 py-2.5 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-slate-900 transition-all shadow-md flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={!hasDefaultCanteen ? "Default canteen assignment required" : ""}
           >
             <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -210,6 +218,19 @@ export default function EmployeeWalletPage() {
           </button>
         </div>
       </div>
+
+      {/* ── Default Canteen Missing Warning (Contract Employees) ── */}
+      {!hasDefaultCanteen && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-3xl p-5 flex items-start gap-3 text-xs shadow-sm">
+          <span className="text-xl">⚠️</span>
+          <div className="space-y-1">
+            <h4 className="font-bold text-amber-900 text-sm">Default Canteen Required for Cash Withdrawals</h4>
+            <p className="text-amber-800 leading-relaxed">
+              Contract employees must have a default canteen assigned to request cash withdrawals. You can top up your wallet at any canteen cashier, but cash withdrawals are settled exclusively at your default canteen. Please contact your administrator or canteen management to configure your default canteen.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Balance Overview Cards ── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -252,6 +273,7 @@ export default function EmployeeWalletPage() {
               <thead className="bg-slate-100/75 text-slate-600 font-semibold border-b border-slate-200">
                 <tr>
                   <th className="p-3.5">Req ID</th>
+                  <th className="p-3.5">Disbursement Canteen</th>
                   <th className="p-3.5">Amount</th>
                   <th className="p-3.5">Requested On</th>
                   <th className="p-3.5">Status</th>
@@ -268,6 +290,11 @@ export default function EmployeeWalletPage() {
                   return (
                     <tr key={wid} className="hover:bg-slate-50 transition-colors">
                       <td className="p-3.5 font-mono font-bold text-slate-900">#{wid}</td>
+                      <td className="p-3.5">
+                        <span className="px-2.5 py-0.5 rounded-full text-[0.65rem] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                          {w.CANTEENNAME || (w.CANTEENID ? `Canteen #${w.CANTEENID}` : "Default Canteen")}
+                        </span>
+                      </td>
                       <td className="p-3.5 font-mono font-black text-rose-600">
                         {formatINR(w.AMOUNT || w.WITHDRAWAMT)}
                       </td>
@@ -427,6 +454,17 @@ export default function EmployeeWalletPage() {
             <p className="text-xs text-slate-500">
               Submit a request to withdraw unspent wallet balance in cash. Once approved by the canteen manager, collect cash at the counter.
             </p>
+
+            {defaultCanteenId && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 space-y-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <span>ℹ️</span> Default Canteen Cash Settlement
+                </div>
+                <p className="text-[0.7rem] text-blue-700 leading-relaxed">
+                  This cash withdrawal request will be routed exclusively to your assigned default canteen (Canteen #{defaultCanteenId}). Please visit that canteen counter for cash collection once approved.
+                </p>
+              </div>
+            )}
 
             {wdFeedback && (
               <div

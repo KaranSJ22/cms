@@ -559,9 +559,9 @@ describe("Wallet Module: Multi-Customer Withdrawal Lifecycle (Request, Cancel, A
     expect(Number(wallets[0].BALANCE)).toBe(350.00);
     expect(Number(wallets[0].RESERVEDAMT)).toBe(0.00);
 
-    // 4. Verify WITHDRAWAL ledger record created
+    // 4. Verify WITHDRAWAL ledger record created with correct CANTEENID
     const [txns] = await pool.query(
-      `SELECT TRANSTYPE, SOURCECODE, AMOUNT 
+      `SELECT TRANSTYPE, SOURCECODE, AMOUNT, CANTEENID 
        FROM CMS_WALLETTRAN 
        WHERE WALLETID IN (SELECT WALLETID FROM CMS_WALLET WHERE CUSTOMERID = 8)
          AND (TRANSTYPE = 'WITHDRAWAL' OR SOURCECODE = 'WITHDRAWAL')
@@ -569,6 +569,62 @@ describe("Wallet Module: Multi-Customer Withdrawal Lifecycle (Request, Cancel, A
     );
     expect(txns.length).toBe(1);
     expect(Number(txns[0].AMOUNT)).toBe(150.00);
+    expect(Number(txns[0].CANTEENID)).toBe(1);
+  });
+
+  it("should reject Manager of another canteen (mgr2, Canteen 3) from approving Canteen 1 request with HTTP 403 Forbidden", async () => {
+    const mgr2Auth = await getAuthHeader("mgr2");
+
+    // 1. Submit fresh withdrawal for cont1 (Canteen 1)
+    const reqRes = await request(app)
+      .post("/api/wallets/withdraw/request")
+      .set(cont1Auth)
+      .send({ customerId: 8, amount: 50.00, remarks: "Cross-canteen test request" });
+
+    expect(reqRes.status).toBe(201);
+    const testWdId = reqRes.body.DATA.WALLETWDID;
+
+    // 2. mgr2 (assigned only to Canteen 3) attempts to approve request for Canteen 1
+    const appRes = await request(app)
+      .post(`/api/wallets/withdraw/${testWdId}/approve`)
+      .set(mgr2Auth)
+      .send({ paymentMethod: "CASH" });
+
+    expect(appRes.status).toBe(403);
+    expect(appRes.body.SUCCESS).toBe(false);
+
+    // 3. Clean up by cancelling request
+    await request(app)
+      .post(`/api/wallets/withdraw/${testWdId}/cancel`)
+      .set(cont1Auth);
+  });
+
+  it("should isolate withdrawal queues so mgr2 (Canteen 3) does not see requests belonging to Canteen 1", async () => {
+    const mgr2Auth = await getAuthHeader("mgr2");
+
+    // 1. Submit fresh withdrawal for cont1 (Canteen 1)
+    const reqRes = await request(app)
+      .post("/api/wallets/withdraw/request")
+      .set(cont1Auth)
+      .send({ customerId: 8, amount: 50.00, remarks: "Queue isolation test" });
+
+    expect(reqRes.status).toBe(201);
+    const testWdId = reqRes.body.DATA.WALLETWDID;
+
+    // 2. mgr2 fetches withdrawal requests for Canteen 3
+    const listRes = await request(app)
+      .get("/api/wallets/withdraw/requests?canteenId=3&status=REQ")
+      .set(mgr2Auth);
+
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.SUCCESS).toBe(true);
+    const found = listRes.body.DATA.find((w) => w.WALLETWDID === testWdId);
+    expect(found).toBeUndefined();
+
+    // 3. Clean up by cancelling request
+    await request(app)
+      .post(`/api/wallets/withdraw/${testWdId}/cancel`)
+      .set(cont1Auth);
   });
 
   afterAll(async () => {

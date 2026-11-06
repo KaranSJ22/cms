@@ -102,6 +102,7 @@ export const walletValidation = {
       .object({
         customerId: z.coerce.number().int().positive().optional(),
         status: z.enum(["REQ", "COM", "REJ", "CAN"]).optional(),
+        canteenId: z.coerce.number().int().positive().optional(),
       })
       .optional(),
   }),

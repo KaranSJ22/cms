@@ -25,11 +25,15 @@ CALL CMSADDSTATUS(32, 'SRV', 'Served', 'BOOKING', 'Item delivered to customer');
 CALL CMSADDSTATUS(33, 'CAN', 'Cancelled', 'BOOKING', 'Cancelled by customer or admin');
 CALL CMSADDSTATUS(34, 'NOS', 'No Show', 'BOOKING', 'Time elapsed without claiming');
 
--- Official Bookings (35-38)
+-- Official Bookings (35-38, 61-63)
+-- Update Numbering each group gets 10 slots for now 
 CALL CMSADDSTATUS(35, 'SUB', 'Submitted', 'OFF_BOOK', 'Official booking submitted, pending approver');
 CALL CMSADDSTATUS(36, 'PENMGR', 'Pending Manager', 'OFF_BOOK', 'Approved by approver, pending canteen manager');
 CALL CMSADDSTATUS(37, 'CNF', 'Confirmed', 'OFF_BOOK', 'Confirmed by canteen manager');
 CALL CMSADDSTATUS(38, 'REJ', 'Rejected', 'OFF_BOOK', 'Rejected by approver or manager');
+CALL CMSADDSTATUS(61, 'RDY', 'Ready for Dispatch', 'OFF_BOOK', 'Packed and ready for delivery runner');
+CALL CMSADDSTATUS(62, 'DISP', 'Dispatched', 'OFF_BOOK', 'Dispatched / In transit to event venue');
+CALL CMSADDSTATUS(63, 'DELV', 'Delivered', 'OFF_BOOK', 'Delivered and fulfilled at event venue');
 
 -- Wallet Transactions (40-49)
 CALL CMSADDSTATUS(40, 'DEP', 'Deposit', 'WALLET_TXN', 'Funds added to wallet');

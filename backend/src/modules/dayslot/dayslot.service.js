@@ -20,7 +20,7 @@ export const fetchDaySlots = async (params = {}) => {
   const PAGE = params.PAGE ?? params.page ?? null;
   const PAGESIZE = params.PAGESIZE ?? params.pageSize ?? null;
 
-  return await getDaySlots({
+  const rows = await getDaySlots({
     SERVICEID: SERVICEID ? Number(SERVICEID) : null,
     CANTEENID: CANTEENID ? Number(CANTEENID) : null,
     DATEFROM: DATEFROM || null,
@@ -28,6 +28,27 @@ export const fetchDaySlots = async (params = {}) => {
     PAGE: PAGE ? Number(PAGE) : null,
     PAGESIZE: PAGESIZE ? Number(PAGESIZE) : null,
   });
+
+  if (PAGE && PAGESIZE) {
+    const totalRows = rows[0]?.TOTALROWS || 0;
+    const totalPages =
+      rows[0]?.TOTALPAGES ||
+      (totalRows > 0 ? Math.ceil(totalRows / Number(PAGESIZE)) : 1);
+    const currentPage = rows[0]?.CURRENTPAGE || Number(PAGE) || 1;
+    const limit = rows[0]?.PAGESIZE || Number(PAGESIZE) || 20;
+
+    return {
+      rows,
+      pagination: {
+        totalRows: Number(totalRows),
+        currentPage: Number(currentPage),
+        pageSize: Number(limit),
+        totalPages: Number(totalPages),
+      },
+    };
+  }
+
+  return rows;
 };
 
 export const fetchDaySlot = async (DAYSLOTID) => {

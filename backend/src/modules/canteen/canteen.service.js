@@ -1,4 +1,3 @@
-import { pool } from "../../db/connection.js";
 import { NotFoundError } from "../../common/errors/appError.js";
 import * as CanteenRepository from "./canteen.repository.js";
 
@@ -47,47 +46,10 @@ export const createCenter = async (centerData) => {
 /**
  * Resolves the CANTEENID associated with a given operational resource
  * (DAYSLOT, DAYMENU, or BOOKING).
- * NOTE: to be converted to stored procedure later
  */
 export const getResourceCanteenId = async (resourceType, id) => {
-  if (!id) return null;
-
   const numericId = Number(id);
   if (!Number.isInteger(numericId) || numericId <= 0) return null;
 
-  // to be converted to stored procedure later
-  if (resourceType === "DAYSLOT") {
-    const [rows] = await pool.query(
-      "SELECT CANTEENID FROM CMS_DAYSLOT WHERE DAYSLOTID = ? LIMIT 1",
-      [numericId]
-    );
-    return rows[0]?.CANTEENID || null;
-  }
-
-  // to be converted to stored procedure later
-  if (resourceType === "DAYMENU") {
-    const [rows] = await pool.query(
-      `SELECT DS.CANTEENID 
-       FROM CMS_DAYMENU DM 
-       JOIN CMS_DAYSLOT DS ON DS.DAYSLOTID = DM.DAYSLOTID 
-       WHERE DM.DAYMENUID = ? LIMIT 1`,
-      [numericId]
-    );
-    return rows[0]?.CANTEENID || null;
-  }
-
-  // to be converted to stored procedure later
-  if (resourceType === "BOOKING") {
-    const [rows] = await pool.query(
-      `SELECT DS.CANTEENID 
-       FROM CMS_BOOKITEM BI 
-       JOIN CMS_DAYMENU DM ON DM.DAYMENUID = BI.DAYMENUID 
-       JOIN CMS_DAYSLOT DS ON DS.DAYSLOTID = DM.DAYSLOTID 
-       WHERE BI.BOOKID = ? LIMIT 1`,
-      [numericId]
-    );
-    return rows[0]?.CANTEENID || null;
-  }
-
-  return null;
+  return await CanteenRepository.getResourceCanteenId(resourceType, numericId);
 };

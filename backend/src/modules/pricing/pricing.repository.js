@@ -17,8 +17,8 @@ export const addItemPrice = async ({
 };
 
 export const getItemPriceHistory = async (MENUITEMID) => {
-  const [resultSets] = await pool.execute("CALL CMSLISTITEMPRICE(?)", [
-    MENUITEMID,
+  const [resultSets] = await pool.execute("CALL CMSGETITEMPRICEHISTORY(?)", [
+    Number(MENUITEMID),
   ]);
 
   return resultSets[0] || [];

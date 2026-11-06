@@ -1,4 +1,3 @@
-import { pool } from "../../db/connection.js";
 import {
   addItemPrice as addItemPriceRepository,
   deactivateItemPrice as deactivateItemPriceRepository,
@@ -24,32 +23,7 @@ export const createItemPrice = async (menuItemId, priceData, createdByUserId) =>
 };
 
 export const fetchItemPriceHistory = async (menuItemId) => {
-  const [rows] = await pool.query(
-    `SELECT 
-       IP.ITEMPRICEID, 
-       IP.MENUITEMID, 
-       MI.MENUCODE, 
-       MI.ITEMNAME,
-       IP.EFFFROM, 
-       IP.STATUSID, 
-       ST.STATUSCODE, 
-       IP.CREATEDBY, 
-       IP.CREATEDAT,
-       IPD.ITMPRICDTID AS ITEMPRICEDTID,
-       IPD.ITMPRICDTID,
-       IPD.CTYPEID,
-       CT.CTYPECODE,
-       CT.CTYPENAME,
-       IPD.PRICE
-     FROM CMS_ITEMPRICE IP
-     JOIN CMS_STATUS ST ON ST.STATUSID = IP.STATUSID
-     JOIN CMS_MENUITEM MI ON MI.MENUITEMID = IP.MENUITEMID
-     LEFT JOIN CMS_ITMPRICDT IPD ON IPD.ITEMPRICEID = IP.ITEMPRICEID
-     LEFT JOIN CMS_CUSTTYPE CT ON CT.CTYPEID = IPD.CTYPEID
-     WHERE IP.MENUITEMID = ?
-     ORDER BY IP.EFFFROM DESC, CT.CTYPENAME ASC`,
-    [Number(menuItemId)]
-  );
+  const rows = await getItemPriceHistory(menuItemId);
 
   const historyMap = new Map();
   for (const row of rows) {

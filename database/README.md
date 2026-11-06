@@ -121,7 +121,6 @@ SOURCE RUN_ALL.sql;
 19. `MENUTEMPLATE_SCHEMA.sql`
 20. `WALLET_SCHEMA.sql`
 21. `OFFICIAL_REQUEST.sql`
-22. `COMPATIBILITY_VIEWS.sql`
 
 ### Phase 2: Stored Procedures (`procedures/`)
 1. `common/write/COMMON_GENAUTO.sql` *(Must run before any SP calling CMSGENAUTO)*

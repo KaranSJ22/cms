@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import request from "supertest";
 import app from "../../../app.js";
 import { pool } from "../../../db/connection.js";
-import { getAuthHeader } from "../../../test/testHelpers.js";
+import { getAuthHeader, getFutureDate } from "../../../test/testHelpers.js";
 
 describe("Day Slot Module: Security & RBAC Guards", () => {
   it("should reject unauthenticated request to GET /api/day-slots with HTTP 401", async () => {
@@ -18,7 +18,7 @@ describe("Day Slot Module: Security & RBAC Guards", () => {
       .send({
         CANTEENID: 1,
         SERVICEID: 1,
-        SERVICEDATE: "2026-11-01",
+        SERVICEDATE: getFutureDate(7),
         STARTTIME: "12:00",
         ENDTIME: "14:30",
       });
@@ -47,7 +47,7 @@ describe("Day Slot Module: Security & RBAC Guards", () => {
       .send({
         CANTEENID: 1,
         SERVICEID: 1,
-        SERVICEDATE: "2026-11-01",
+        SERVICEDATE: getFutureDate(7),
         STARTTIME: "12:00",
         ENDTIME: "14:30",
       });
@@ -95,7 +95,7 @@ describe("Day Slot Module: Input Validation", () => {
       .send({
         CANTEENID: 1,
         SERVICEID: 1,
-        SERVICEDATE: "2026-11-01",
+        SERVICEDATE: getFutureDate(7),
         STARTTIME: "25:70",
         ENDTIME: "14:30",
       });
@@ -154,7 +154,7 @@ describe("Day Slot Module: Dynamic CRUD Lifecycle & Filtering", () => {
   let testCanteenId;
   let testServiceId;
   let createdSlotId;
-  const targetDate = "2026-12-15";
+  const targetDate = getFutureDate(14);
 
   beforeAll(async () => {
     managerAuth = await getAuthHeader("mgr1");
@@ -296,7 +296,7 @@ describe("Day Slot Module: Business Rule Invariants", () => {
       .send({
         CANTEENID: testCanteenId,
         SERVICEID: testServiceId,
-        SERVICEDATE: "2026-12-20",
+        SERVICEDATE: getFutureDate(21),
         STARTTIME: "14:00",
         ENDTIME: "13:00",
       });

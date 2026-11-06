@@ -20,6 +20,8 @@ import {
   levelMappingSchema,
   kitchenConfirmedQuerySchema,
   kitchenPrepSummaryQuerySchema,
+  updateFulfillmentSchema,
+  updateDishPrepSchema,
 } from "./official.validation.js";
 
 import {
@@ -50,6 +52,8 @@ import {
   processManagerActionController,
   listConfirmedOfficialBookingsController,
   getOfficialKitchenPrepSummaryController,
+  updateBookingFulfillmentController,
+  updateDishPrepStatusController,
 } from "./official.controller.js";
 
 const router = express.Router();
@@ -234,6 +238,22 @@ router.get(
   authorizeCanteenRoles(["CNTMGR", "CNTAST", "CNTSTF"]),
   validate(kitchenPrepSummaryQuerySchema),
   getOfficialKitchenPrepSummaryController
+);
+
+router.put(
+  "/kitchen-prep/bookings/:id/fulfillment",
+  authenticate,
+  authorizeCanteenRoles(["CNTMGR", "CNTAST", "CNTSTF"], getCanteenFromBooking),
+  validate(updateFulfillmentSchema),
+  updateBookingFulfillmentController
+);
+
+router.put(
+  "/kitchen-prep/dishes/prep-status",
+  authenticate,
+  authorizeCanteenRoles(["CNTMGR", "CNTAST", "CNTSTF"], (req) => req.body?.CANTEENID || req.validated?.body?.CANTEENID),
+  validate(updateDishPrepSchema),
+  updateDishPrepStatusController
 );
 
 export default router;

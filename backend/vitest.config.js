@@ -11,6 +11,7 @@ export default defineConfig({
     fileParallelism: false,
     env: {
       DB_NAME: "cms_test_db",
+      SSO_SECRET_KEY: "0123456789abcdef",
     },
   },
 });

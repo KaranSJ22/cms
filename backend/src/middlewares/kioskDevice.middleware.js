@@ -58,12 +58,12 @@ export async function resolveKioskFromIp(ip) {
     }
     return null;
   } catch (err) {
-    // If not found in DB procedure, return null rather than 500
+    // If client IP validation signal from DB procedure, return null
     if (err.sqlState === "45000") {
       return null;
     }
-    logger.warn({ ip, err: err.message }, "Error identifying kiosk device from IP");
-    return null;
+    logger.error({ ip, err }, "Operational failure identifying kiosk device from database");
+    throw err;
   }
 }
 
@@ -79,6 +79,15 @@ export const detectKiosk = async (req, res, next) => {
     }
     next();
   } catch (err) {
+    logger.error(
+      {
+        err,
+        ip: getClientIp(req),
+        url: req.originalUrl,
+        method: req.method,
+      },
+      "Unexpected error in optional detectKiosk middleware"
+    );
     next();
   }
 };

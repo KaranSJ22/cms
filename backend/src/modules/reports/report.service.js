@@ -1,5 +1,4 @@
 import * as ReportRepository from "./report.repository.js";
-import { pool } from "../../db/connection.js";
 import { NotFoundError } from "../../common/errors/appError.js";
 import { getMonthDateRange } from "../../utils/dateTime.js";
 
@@ -8,188 +7,43 @@ export const getKitchenSummary = async (daySlotId) => {
   return result;
 };
 
-// ── Raw SQL Reporting Queries (Maintained in Service Layer) ──────────────────
-
 export const findMonthlyPayrollData = async ({
   startDate,
   endDate,
   canteenId,
   allowedTypes,
+  customerType,
   loginId,
 }) => {
-  const queryParams = [startDate, endDate];
-
-  let canteenFilterClause = "";
-  if (canteenId) {
-    canteenFilterClause = " AND ds.CANTEENID = ? ";
-    queryParams.push(parseInt(canteenId, 10));
+  let cType = customerType;
+  if (!cType && Array.isArray(allowedTypes)) {
+    const hasPrm = allowedTypes.some((t) => ["PRM", "PERMEMP"].includes(t));
+    const hasOce = allowedTypes.some((t) => ["OCE", "OCEEMP"].includes(t));
+    if (hasPrm && !hasOce) cType = "PRM";
+    else if (!hasPrm && hasOce) cType = "OCE";
+    else cType = "ALL";
   }
 
-  const typePlaceholders = allowedTypes.map(() => "?").join(", ");
-  queryParams.push(...allowedTypes);
-
-  let loginFilterClause = "";
-  if (loginId && loginId.trim()) {
-    loginFilterClause = " AND u.LOGINID LIKE ? ";
-    queryParams.push(`%${loginId.trim()}%`);
-  }
-
-  const sql = `
-    SELECT 
-        c.CUSTOMERID,
-        u.USERID,
-        u.LOGINID,
-        u.FULLNAME,
-        ct.CTYPECODE,
-        CASE 
-            WHEN ct.CTYPECODE IN ('PRM', 'PERMEMP') THEN 'Permanent Employee'
-            WHEN ct.CTYPECODE IN ('OCE', 'OCEEMP') THEN 'Other Centre Employee'
-            ELSE ct.CTYPECODE
-        END AS CTYPENAME,
-        COALESCE(pe.EMPCODE, oe.EMPCODE, u.LOGINID) AS EMPCODE,
-        COALESCE(pe.DEPT, oe.DEPT, 'N/A') AS DEPT,
-        COALESCE(pe.DESIG, oe.DESIG, 'N/A') AS DESIG,
-        oe.CENTERNAME,
-        COUNT(DISTINCT b.SERVICEDATE) AS DAYS_BOOKED,
-        COUNT(DISTINCT b.BOOKID) AS TOTAL_BOOKINGS,
-        SUM(CASE WHEN b.STATUSID = 32 THEN 1 ELSE 0 END) AS SERVED_BOOKINGS,
-        SUM(CASE WHEN b.STATUSID = 34 THEN 1 ELSE 0 END) AS NOSHOW_BOOKINGS,
-        SUM(CASE WHEN b.STATUSID = 30 THEN 1 ELSE 0 END) AS CREATED_BOOKINGS,
-        COALESCE(SUM(b.TOTALAMOUNT), 0) AS TOTAL_AMOUNT,
-        GROUP_CONCAT(DISTINCT can.CANTEENNAME ORDER BY can.CANTEENNAME SEPARATOR ', ') AS CANTEENS_USED
-    FROM CMS_CUSTOMER c
-    INNER JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = c.CTYPEID
-    INNER JOIN CMS_USER u ON c.USERID = u.USERID
-    LEFT JOIN CMS_PERMEMP pe ON c.CUSTOMERID = pe.CUSTOMERID
-    LEFT JOIN CMS_OCEEMP oe ON c.CUSTOMERID = oe.CUSTOMERID
-    INNER JOIN (
-        SELECT 
-            b.BOOKID,
-            b.CUSTOMERID,
-            b.SERVICEDATE,
-            b.STATUSID,
-            b.TOTALAMOUNT,
-            MIN(ds.CANTEENID) AS CANTEENID
-        FROM CMS_BOOKING b
-        INNER JOIN CMS_BOOKITEM bi ON b.BOOKID = bi.BOOKID
-        INNER JOIN CMS_DAYMENU dm ON bi.DAYMENUID = dm.DAYMENUID
-        INNER JOIN CMS_DAYSLOT ds ON dm.DAYSLOTID = ds.DAYSLOTID
-        WHERE b.STATUSID != 33
-          AND b.SERVICEDATE >= ?
-          AND b.SERVICEDATE <= ?
-          ${canteenFilterClause}
-        GROUP BY b.BOOKID, b.CUSTOMERID, b.SERVICEDATE, b.STATUSID, b.TOTALAMOUNT
-    ) b ON c.CUSTOMERID = b.CUSTOMERID
-    INNER JOIN CMS_CANTEEN can ON b.CANTEENID = can.CANTEENID
-    WHERE ct.CTYPECODE IN (${typePlaceholders})
-      ${loginFilterClause}
-    GROUP BY 
-        c.CUSTOMERID, 
-        u.USERID, 
-        u.LOGINID, 
-        u.FULLNAME, 
-        ct.CTYPECODE, 
-        pe.EMPCODE, 
-        oe.EMPCODE, 
-        pe.DEPT, 
-        oe.DEPT, 
-        pe.DESIG, 
-        oe.DESIG, 
-        oe.CENTERNAME
-    ORDER BY u.LOGINID ASC;
-  `;
-
-  const [rows] = await pool.query(sql, queryParams);
-  return rows;
+  return await ReportRepository.getMonthlyPayrollData({
+    startDate,
+    endDate,
+    canteenId,
+    customerType: cType || "ALL",
+    loginId,
+  });
 };
 
 export const findEmployeeProfile = async (customerId) => {
-  const [empRows] = await pool.query(
-    `
-    SELECT 
-        c.CUSTOMERID,
-        u.USERID,
-        u.LOGINID,
-        u.FULLNAME,
-        ct.CTYPECODE,
-        COALESCE(pe.EMPCODE, oe.EMPCODE, u.LOGINID) AS EMPCODE,
-        COALESCE(pe.DEPT, oe.DEPT, 'N/A') AS DEPT,
-        COALESCE(pe.DESIG, oe.DESIG, 'N/A') AS DESIG,
-        oe.CENTERNAME
-    FROM CMS_CUSTOMER c
-    INNER JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = c.CTYPEID
-    INNER JOIN CMS_USER u ON c.USERID = u.USERID
-    LEFT JOIN CMS_PERMEMP pe ON c.CUSTOMERID = pe.CUSTOMERID
-    LEFT JOIN CMS_OCEEMP oe ON c.CUSTOMERID = oe.CUSTOMERID
-    WHERE c.CUSTOMERID = ?
-    LIMIT 1
-  `,
-    [customerId]
-  );
-  return empRows[0] || null;
+  return await ReportRepository.getEmployeeProfile(customerId);
 };
 
 export const findEmployeeMonthlyBookings = async ({ customerId, startDate, endDate }) => {
-  const [bookingRows] = await pool.query(
-    `
-    SELECT 
-        b.BOOKID,
-        b.BOOKNO,
-        DATE_FORMAT(b.SERVICEDATE, '%Y-%m-%d') AS SERVICEDATE,
-        b.SERVICEID,
-        COALESCE(s.SERVNAME, 'Meal Service') AS SERVNAME,
-        b.STATUSID,
-        COALESCE(st.STATUSCODE, 'CRT') AS STATUSCODE,
-        COALESCE(st.STATUSNAME, 'Confirmed') AS STATUSNAME,
-        b.TOTALQTY,
-        b.TOTALAMOUNT,
-        b.BOOKEDAT,
-        b.BOOKEDAT AS BOOKEDON,
-        b.SERVEDAT,
-        b.SERVEDAT AS SERVEDON
-    FROM CMS_BOOKING b
-    LEFT JOIN CMS_SERVICE s ON b.SERVICEID = s.SERVICEID
-    LEFT JOIN CMS_STATUS st ON b.STATUSID = st.STATUSID
-    WHERE b.CUSTOMERID = ?
-      AND b.STATUSID != 33
-      AND b.SERVICEDATE >= ?
-      AND b.SERVICEDATE <= ?
-    ORDER BY b.SERVICEDATE DESC, b.BOOKID DESC
-  `,
-    [customerId, startDate, endDate]
-  );
-  return bookingRows;
+  return await ReportRepository.getEmployeeMonthlyBookings({ customerId, startDate, endDate });
 };
 
 export const findBookingItemsWithCanteen = async (bookIds) => {
-  if (!bookIds || bookIds.length === 0) return [];
-  const placeholders = bookIds.map(() => "?").join(", ");
-  const [itemRows] = await pool.query(
-    `
-    SELECT 
-        bi.BOOKID,
-        bi.BOOKITEMID,
-        COALESCE(mi.ITEMNAME, 'Dish Item') AS ITEMNAME,
-        mi.SHORTNAME,
-        mi.MENUCODE,
-        bi.QTY,
-        bi.RATE,
-        bi.AMOUNT,
-        can.CANTEENNAME,
-        can.CANTEENCODE
-    FROM CMS_BOOKITEM bi
-    LEFT JOIN CMS_MENUITEM mi ON bi.MENUITEMID = mi.MENUITEMID
-    LEFT JOIN CMS_DAYMENU dm ON bi.DAYMENUID = dm.DAYMENUID
-    LEFT JOIN CMS_DAYSLOT ds ON dm.DAYSLOTID = ds.DAYSLOTID
-    LEFT JOIN CMS_CANTEEN can ON ds.CANTEENID = can.CANTEENID
-    WHERE bi.BOOKID IN (${placeholders})
-  `,
-    bookIds
-  );
-  return itemRows;
+  return await ReportRepository.getBookingItemsWithCanteen(bookIds);
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Monthly Payroll Summary for Permanent and Other Centre Employees.
@@ -204,19 +58,19 @@ export const getMonthlyPayrollReport = async ({
   const { startDate, endDate, targetYear, targetMonth } = getMonthDateRange(year, month);
 
   // Customer Type filter
-  let allowedTypes = ["PRM", "PERMEMP", "OCE", "OCEEMP"];
+  let cType = "ALL";
   const upperType = String(customerType).toUpperCase().trim();
   if (upperType === "PRM" || upperType === "PERMEMP") {
-    allowedTypes = ["PRM", "PERMEMP"];
+    cType = "PRM";
   } else if (upperType === "OCE" || upperType === "OCEEMP") {
-    allowedTypes = ["OCE", "OCEEMP"];
+    cType = "OCE";
   }
 
-  const rows = await findMonthlyPayrollData({
+  const rows = await ReportRepository.getMonthlyPayrollData({
     startDate,
     endDate,
     canteenId,
-    allowedTypes,
+    customerType: cType,
     loginId,
   });
 
@@ -266,14 +120,14 @@ export const getEmployeeMonthlyPayrollBreakdown = async ({
   const { startDate, endDate, targetYear, targetMonth } = getMonthDateRange(year, month);
 
   // 1. Fetch employee basic info
-  const employee = await findEmployeeProfile(customerId);
+  const employee = await ReportRepository.getEmployeeProfile(customerId);
 
   if (!employee) {
     throw new NotFoundError("Employee profile not found");
   }
 
   // 2. Fetch booking headers
-  const bookingRows = await findEmployeeMonthlyBookings({
+  const bookingRows = await ReportRepository.getEmployeeMonthlyBookings({
     customerId,
     startDate,
     endDate,
@@ -285,7 +139,7 @@ export const getEmployeeMonthlyPayrollBreakdown = async ({
   let canteenMap = {};
 
   if (bookIds.length > 0) {
-    const itemRows = await findBookingItemsWithCanteen(bookIds);
+    const itemRows = await ReportRepository.getBookingItemsWithCanteen(bookIds);
 
     for (const item of itemRows) {
       if (!itemsMap[item.BOOKID]) {

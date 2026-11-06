@@ -183,9 +183,13 @@ BEGIN
 
     START TRANSACTION;
 
-    -- Create or find existing day slot
-    SELECT DAYSLOTID INTO VDAYSLOTID
-    FROM CMS_DAYSLOT WHERE SERVICEID = VSERVICEID AND SERVICEDATE = PTARGETDATE;
+    -- Create or find existing day slot (isolated block so NOT FOUND does not taint done)
+    SET VDAYSLOTID = NULL;
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR NOT FOUND BEGIN END;
+        SELECT DAYSLOTID INTO VDAYSLOTID
+        FROM CMS_DAYSLOT WHERE SERVICEID = VSERVICEID AND SERVICEDATE = PTARGETDATE;
+    END;
 
     IF VDAYSLOTID IS NULL THEN
         CALL CMSGENAUTO('CMS_DAYSLOT', 'SLOTNO', VSLOTNO);
@@ -194,8 +198,10 @@ BEGIN
         SET VDAYSLOTID = LAST_INSERT_ID();
     END IF;
 
+    SET done = FALSE;
     OPEN cur;
     read_loop: LOOP
+        SET done = FALSE;
         FETCH cur INTO v_menuitemid, v_isspecial, v_isprebook, v_iskiosk, v_defavailqty, v_maxqty;
         IF done THEN
             LEAVE read_loop;

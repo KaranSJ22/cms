@@ -17,5 +17,5 @@ export const env = {
 
   JWT_SECRET: process.env.JWT_SECRET || "cms_default_jwt_secret_key_change_in_production",
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || "8h",
-  SSO_SECRET_KEY: process.env.SSO_SECRET_KEY || "",
+  SSO_SECRET_KEY: process.env.SSO_SECRET_KEY || "0123456789abcdef",
 };

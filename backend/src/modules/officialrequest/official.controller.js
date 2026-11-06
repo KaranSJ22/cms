@@ -156,3 +156,22 @@ export const getOfficialKitchenPrepSummaryController = asyncHandler(async (req, 
   const summary = await officialService.getOfficialKitchenPrepSummary(canteenId, date);
   return sendSuccess(res, summary, "Official kitchen prep summary retrieved");
 });
+
+export const updateBookingFulfillmentController = asyncHandler(async (req, res) => {
+  const bookingId = Number(req.params.id);
+  const { STATUS } = req.validated.body;
+  const result = await officialService.updateBookingFulfillmentService(
+    bookingId,
+    STATUS,
+    req.user
+  );
+  return sendSuccess(res, result, `Booking fulfillment updated to ${STATUS}`);
+});
+
+export const updateDishPrepStatusController = asyncHandler(async (req, res) => {
+  const result = await officialService.updateDishPrepStatusService(
+    req.validated.body,
+    req.user
+  );
+  return sendSuccess(res, result, "Dish prep status updated successfully");
+});

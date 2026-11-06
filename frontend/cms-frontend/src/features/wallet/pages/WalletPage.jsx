@@ -57,7 +57,7 @@ export default function WalletPage() {
     loadWithdrawals,
     handleApprove,
     handleReject,
-  } = useWithdrawals();
+  } = useWithdrawals(activeCanteen?.CANTEENID);
 
   // Load pending withdrawal requests on mount to show badge count and on tab switch
   useEffect(() => {

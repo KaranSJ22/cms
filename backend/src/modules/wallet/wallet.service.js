@@ -1,7 +1,7 @@
 import * as walletRepo from "./wallet.repository.js";
 import { findCustomerByIdentifier } from "../identity/identity.service.js";
-import { pool } from "../../db/connection.js";
 import { PaymentStrategyFactory } from "./strategies/paymentStrategy.factory.js";
+import { getResourceCanteenId } from "../canteen/canteen.service.js";
 import {
   BadRequestError,
   NotFoundError,
@@ -88,112 +88,61 @@ export class WalletService {
     const strategy = PaymentStrategyFactory.getStrategy(paymentMethod);
     await strategy.validate({ amount, refNo });
 
-    const conn = await pool.getConnection();
-    try {
-      await conn.beginTransaction();
+    // 3. Customer Type & Status Check
+    const cust = await findCustomerByIdentifier(customerId);
+    if (!cust) throw new NotFoundError("Customer not found or inactive");
 
-      // 3. Customer Type & Status Check (10 = 'ACT' from SEED_STATUS.sql)
-      const [[cust]] = await conn.query(
-        `SELECT c.CUSTOMERID, c.CTYPEID, ct.CTYPECODE, c.DISPNAME 
-         FROM CMS_CUSTOMER c 
-         JOIN CMS_CUSTTYPE ct ON ct.CTYPEID = c.CTYPEID 
-         WHERE c.CUSTOMERID = ? AND c.STATUSID = 10`,
-        [customerId]
-      );
-      if (!cust) throw new NotFoundError("Customer not found or inactive");
-
-      const topupAmount = Number(amount);
-      if (topupAmount <= 0) {
-        throw new BadRequestError("Top-up amount must be greater than zero");
-      }
-
-      // Rule: Contract employees have ₹100 minimum; Visitors have no minimum (can pay exact amount)
-      if (cust.CTYPECODE === "CNT" && topupAmount < 100.0) {
-        throw new BadRequestError(
-          "Contract employee top-up amount must be at least ₹100.00"
-        );
-      }
-
-      // 4. Execute Payment Strategy
-      const paymentResult = await strategy.processPayment({
-        amount: topupAmount,
-        customer: cust,
-        refNo,
-        createdBy,
-        remarks,
-      });
-
-      // 5. Fetch or Auto-Initialize Wallet (Status 10 = 'ACT')
-      let [[wallet]] = await conn.query(
-        `SELECT WALLETID, BALANCE FROM CMS_WALLET WHERE CUSTOMERID = ? AND STATUSID = 10 FOR UPDATE`,
-        [customerId]
-      );
-
-      if (!wallet) {
-        const [wRes] = await conn.query(
-          `INSERT INTO CMS_WALLET (CUSTOMERID, BALANCE, RESERVEDAMT, STATUSID) VALUES (?, 0.00, 0.00, 10)`,
-          [customerId]
-        );
-        wallet = { WALLETID: wRes.insertId, BALANCE: 0.0 };
-      }
-
-      const balBefore = Number(wallet.BALANCE);
-      const balAfter = Number((balBefore + topupAmount).toFixed(2));
-
-      // 6. Update Wallet Balance
-      await conn.query(
-        `UPDATE CMS_WALLET SET BALANCE = ? WHERE WALLETID = ?`,
-        [balAfter, wallet.WALLETID]
-      );
-
-      // 7. Resolve Transaction Reference Number
-      let finalRefNo = paymentResult.refNo;
-      if (!finalRefNo) {
-        await conn.execute(`CALL CMSGENAUTO('CMS_WALLETTRAN', 'REFNO', @refNo)`);
-        const [[refRow]] = await conn.execute(`SELECT @refNo AS REFNO`);
-        finalRefNo = refRow?.REFNO || `TXN-${Date.now()}`;
-      }
-
-      // 8. Record Ledger Entry with CANTEENID and STATUSID = 40 ('DEP' / Deposit)
-      await conn.query(
-        `INSERT INTO CMS_WALLETTRAN (
-           WALLETID, BOOKID, CANTEENID, TRANSTYPE, SOURCECODE,
-           AMOUNT, BALBEFORE, BALAFTER, PAYMENTMETHOD, REFNO, STATUSID, CREATEDBY, REMARKS
-         ) VALUES (
-           ?, NULL, ?, 'CREDIT', 'TOPUP',
-           ?, ?, ?, ?, ?, 40, ?, ?
-         )`,
-        [
-          wallet.WALLETID,
-          canteenId,
-          topupAmount,
-          balBefore,
-          balAfter,
-          paymentResult.paymentMethod,
-          finalRefNo,
-          createdBy,
-          paymentResult.remarks,
-        ]
-      );
-
-      await conn.commit();
-
-      return {
-        walletId: wallet.WALLETID,
-        customerId,
-        amount: topupAmount,
-        balBefore,
-        balAfter,
-        canteenId,
-        refNo: finalRefNo,
-        paymentMethod: paymentResult.paymentMethod,
-      };
-    } catch (err) {
-      await conn.rollback();
-      throw err;
-    } finally {
-      conn.release();
+    const topupAmount = Number(amount);
+    if (topupAmount <= 0) {
+      throw new BadRequestError("Top-up amount must be greater than zero");
     }
+
+    // Rule: Contract employees have ₹100 minimum; Visitors have no minimum (can pay exact amount)
+    if (cust.CTYPECODE === "CNT" && topupAmount < 100.0) {
+      throw new BadRequestError(
+        "Contract employee top-up amount must be at least ₹100.00"
+      );
+    }
+
+    // 4. Execute Payment Strategy
+    const paymentResult = await strategy.processPayment({
+      amount: topupAmount,
+      customer: cust,
+      refNo,
+      createdBy,
+      remarks,
+    });
+
+    // 5. Execute Atomic Top-Up via Stored Procedure
+    const result = await walletRepo.addWalletAmount({
+      customerId: cust.CUSTOMERID,
+      amount: topupAmount,
+      paymentMethod: paymentResult.paymentMethod,
+      refNo: paymentResult.refNo || null,
+      createdBy,
+      remarks: paymentResult.remarks,
+      canteenId,
+    });
+
+    const amountVal = Number(result?.AMOUNT ?? topupAmount);
+    const balanceVal = Number(result?.BALANCE ?? result?.BALAFTER ?? 0);
+    const balAfterVal = Number(result?.BALAFTER ?? balanceVal);
+    const balBeforeVal = Number(
+      result?.BALBEFORE !== undefined && result?.BALBEFORE !== null
+        ? result.BALBEFORE
+        : (balAfterVal - amountVal).toFixed(2)
+    );
+
+    return {
+      walletId: result?.WALLETID,
+      customerId: result?.CUSTOMERID || cust.CUSTOMERID,
+      amount: amountVal,
+      balBefore: balBeforeVal,
+      balAfter: balAfterVal,
+      canteenId: result?.CANTEENID || canteenId,
+      refNo: result?.REFNO || paymentResult.refNo,
+      paymentMethod: result?.PAYMENTMETHOD || paymentResult.paymentMethod,
+    };
   }
 
   /**
@@ -208,22 +157,53 @@ export class WalletService {
   }
 
   /**
-   * List wallet transactions.
+   * List wallet transactions with optional pagination metadata.
    */
   static async listTransactions(customerId, fromDate, toDate, page = null, pageSize = null) {
-    return await walletRepo.listWalletTransactions(
+    const rows = await walletRepo.listWalletTransactions(
       customerId,
       fromDate,
       toDate,
       page,
       pageSize
     );
+
+    if (page && pageSize) {
+      const totalRows = Number(rows[0]?.TOTALROWS || 0);
+      const limit = Number(rows[0]?.PAGESIZE || pageSize || 20);
+      const totalPages = Number(rows[0]?.TOTALPAGES || (totalRows > 0 ? Math.ceil(totalRows / limit) : 1));
+      const currentPage = Number(rows[0]?.CURRENTPAGE || page || 1);
+
+      return {
+        rows,
+        pagination: {
+          totalRows,
+          currentPage,
+          pageSize: limit,
+          totalPages,
+        },
+      };
+    }
+
+    return rows;
   }
 
   /**
    * Request a withdrawal.
+   * Ensures contract employees have an assigned default canteen.
    */
   static async requestWithdrawal(customerId, amount, requestedBy, remarks) {
+    const cust = await findCustomerByIdentifier(customerId);
+    if (!cust) throw new NotFoundError("Customer not found or inactive");
+
+    if (["CNT", "CONTEMP", "CONT"].includes(cust.CTYPECODE)) {
+      if (!cust.DEFAULTCANTEENID) {
+        throw new BadRequestError(
+          "Contract employee does not have an assigned default canteen for withdrawal processing"
+        );
+      }
+    }
+
     return await walletRepo.reqWalletWithdrawal(
       customerId,
       amount,
@@ -234,8 +214,34 @@ export class WalletService {
 
   /**
    * Approve a withdrawal.
+   * Validates acting manager is authorized for the employee's default canteen.
    */
-  static async approveWithdrawal(walletWdId, processedBy, paymentMethod, refNo, remarks) {
+  static async approveWithdrawal(walletWdId, processedBy, paymentMethod, refNo, remarks, user = null) {
+    const isSysAdmin = (user?.SYSTEMROLES || []).includes("SYSADM");
+    if (!isSysAdmin && user) {
+      let targetCanteenId = await getResourceCanteenId("WALLETWD", walletWdId);
+      if (!targetCanteenId) {
+        // Fallback for visitors who do not have an assigned default canteen in CMS_CONTEMP
+        targetCanteenId =
+          user.CANTEENROLES?.find((r) => r.ISDEFAULT)?.CANTEENID ||
+          user.CANTEENROLES?.[0]?.CANTEENID ||
+          null;
+      }
+      if (!targetCanteenId) {
+        throw new BadRequestError("Withdrawal request has no valid default canteen routing");
+      }
+      const hasCanteenAccess = (user?.CANTEENROLES || []).some(
+        (r) =>
+          ["CNTMGR", "CNTAST", "CMGR"].includes(r.ROLECODE) &&
+          Number(r.CANTEENID) === Number(targetCanteenId)
+      );
+      if (!hasCanteenAccess) {
+        throw new ForbiddenError(
+          "You are only authorized to approve withdrawals for your assigned default canteen"
+        );
+      }
+    }
+
     return await walletRepo.approveWalletWithdrawal(
       walletWdId,
       processedBy,
@@ -247,8 +253,34 @@ export class WalletService {
 
   /**
    * Reject a withdrawal.
+   * Validates acting manager is authorized for the employee's default canteen.
    */
-  static async rejectWithdrawal(walletWdId, processedBy, remarks) {
+  static async rejectWithdrawal(walletWdId, processedBy, remarks, user = null) {
+    const isSysAdmin = (user?.SYSTEMROLES || []).includes("SYSADM");
+    if (!isSysAdmin && user) {
+      let targetCanteenId = await getResourceCanteenId("WALLETWD", walletWdId);
+      if (!targetCanteenId) {
+        // Fallback for visitors who do not have an assigned default canteen in CMS_CONTEMP
+        targetCanteenId =
+          user.CANTEENROLES?.find((r) => r.ISDEFAULT)?.CANTEENID ||
+          user.CANTEENROLES?.[0]?.CANTEENID ||
+          null;
+      }
+      if (!targetCanteenId) {
+        throw new BadRequestError("Withdrawal request has no valid default canteen routing");
+      }
+      const hasCanteenAccess = (user?.CANTEENROLES || []).some(
+        (r) =>
+          ["CNTMGR", "CNTAST", "CMGR"].includes(r.ROLECODE) &&
+          Number(r.CANTEENID) === Number(targetCanteenId)
+      );
+      if (!hasCanteenAccess) {
+        throw new ForbiddenError(
+          "You are only authorized to reject withdrawals for your assigned default canteen"
+        );
+      }
+    }
+
     return await walletRepo.rejectWalletWithdrawal(walletWdId, processedBy, remarks);
   }
 
@@ -261,8 +293,42 @@ export class WalletService {
 
   /**
    * List withdrawal requests.
+   * Scoped to customer (employee view), assigned canteen (manager view), or all (SYSADM).
    */
-  static async listWithdrawals(customerId, status) {
-    return await walletRepo.listWalletWithdrawals(customerId, status);
+  static async listWithdrawals(customerId = null, status = null, canteenId = null, user = null) {
+    // If customerId is provided, caller is an employee fetching their own request history
+    if (customerId) {
+      return await walletRepo.listWalletWithdrawals(customerId, status, null);
+    }
+
+    // Manager / Staff / Admin queue
+    const isSysAdmin = (user?.SYSTEMROLES || []).includes("SYSADM");
+    let effectiveCanteenId = canteenId ? Number(canteenId) : null;
+
+    if (!isSysAdmin && user) {
+      const userCanteenRoles = user?.CANTEENROLES || [];
+      const managerCanteens = userCanteenRoles
+        .filter((r) => ["CNTMGR", "CNTAST", "CMGR"].includes(r.ROLECODE))
+        .map((r) => Number(r.CANTEENID));
+
+      if (managerCanteens.length === 0) {
+        throw new ForbiddenError("You are not authorized as canteen staff/manager for any canteen");
+      }
+
+      if (effectiveCanteenId) {
+        if (!managerCanteens.includes(effectiveCanteenId)) {
+          throw new ForbiddenError(
+            "You are not authorized to view withdrawal requests for the selected canteen"
+          );
+        }
+      } else {
+        const defaultRole = userCanteenRoles.find(
+          (r) => r.ISDEFAULT && managerCanteens.includes(Number(r.CANTEENID))
+        );
+        effectiveCanteenId = defaultRole ? Number(defaultRole.CANTEENID) : managerCanteens[0];
+      }
+    }
+
+    return await walletRepo.listWalletWithdrawals(null, status, effectiveCanteenId);
   }
 }
