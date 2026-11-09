@@ -21,6 +21,7 @@ CREATE PROCEDURE CMSREPLACEDMENUITEMS (
 BEGIN
     DECLARE VSLOTSTATUSID INT;
     DECLARE VSERVDATE     DATE;
+    DECLARE VENDTIME      TIME;
     DECLARE VAPPRSTATUSID INT;
     DECLARE VMISSING      VARCHAR(255);
     DECLARE VDMENUNO      VARCHAR(20);
@@ -32,11 +33,18 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Items JSON array is required';
     END IF;
     
-    SELECT STATUSID, SERVICEDATE, APPRSTATUSID INTO VSLOTSTATUSID, VSERVDATE, VAPPRSTATUSID
+    SELECT STATUSID, SERVICEDATE, ENDTIME, APPRSTATUSID INTO VSLOTSTATUSID, VSERVDATE, VENDTIME, VAPPRSTATUSID
     FROM CMS_DAYSLOT WHERE DAYSLOTID = PDAYSLOTID;
     
     IF VSLOTSTATUSID IS NULL THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Day slot not found'; END IF;
     IF VSLOTSTATUSID <> 10 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Day slot must be active (10 = ACT)'; END IF;
+    
+    IF VSERVDATE < CURRENT_DATE() THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Cannot modify menu for a past date';
+    END IF;
+    IF VSERVDATE = CURRENT_DATE() AND VENDTIME <= CURRENT_TIME() THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Cannot modify menu for a service window that has already ended';
+    END IF;
     
     SELECT GROUP_CONCAT(DISTINCT CONCAT(MI.MENUITEMID, ' missing ', CT.CTYPECODE)) INTO VMISSING
     FROM JSON_TABLE(PITEMSJSON, '$[*]' COLUMNS (
@@ -458,6 +466,21 @@ BEGIN
         SET v_holidayid = NULL;
         SET v_holidayname = NULL;
 
+        -- Security & Integrity Guard: Skip past dates completely
+        IF v_servdate < CURRENT_DATE() THEN
+            INSERT INTO TMP_TEMPLATE_RESULTS (SERVICEDATE, SERVDATE, DAYSLOTID, SLOTNO, ISNEWSLOT, ITEMCOUNT, TIMINGUPDATED, SKIPPED, REASON)
+            VALUES (v_servdate, v_servdate, NULL, NULL, 0, 0, 0, 1, 'Past date (Cannot create menu for past dates)');
+            SET done_days = FALSE;
+            ITERATE days_loop;
+        END IF;
+
+        IF v_servdate = CURRENT_DATE() AND v_day_endtime <= CURRENT_TIME() THEN
+            INSERT INTO TMP_TEMPLATE_RESULTS (SERVICEDATE, SERVDATE, DAYSLOTID, SLOTNO, ISNEWSLOT, ITEMCOUNT, TIMINGUPDATED, SKIPPED, REASON)
+            VALUES (v_servdate, v_servdate, NULL, NULL, 0, 0, 0, 1, 'Service hours already elapsed today');
+            SET done_days = FALSE;
+            ITERATE days_loop;
+        END IF;
+
         -- Check Holiday (isolated block so NOT FOUND does not taint done_days)
         BEGIN
             DECLARE CONTINUE HANDLER FOR NOT FOUND BEGIN END;
@@ -719,6 +742,25 @@ BEGIN
         SET v_is_new_slot = 0;
         SET v_timing_updated = 0;
 
+        -- Security & Integrity Guard: Skip past dates completely
+        IF v_servdate < CURRENT_DATE() THEN
+            INSERT INTO TMP_BULK_RESULTS (date, daySlotId, slotNo, isNewSlot, itemsInserted, timingUpdated, skipped, reason, statusId, action)
+            VALUES (v_servdate_str, NULL, NULL, 0, 0, 0, 1, 'Past date (Cannot create menu for past dates)', NULL, PACTION);
+            SET done_days = FALSE;
+            ITERATE days_loop;
+        END IF;
+
+        SET v_day_starttime = COALESCE(v_day_starttime, PSTARTTIME);
+        SET v_day_endtime   = COALESCE(v_day_endtime, PENDTIME);
+
+        -- Security & Integrity Guard: If today, skip if service hours already elapsed
+        IF v_servdate = CURRENT_DATE() AND v_day_endtime <= CURRENT_TIME() THEN
+            INSERT INTO TMP_BULK_RESULTS (date, daySlotId, slotNo, isNewSlot, itemsInserted, timingUpdated, skipped, reason, statusId, action)
+            VALUES (v_servdate_str, NULL, NULL, 0, 0, 0, 1, 'Service hours already elapsed today', NULL, PACTION);
+            SET done_days = FALSE;
+            ITERATE days_loop;
+        END IF;
+
         -- Check Holiday (isolated block so NOT FOUND does not taint done_days)
         BEGIN
             DECLARE CONTINUE HANDLER FOR NOT FOUND BEGIN END;
@@ -739,8 +781,14 @@ BEGIN
             ITERATE days_loop;
         END IF;
 
-        SET v_day_starttime = COALESCE(v_day_starttime, PSTARTTIME);
-        SET v_day_endtime   = COALESCE(v_day_endtime, PENDTIME);
+        -- Skip days with no menu items BEFORE touching or creating any Day Slot
+        SET v_item_count = JSON_LENGTH(v_itemsjson);
+        IF v_item_count IS NULL OR v_item_count = 0 THEN
+            INSERT INTO TMP_BULK_RESULTS (date, daySlotId, slotNo, isNewSlot, itemsInserted, timingUpdated, skipped, reason, statusId, action)
+            VALUES (v_servdate_str, NULL, NULL, 0, 0, 0, 1, 'No items configured', NULL, PACTION);
+            SET done_days = FALSE;
+            ITERATE days_loop;
+        END IF;
 
         -- Check existing slot (isolated block so NOT FOUND does not taint done_days)
         SET v_dayslotid = NULL;
@@ -855,14 +903,6 @@ BEGIN
                 CASE WHEN PTARGETAPPRSTATUS = 22 THEN CURRENT_TIMESTAMP ELSE NULL END,
                 PUSERID, v_change_reason
             );
-        END IF;
-
-        SET v_item_count = JSON_LENGTH(v_itemsjson);
-        IF v_item_count IS NULL OR v_item_count = 0 THEN
-            INSERT INTO TMP_BULK_RESULTS (date, daySlotId, slotNo, isNewSlot, itemsInserted, timingUpdated, skipped, reason, statusId, action)
-            VALUES (v_servdate_str, v_dayslotid, v_slotno, v_is_new_slot, 0, 0, 1, 'No items configured', PTARGETAPPRSTATUS, PACTION);
-            SET done_days = FALSE;
-            ITERATE days_loop;
         END IF;
 
         -- Insert day menu items

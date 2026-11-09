@@ -8,7 +8,7 @@ FROM rockylinux:9 AS builder
 WORKDIR /app
 
 # Install Node.js 20 and build tools
-RUN dnf install -y curl && \
+RUN dnf install -y --allowerasing curl && \
     curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - && \
     dnf install -y nodejs make gcc-c++ && \
     dnf clean all
@@ -28,7 +28,7 @@ FROM rockylinux:9
 
 # Install Nginx and curl for healthcheck from Rocky 9 AppStream / EPEL
 RUN dnf install -y epel-release && \
-    dnf install -y nginx curl && \
+    dnf install -y --allowerasing nginx curl && \
     dnf clean all
 
 # Copy custom Nginx configuration directly to master nginx.conf

@@ -304,9 +304,19 @@ export function useBulkMenuPlanner() {
   );
   const daySummary = weekItems.map((dayMap) => Object.keys(dayMap).length);
 
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
+  const isDayPast = useCallback(
+    (idx) => {
+      const d = weekDates[idx];
+      return d ? d < todayStr : false;
+    },
+    [weekDates, todayStr]
+  );
+
   const addItem = useCallback(
     (menuItem) => {
-      if (publishedDays[activeDayIndex]?.isPublished) return;
+      if (publishedDays[activeDayIndex]?.isPublished || isDayPast(activeDayIndex)) return;
       const servDate = weekDates[activeDayIndex] || startDate;
       setWeekItems((prev) => {
         const copy = [...prev];
@@ -321,12 +331,12 @@ export function useBulkMenuPlanner() {
         return copy;
       });
     },
-    [activeDayIndex, weekDates, startDate, startTime, publishedDays]
+    [activeDayIndex, weekDates, startDate, startTime, publishedDays, isDayPast]
   );
 
   const removeItem = useCallback(
     (menuItemId) => {
-      if (publishedDays[activeDayIndex]?.isPublished) return;
+      if (publishedDays[activeDayIndex]?.isPublished || isDayPast(activeDayIndex)) return;
       setWeekItems((prev) => {
         const copy = [...prev];
         const dayMap = { ...copy[activeDayIndex] };
@@ -335,12 +345,12 @@ export function useBulkMenuPlanner() {
         return copy;
       });
     },
-    [activeDayIndex, publishedDays]
+    [activeDayIndex, publishedDays, isDayPast]
   );
 
   const updateFlag = useCallback(
     (menuItemId, field, value) => {
-      if (publishedDays[activeDayIndex]?.isPublished) return;
+      if (publishedDays[activeDayIndex]?.isPublished || isDayPast(activeDayIndex)) return;
       setWeekItems((prev) => {
         const copy = [...prev];
         const dayMap = { ...copy[activeDayIndex] };
@@ -369,7 +379,7 @@ export function useBulkMenuPlanner() {
 
   const updateQty = useCallback(
     (menuItemId, field, value) => {
-      if (publishedDays[activeDayIndex]?.isPublished) return;
+      if (publishedDays[activeDayIndex]?.isPublished || isDayPast(activeDayIndex)) return;
       setWeekItems((prev) => {
         const copy = [...prev];
         copy[activeDayIndex] = {
@@ -382,20 +392,24 @@ export function useBulkMenuPlanner() {
         return copy;
       });
     },
-    [activeDayIndex, publishedDays]
+    [activeDayIndex, publishedDays, isDayPast]
   );
 
-  const applyToAllDays = () => {
+  const applyToDays = (filterFn, label) => {
     let appliedDaysCount = 0;
-    const sourceCount = Object.keys(weekItems[activeDayIndex] || {}).length;
+    const source = weekItems[activeDayIndex] || {};
+    const sourceCount = Object.keys(source).length;
     if (sourceCount === 0) return;
 
     setWeekItems((prev) => {
-      const source = prev[activeDayIndex] || {};
       return prev.map((currDay, i) => {
         if (i === activeDayIndex) return currDay;
+        if (filterFn && !filterFn(i)) return currDay;
         if (publishedDays[i]?.isPublished) return currDay;
         const targetDate = weekDates[i] || addDays(startDate || getMonday(), i);
+        if (targetDate && targetDate < todayStr) {
+          return currDay;
+        }
         if (targetDate && holidayMap[targetDate] && !holidayOverrides[i]) {
           return currDay;
         }
@@ -419,12 +433,15 @@ export function useBulkMenuPlanner() {
       });
     });
     setSuccessToast(
-      `Applied ${DAY_FULL[activeDayIndex]}'s ${sourceCount} item${sourceCount > 1 ? 's' : ''} to remaining open days.`
+      `Applied ${DAY_FULL[activeDayIndex]}'s ${sourceCount} item${sourceCount > 1 ? 's' : ''} to ${label}.`
     );
   };
 
+  const applyToAllDays = () => applyToDays(() => true, 'remaining open days (Mon–Sun)');
+  const applyToWeekdays = () => applyToDays((i) => i < 5, 'weekdays (Mon–Fri)');
+
   const copyFromDay = (sourceIndex) => {
-    if (publishedDays[activeDayIndex]?.isPublished) return;
+    if (publishedDays[activeDayIndex]?.isPublished || isDayPast(activeDayIndex)) return;
     const source = weekItems[sourceIndex] || {};
     const sourceCount = Object.keys(source).length;
     if (sourceCount === 0) {
@@ -465,7 +482,7 @@ export function useBulkMenuPlanner() {
   };
 
   const clearDay = () => {
-    if (publishedDays[activeDayIndex]?.isPublished) return;
+    if (publishedDays[activeDayIndex]?.isPublished || isDayPast(activeDayIndex)) return;
     setWeekItems((prev) => {
       const copy = [...prev];
       copy[activeDayIndex] = {};
@@ -535,9 +552,13 @@ export function useBulkMenuPlanner() {
           ? 'submitted for manager approval'
           : 'published successfully';
 
-      setSuccessToast(
-        `Bulk menu ${actionLabel}! Scheduled week from ${weekDates[0]} to ${weekDates[6]}.`
-      );
+      const processedCount = Array.isArray(res) ? res.filter((r) => !r.skipped).length : 0;
+      const skippedCount = Array.isArray(res) ? res.filter((r) => r.skipped).length : 0;
+      const detailMsg = skippedCount > 0
+        ? `Bulk menu ${actionLabel} for ${processedCount} day(s) (${skippedCount} unconfigured day(s) skipped).`
+        : `Bulk menu ${actionLabel} for all ${processedCount} day(s).`;
+
+      setSuccessToast(detailMsg);
       setReloadCounter((c) => c + 1);
       reset();
     }
@@ -613,11 +634,14 @@ export function useBulkMenuPlanner() {
     isManager,
     isAssistant,
     isReady,
+    isDayPast,
+    todayStr,
     addItem,
     removeItem,
     updateFlag,
     updateQty,
     applyToAllDays,
+    applyToWeekdays,
     copyFromDay,
     clearDay,
     handleSubmit,

@@ -17,14 +17,16 @@ if [ ! -d "/var/lib/mysql/mysql" ]; then
     echo "=========================================================="
     echo " Initializing MySQL 8.0 on Rocky Linux 9..."
     echo "=========================================================="
+    # Clean up any partial files if initialization was previously aborted
+    rm -rf /var/lib/mysql/* /var/lib/mysql/.* 2>/dev/null || true
     mysqld --initialize-insecure --user=mysql --datadir=/var/lib/mysql
 
     echo "=> Starting temporary background MySQL server..."
     mysqld --user=mysql --datadir=/var/lib/mysql --skip-networking --socket=/var/run/mysqld/mysqld.sock &
     pid="$!"
 
-    # Wait for MySQL to become ready
-    for i in {30..0}; do
+    # Wait for MySQL to become ready (up to 60 seconds)
+    for i in {60..0}; do
         if mysqladmin ping --socket=/var/run/mysqld/mysqld.sock --silent 2>/dev/null; then
             break
         fi

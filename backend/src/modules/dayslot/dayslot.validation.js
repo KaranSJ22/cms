@@ -31,6 +31,14 @@ export const createDaySlotSchema = z.object({
     .refine((data) => data.SERVICEDATE || data.SERVDATE, {
       message: "SERVICEDATE or SERVDATE is required",
       path: ["SERVICEDATE"],
+    })
+    .refine((data) => {
+      const servDate = (data.SERVICEDATE || data.SERVDATE || "").slice(0, 10);
+      const today = new Date().toISOString().slice(0, 10);
+      return servDate >= today;
+    }, {
+      message: "Cannot create a day slot for a past date",
+      path: ["SERVICEDATE"],
     }),
 });
 

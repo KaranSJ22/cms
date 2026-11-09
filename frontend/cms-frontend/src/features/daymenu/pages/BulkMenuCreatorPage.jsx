@@ -54,11 +54,13 @@ export default function BulkMenuCreatorPage() {
     isManager,
     isAssistant,
     isReady,
+    isDayPast,
     addItem,
     removeItem,
     updateFlag,
     updateQty,
     applyToAllDays,
+    applyToWeekdays,
     copyFromDay,
     clearDay,
     handleSubmit,
@@ -136,12 +138,14 @@ export default function BulkMenuCreatorPage() {
           holidayOverrides={holidayOverrides}
           publishedDays={publishedDays}
           daySummary={daySummary}
+          isDayPast={isDayPast}
         />
 
         {/* 2-Column Catalog and Day Item Configuration Studio */}
         <DayConfigTable
           activeDayIndex={activeDayIndex}
           weekDates={weekDates}
+          isDayPast={isDayPast(activeDayIndex)}
           holidayMap={holidayMap}
           holidayOverrides={holidayOverrides}
           setHolidayOverrides={setHolidayOverrides}
@@ -159,6 +163,7 @@ export default function BulkMenuCreatorPage() {
           onUpdateFlag={updateFlag}
           onUpdateQty={updateQty}
           onApplyToAllDays={applyToAllDays}
+          onApplyToWeekdays={applyToWeekdays}
           onCopyFromDayClick={() => setShowCopyModal(true)}
           onClearDay={clearDay}
         />

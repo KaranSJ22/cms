@@ -114,5 +114,16 @@ export const bulkCreateDayMenuSchema = z.object({
     ACTION:     z.enum(["DRAFT", "SUBMIT", "PUBLISH"]).default("PUBLISH"),
     // 5 to 7 day configs (Monday to Sunday). Days with empty ITEMS or holidays are skipped.
     DAYS: z.array(bulkDaySchema).min(1).max(7),
+  }).refine((data) => {
+    // Week end date (STARTDATE + 6 days) must be >= today
+    const start = new Date(data.STARTDATE);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return end >= today;
+  }, {
+    message: "Cannot configure a bulk menu for a week that has already passed",
+    path: ["STARTDATE"],
   }),
 });

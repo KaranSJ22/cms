@@ -94,6 +94,9 @@ export default function DayMenuPlannerPage() {
     return map;
   }, [holidays]);
 
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const isSlotDatePast = Boolean(selectedDate && selectedDate < todayStr);
+
   const isCurrentDateHoliday = selectedDate ? Boolean(holidayMap[selectedDate]) : false;
 
   useEffect(() => {
@@ -230,6 +233,10 @@ export default function DayMenuPlannerPage() {
   // Handle slot timings update for an existing slot
   const handleUpdateTimings = async () => {
     if (!resolvedSlot || resolvedSlot.isNew) return;
+    if (isSlotDatePast) {
+      setError("Cannot modify slot timings for a past date.");
+      return;
+    }
     setTimingUpdating(true);
     setError(null);
     setTimingMessage("");
@@ -253,6 +260,10 @@ export default function DayMenuPlannerPage() {
 
   const handleSaveSelection = async (itemsToSave) => {
     if (!resolvedSlot) return;
+    if (isSlotDatePast) {
+      setError("Cannot create or modify day menu for a past date.");
+      return;
+    }
     setIsSubmitting(true);
     setError(null);
     try {
@@ -425,6 +436,10 @@ export default function DayMenuPlannerPage() {
 
   const handleSaveAndPublish = async (itemsToSave) => {
     if (!resolvedSlot) return;
+    if (isSlotDatePast) {
+      setError("Cannot publish menu for a past date.");
+      return;
+    }
     setIsSubmitting(true);
     setError(null);
     try {
@@ -574,6 +589,10 @@ export default function DayMenuPlannerPage() {
                   <span className="animate-spin h-3.5 w-3.5 border-2 border-slate-400 border-t-transparent rounded-full"></span>
                   Resolving...
                 </span>
+              ) : isSlotDatePast ? (
+                <span className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                  🔒 Past Date (Read-Only)
+                </span>
               ) : resolvedSlot?.isNew ? (
                 <span className="px-3 py-1.5 bg-blue-100 text-blue-800 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm">
                   <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
@@ -616,6 +635,7 @@ export default function DayMenuPlannerPage() {
               <input
                 type="date"
                 value={selectedDate}
+                min={todayStr}
                 onChange={(e) => {
                   setSelectedDate(e.target.value);
                   setSelectedPendingId(null);

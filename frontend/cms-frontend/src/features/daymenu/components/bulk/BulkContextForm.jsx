@@ -93,6 +93,7 @@ export default function BulkContextForm({
                 id="bulk-startdate"
                 type="date"
                 value={startDate}
+                min={getMonday(new Date().toISOString().slice(0, 10))}
                 style={{ colorScheme: 'light' }}
                 onChange={(e) => {
                   const monday = getMonday(e.target.value);

@@ -107,6 +107,23 @@ export const bulkCreateDayMenu = async (payload, userOrId) => {
     throw new BadRequestError("At least one day must have menu items configured");
   }
 
+  // Ensure at least one day today or in the future has menu items configured
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const startDt = new Date(STARTDATE);
+  const hasValidFutureItems = DAYS.some((d) => {
+    if (!d.ITEMS || d.ITEMS.length === 0) return false;
+    const targetDate = new Date(startDt);
+    targetDate.setDate(targetDate.getDate() + Number(d.DAYINDEX || 0));
+    const targetDateStr = targetDate.toISOString().slice(0, 10);
+    return targetDateStr >= todayStr;
+  });
+
+  if (!hasValidFutureItems) {
+    throw new BadRequestError(
+      "Cannot submit bulk menu where all configured days are in the past. At least one day today or in the future must have items."
+    );
+  }
+
   const isSysAdmin =
     (user.SYSTEMROLES || []).includes("SYSADM") ||
     user.LOGINID === "admin" ||

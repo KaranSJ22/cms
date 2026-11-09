@@ -40,7 +40,7 @@ Once `docker compose up -d` finishes:
 | **Backend API Health** | [http://localhost/health](http://localhost/health) or [http://localhost:8080/health](http://localhost:8080/health) | API health check endpoint |
 | **Database Health Check** | [http://localhost/health/db](http://localhost/health/db) | Live database connection verification |
 | **API Documentation** | [http://localhost/api-docs](http://localhost/api-docs) | Interactive Swagger OpenAPI docs |
-| **Database Server** | `localhost:3306` | MySQL server (`root` / `RootPassword@123`, DB: `CMS_DB`) |
+| **Database Server** | `localhost:3307` | MySQL container (`root` / `RootPassword@123`, DB: `CMS_DB`). Host port 3307 is used to avoid collisions if local MySQL is running on 3306. Configurable via `MYSQL_PORT`. |
 
 ---
 

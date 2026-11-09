@@ -6,7 +6,7 @@ FROM rockylinux:9 AS base
 WORKDIR /app
 
 # 1. Install Node.js 20, native build tools (gcc, make, python3 for bcrypt), and curl
-RUN dnf install -y curl && \
+RUN dnf install -y --allowerasing curl && \
     curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - && \
     dnf install -y nodejs make gcc-c++ python3 && \
     dnf clean all
@@ -16,7 +16,7 @@ RUN npm install -g pm2
 
 # 3. Copy package descriptors and install production dependencies
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev --no-audit
 
 # 4. Copy application source, startup scripts, PM2 config, and env template
 COPY src/ ./src/
